@@ -33,14 +33,38 @@ fi
 echo -e "npm version: $(npm -v)"
 echo ""
 
+# Install PM2 globally if not present
+if ! command -v pm2 &> /dev/null; then
+    echo -e "${YELLOW}PM2 not found. Installing globally...${NC}"
+    npm install -g pm2
+fi
+
+echo -e "PM2 version: $(pm2 -v)"
+echo ""
+
 # Install dependencies
 echo -e "${GREEN}Installing dependencies...${NC}"
 npm install
 
+# Build for production
+echo -e "${GREEN}Building for production...${NC}"
+npm run build
+
+# Start/restart with PM2 on port 9001
+echo -e "${GREEN}Starting app with PM2 on port 9001...${NC}"
+pm2 stop portal-frontend 2>/dev/null || true
+pm2 delete portal-frontend 2>/dev/null || true
+pm2 start ecosystem.config.cjs
+
 echo ""
-echo -e "${GREEN}=== Installation complete! ===${NC}"
+echo -e "${GREEN}=== Deployment complete! ===${NC}"
 echo ""
-echo "Available commands:"
-echo "  npm run dev      - Start development server"
-echo "  npm run build    - Build for production"
-echo "  npm run preview  - Preview production build"
+echo "App running on port 9001"
+echo ""
+echo "PM2 commands:"
+echo "  pm2 status             - Check app status"
+echo "  pm2 logs portal-frontend  - View logs"
+echo "  pm2 restart portal-frontend - Restart app"
+echo "  pm2 stop portal-frontend    - Stop app"
+echo "  pm2 save               - Save process list for auto-restart"
+echo "  pm2 startup            - Enable auto-start on boot"
