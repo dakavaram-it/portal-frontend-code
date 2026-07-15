@@ -6,9 +6,13 @@ export default defineConfig({
   server: {
     port: 9001,
     host: '0.0.0.0',
+    allowedHosts: true
   },
   preview: {
     port: 9001,
     host: '0.0.0.0',
+    allowedHosts: true
   },
 })
+
+

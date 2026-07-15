@@ -7,7 +7,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-echo -e "${GREEN}=== MyPartyDashboard - Install Script ===${NC}"
+echo -e "${GREEN}=== MyPartyDashboard Portal - Install Script ===${NC}"
 echo ""
 
 # Check for Node.js
@@ -50,11 +50,22 @@ npm install
 echo -e "${GREEN}Building for production...${NC}"
 npm run build
 
-# Start/restart with PM2 on port 9001
-echo -e "${GREEN}Starting app with PM2 on port 9001...${NC}"
+# Stop and clean up existing PM2 process
+echo -e "${GREEN}Stopping existing PM2 process...${NC}"
 pm2 stop portal-frontend 2>/dev/null || true
 pm2 delete portal-frontend 2>/dev/null || true
+
+# Free port 9001 in case of orphaned process
+echo -e "${GREEN}Freeing port 9001...${NC}"
+fuser -k 9001/tcp 2>/dev/null || true
+sleep 1
+
+# Start with PM2
+echo -e "${GREEN}Starting app with PM2 on port 9001...${NC}"
 pm2 start ecosystem.config.cjs
+
+# Save PM2 process list for auto-restart on reboot
+pm2 save
 
 echo ""
 echo -e "${GREEN}=== Deployment complete! ===${NC}"
@@ -62,9 +73,8 @@ echo ""
 echo "App running on port 9001"
 echo ""
 echo "PM2 commands:"
-echo "  pm2 status             - Check app status"
-echo "  pm2 logs portal-frontend  - View logs"
-echo "  pm2 restart portal-frontend - Restart app"
-echo "  pm2 stop portal-frontend    - Stop app"
-echo "  pm2 save               - Save process list for auto-restart"
-echo "  pm2 startup            - Enable auto-start on boot"
+echo "  pm2 status                    - Check app status"
+echo "  pm2 logs portal-frontend      - View logs"
+echo "  pm2 restart portal-frontend   - Restart app"
+echo "  pm2 stop portal-frontend      - Stop app"
+echo "  pm2 startup                   - Enable auto-start on boot"
