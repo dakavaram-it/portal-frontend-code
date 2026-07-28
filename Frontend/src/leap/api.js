@@ -6,6 +6,12 @@ import { useEffect, useState } from 'react'
 // those are an expiry, and treating a failed login as one would clear the error banner.
 const AUTH_PATHS = ['/S14login', '/S15me', '/S16logout']
 
+// Not `/api`: on the deployed host that prefix already belongs to the older party
+// dashboard service (its routes live under /api/v1), so /api/S14login never reaches this
+// backend and comes back 404 from that other app. This prefix is unclaimed, so it falls
+// through to whatever fronts the site, into the Vite preview proxy, and on to :8001.
+const API_BASE = '/leapapi'
+
 let onUnauthorized = () => {}
 export const setUnauthorizedHandler = (fn) => { onUnauthorized = fn }
 
@@ -14,7 +20,7 @@ const checkUnauthorized = (path, status) => {
 }
 
 const get = async (path) => {
-  const res = await fetch(`/api${path}`)
+  const res = await fetch(`${API_BASE}${path}`)
   if (!res.ok) {
     checkUnauthorized(path, res.status)
     throw new Error(`${path} -> ${res.status}`)
@@ -25,7 +31,7 @@ const get = async (path) => {
 // FastAPI reports its own failures as {detail: "..."}; surface that text so the
 // UI can show the real reason (reservation mismatch, position full, duplicate).
 const post = async (path, body) => {
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
