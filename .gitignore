@@ -5,3 +5,7 @@ dist-ssr
 .vite
 .idea
 *.iml
+.venv
+__pycache__
+*.pyc
+.DS_Store

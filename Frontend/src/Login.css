@@ -130,9 +130,20 @@
   cursor: pointer;
 }
 
-.btn:hover {
+.btn:hover:not(:disabled) {
   background-color: #449d44;
   border-color: #398439;
+}
+
+.btn:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.login-error {
+  margin: 20px 0 0;
+  font-size: 14px;
+  color: #a94442;
 }
 
 .copyright {

@@ -128,6 +128,7 @@
 }
 
 .leap-avatar {
+  flex: 0 0 auto;
   width: 30px;
   height: 30px;
   border-radius: 50%;
@@ -140,8 +141,32 @@
   font-weight: 700;
 }
 
-.leap-sidebar-footer-dash {
+.leap-sidebar-user {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leap-logout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
   color: #8a8079;
+  cursor: pointer;
+}
+
+.leap-logout-btn:hover {
+  background: #2a2018;
+  color: #f5c518;
 }
 
 /* ---------- Main ---------- */

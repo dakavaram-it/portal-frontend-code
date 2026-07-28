@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import circleImage from './circle.svg'
+import { login } from './leap/api.js'
 import './Login.css'
 
 function UserIcon() {
@@ -21,12 +22,20 @@ function LockIcon() {
 export default function Login({ onLoginSuccess }) {
   const [userName, setUserName] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    // Frontend clone only — wire this up to real authentication as needed.
-    console.log('SIGN IN', { userName, password })
-    onLoginSuccess?.()
+    setError('')
+    setBusy(true)
+    try {
+      const user = await login(userName, password)
+      onLoginSuccess?.(user)
+    } catch (err) {
+      setError(err.message)
+      setBusy(false)
+    }
   }
 
   return (
@@ -75,8 +84,10 @@ export default function Login({ onLoginSuccess }) {
             />
           </div>
 
-          <button type="submit" className="btn">
-            SIGN IN
+          {error && <p className="login-error">{error}</p>}
+
+          <button type="submit" className="btn" disabled={busy}>
+            {busy ? 'SIGNING IN…' : 'SIGN IN'}
           </button>
         </form>
 

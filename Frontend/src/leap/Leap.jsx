@@ -6,7 +6,7 @@ import PositionDetail from './components/PositionDetail.jsx'
 import NewPositionModal from './components/NewPositionModal.jsx'
 import './Leap.css'
 
-export default function Leap() {
+export default function Leap({ user, onLogout }) {
   const [positions, setPositions] = useState(POSITIONS)
   const [view, setView] = useState({ name: 'newPosition' })
 
@@ -22,7 +22,7 @@ export default function Leap() {
 
   return (
     <div className="leap-app">
-      <Sidebar />
+      <Sidebar user={user} onLogout={onLogout} />
       <main className="leap-main">
         {view.name === 'newPosition' && <NewPositionModal />}
         {view.name === 'positions' && (
