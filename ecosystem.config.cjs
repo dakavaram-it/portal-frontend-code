@@ -10,13 +10,5 @@ module.exports = {
         NODE_ENV: "production",
       },
     },
-    {
-      name: "portal-backend",
-      cwd: "./Backend",
-      script: "./.venv/bin/uvicorn",
-      args: "main:app --host 0.0.0.0 --port 8001",
-      interpreter: "none",
-      kill_timeout: 5000,
-    },
   ],
 };

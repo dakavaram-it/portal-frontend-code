@@ -15,20 +15,20 @@ npm run preview      # serve the built output on 0.0.0.0:9001
 
 There is no test runner, linter, or formatter configured — do not assume `npm test` or `npm run lint` exist. Verification means building (`npm run build`) and clicking through in the browser.
 
-`vite.config.js` proxies `/leapapi/*` to `http://127.0.0.1:8001` with the `/leapapi` prefix stripped, configured identically for `dev` and `preview`. **The prefix is `/leapapi`, not `/api`, on purpose** — on the deployed host (`portalnew.mypartydashboard.com`) `/api` is already routed to the older party dashboard service, whose own routes live under `/api/v1`, so `/api/S14login` answers `404` from that service and never reaches this backend. This also means so the backend must be running too (`Backend/README.md` has the uvicorn command and the `.env` requirement). **When it isn't, every picklist is silently empty** — `useList` swallows fetch errors, so a dead backend looks exactly like a state with no assemblies in it. Check the console and network tab first when the wizard renders but won't populate. Note that this is now the signature of a *dead backend specifically*: a `401` no longer lands here, because `api.js` intercepts it and sends the app back to the login screen (see below), so a blank wizard means the backend is unreachable rather than the session having lapsed.
+`vite.config.js` proxies `/leapapi/*` to `http://127.0.0.1:8001` with the `/leapapi` prefix stripped, configured identically for `dev` and `preview`. **The prefix is `/leapapi`, not `/api`, on purpose** — on the deployed host (`portalnew.mypartydashboard.com`) `/api` is already routed to the older party dashboard service, whose own routes live under `/api/v1`, so `/api/S14login` answers `404` from that service and never reaches this backend. The backend lives in a **separate repository** — it is not in this tree — and must be running and reachable at that `target` for anything to work. **When it isn't, every picklist is silently empty** — `useList` swallows fetch errors, so a dead backend looks exactly like a state with no assemblies in it. Check the console and network tab first when the wizard renders but won't populate. Note that this is now the signature of a *dead backend specifically*: a `401` no longer lands here, because `api.js` intercepts it and sends the app back to the login screen (see below), so a blank wizard means the backend is unreachable rather than the session having lapsed.
 
-Deployment: `./install.sh` **from the repo root** installs frontend deps, builds, creates `Backend/.venv` and installs `requirements.txt`, then (re)starts both under PM2 using the root `ecosystem.config.cjs` — `portal-frontend` (`vite preview` on 9001) and `portal-backend` (`Backend/.venv/bin/uvicorn` on 8001). It aborts if the root `.env` is missing. The older frontend-only `Frontend/install.sh` + `Frontend/ecosystem.config.cjs` are superseded and declare the same `portal-frontend` process name — don't run both.
+Deployment: `./install.sh` **from the repo root** installs frontend deps, builds, then (re)starts `portal-frontend` (`vite preview` on 9001) under PM2 using the root `ecosystem.config.cjs`. Frontend only — the backend is deployed from its own repo.
 
 ## What this is
 
-A prototype of a nomination workflow for local body elections, styled as a party internal portal. React 18 + Vite SPA, plain JSX with hand-written CSS, backed by a FastAPI + PyMySQL service in `Backend/` (see `Backend/README.md` for the endpoint table). **No router, no tests, no state library.** The only frontend deps are `react` and `react-dom`.
+A prototype of a nomination workflow for local body elections, styled as a party internal portal. React 18 + Vite SPA, plain JSX with hand-written CSS, backed by a FastAPI + PyMySQL service that lives in a **separate repository** (this repo is frontend-only). **No router, no tests, no state library.** The only frontend deps are `react` and `react-dom`.
 
 The reachable flow is backend-driven end to end and holds **no application state of its own**: picklists, reservation, positions, cadre search, candidate assignment and the member list all hit the database, keyed by ids the user picks. Nothing survives in memory across a reload except the wizard's own selections, and nothing needs to — `proposal_position_id` is the only handle the writes use.
 
 **The entire reachable app is `Sidebar` + `NewPositionModal`.** `NewPositionModal` is a single scrolling screen that does everything (pick a body → view its members, or add one), takes no props, and never navigates. Everything else in `leap/` — the `positions` dataset, `PositionDetail`, `AllPositions`, `PositionCard`, `Dashboard`, and the whole `STAGES` pipeline — is unreachable. See "Known dead / inert code".
 
 Two top-level screens, switched by a boolean in `Frontend/src/App.jsx`:
-- `Frontend/src/Login.jsx` — real login. `handleSubmit` posts to `S14`, which validates the credentials against the `user` table (see `Backend/README.md` for the PBKDF2-over-MD5 scheme), and calls `onLoginSuccess(user)` only on `200`; a `401` renders in `.login-error`. S14 opens a server-side session and sets an **httpOnly** cookie, so the token is never reachable from JS and there is nothing in `localStorage` to steal. `App.jsx` cannot read the cookie either — it calls `S15` on mount to ask whether a session is live, which is what makes a reload keep you logged in, and renders `null` until that answers so the login screen does not flash. `onLogout` calls `S16`, which drops the session server-side. **Every endpoint except S14 requires the session** (see `Backend/README.md`).
+- `Frontend/src/Login.jsx` — real login. `handleSubmit` posts to `S14`, which validates the credentials against the `user` table, and calls `onLoginSuccess(user)` only on `200`; a `401` renders in `.login-error`. S14 opens a server-side session and sets an **httpOnly** cookie, so the token is never reachable from JS and there is nothing in `localStorage` to steal. `App.jsx` cannot read the cookie either — it calls `S15` on mount to ask whether a session is live, which is what makes a reload keep you logged in, and renders `null` until that answers so the login screen does not flash. `onLogout` calls `S16`, which drops the session server-side. **Every endpoint except S14 requires the session.**
 - `Frontend/src/leap/Leap.jsx` — the actual app.
 
 ## The `leap/` module
@@ -124,8 +124,8 @@ those two columns first.
 be proposed only if their `user_address` matches the proposal constituency's own address
 (assembly + mandal + panchayat, or local election body for towns) *and* satisfies its
 reservation. `S12` applies it to the search pool, `S11` re-checks it on write — both via
-the shared `proposal_context()` / `eligibility_filter()` in `main.py`. Change eligibility
-there, not in either endpoint.
+the shared `proposal_context()` / `eligibility_filter()` in the backend repo's `main.py`.
+Change eligibility there, not in either endpoint, and not in this repo.
 
 Some seeded `proposal_candidate` rows pre-date the rule and would fail it now (rows 1/6/7
 are KUPPAM cadre on a VALLURU position). `S13` still returns them — it reports what *is*
@@ -175,5 +175,5 @@ than silently remove:
 - `PositionDetail` imports `STAGES` without using it (pre-dates the backend wiring).
 - `checkPositionAvailability` (S10) is exported from `api.js` and called by nothing.
 - `Frontend/src/circle.svg` is used only by the login screen.
-- `Backend` `S8` and `S10` are unused by the frontend; `S7` already carries the role
+- Backend `S8` and `S10` are unused by the frontend; `S7` already carries the role
   names and the counts that make both redundant.
