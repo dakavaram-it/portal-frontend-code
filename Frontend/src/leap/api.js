@@ -9,7 +9,8 @@ const AUTH_PATHS = ['/S14login', '/S15me', '/S16logout']
 // Not `/api`: on the deployed host that prefix already belongs to the older party
 // dashboard service (its routes live under /api/v1), so /api/S14login never reaches this
 // backend and comes back 404 from that other app. This prefix is unclaimed, so it falls
-// through to whatever fronts the site, into the Vite preview proxy, and on to :8001.
+// through to whatever fronts the site, into the Vite preview proxy, and on to the
+// gateway, which serves it under that backend's own mount (/portal-frontend-code).
 const API_BASE = '/leapapi'
 
 let onUnauthorized = () => {}

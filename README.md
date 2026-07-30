@@ -18,9 +18,11 @@ backend existed and no longer reaches the screen.
 ## Talking to the API
 
 `Frontend/src/leap/api.js` calls `/leapapi/*`. `Frontend/vite.config.js` proxies that
-prefix to `http://127.0.0.1:8001`, stripping `/leapapi`, in both `dev` and `preview`.
-**Point that `target` at wherever the backend actually runs** — it is the only place the
-API host is configured.
+prefix to `http://127.0.0.1:4000`, rewriting `/leapapi` to `/portal-frontend-code`, in
+both `dev` and `preview`. The backend is served by the PSA gateway (`gateway.py`), which
+mounts each project's FastAPI app under a prefix named after it — hence the rewrite
+rather than a strip. **Point that `target` at wherever the gateway actually runs** — it
+is the only place the API host is configured.
 
 The prefix is `/leapapi`, not `/api`, on purpose: on the deployed host
 (`portalnew.mypartydashboard.com`) `/api` is already routed to the older party dashboard
