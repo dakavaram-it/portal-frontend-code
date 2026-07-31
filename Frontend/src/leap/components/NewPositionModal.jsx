@@ -25,6 +25,12 @@ const SEARCH_TYPES = [
 // returns four figures of rows; only the first page gets rendered.
 const MAX_RESULTS = 50
 
+// membership_id is an 8-digit number, and S12 matches it exactly, so anything else
+// in the box can only ever return nothing. Applied on typing, on paste and when the
+// search type changes with a value already in the box.
+const sanitizeSearchValue = (type, value) =>
+  type === 'MembershipId' ? value.replace(/\D/g, '').slice(0, 8) : value
+
 // S13 is keyed per position, so the member list is the same cadre shape the
 // detail screen renders. Every field it returns is shown except the internal
 // ids and img_url (which is the photo itself).
@@ -314,6 +320,12 @@ export default function NewPositionModal() {
   const position = positions.find((p) => String(p.proposal_position_id) === positionId)
 
   const openSlots = (p) => p.max_proposals - p.proposed_cnt
+
+  // S12 returns everyone the search matched and flags whether the reservation lets
+  // them stand, so "matched nobody" and "matched only ineligible cadre" can say
+  // different things. Only the eligible ones are offered for assignment.
+  const eligibleResults = results.filter((c) => c.eligible === 'Y')
+  const ineligibleResults = results.filter((c) => c.eligible !== 'Y')
 
   const step1Done = !!electionTypeId
   const step2Done = step1Done && !!assemblyId
@@ -608,10 +620,17 @@ export default function NewPositionModal() {
           </div>
 
           <div className="leap-cadre-search-row">
-            <Dropdown value={searchType} onChange={setSearchType} options={SEARCH_TYPES} />
+            <Dropdown
+              value={searchType}
+              onChange={(type) => {
+                setSearchType(type)
+                setSearchValue((v) => sanitizeSearchValue(type, v))
+              }}
+              options={SEARCH_TYPES}
+            />
             <input
               value={searchValue}
-              onChange={(e) => setSearchValue(e.target.value)}
+              onChange={(e) => setSearchValue(sanitizeSearchValue(searchType, e.target.value))}
               onKeyDown={(e) => { if (e.key === 'Enter') runSearch() }}
               placeholder="Search…"
             />
@@ -632,10 +651,18 @@ export default function NewPositionModal() {
             <div className="leap-cadre-results">
               {results.length === 0 && !error && (
                 <div className="leap-empty">
-                  No eligible cadre in {proposalConstituencyName} matched that search.
+                  No cadre matched that search.
                 </div>
               )}
-              {results.slice(0, MAX_RESULTS).map((c) => (
+              {eligibleResults.length === 0 && ineligibleResults.length > 0 && (
+                <div className="leap-empty">
+                  {ineligibleResults.length === 1
+                    ? 'This candidate is not eligible'
+                    : `These ${ineligibleResults.length} candidates are not eligible`}
+                  {' '}as this position is reserved for {reservation}.
+                </div>
+              )}
+              {eligibleResults.slice(0, MAX_RESULTS).map((c) => (
                 <button
                   type="button"
                   key={c.tdp_cadre_id}
@@ -654,9 +681,9 @@ export default function NewPositionModal() {
                   </span>
                 </button>
               ))}
-              {results.length > MAX_RESULTS && (
+              {eligibleResults.length > MAX_RESULTS && (
                 <div className="leap-field-hint">
-                  Showing the first {MAX_RESULTS} of {results.length} matches — refine your search.
+                  Showing the first {MAX_RESULTS} of {eligibleResults.length} matches — refine your search.
                 </div>
               )}
             </div>
