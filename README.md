@@ -10,7 +10,8 @@ The API (FastAPI + PyMySQL) lives in a **separate repository** and is deployed
 separately. This repo contains no backend code and no database credentials.
 
 Everything the reachable UI shows comes from that API — picklists, reservation,
-positions, cadre search and the proposed candidates — and assignments persist. The
+positions, cadre search, cadre performance scores and the proposed candidates — and
+assignments persist. The
 frontend keeps no dataset of its own; only the wizard's current selections reset on
 reload. The seed data in `Frontend/src/leap/data.js` is left over from before the
 backend existed and no longer reaches the screen.
@@ -80,7 +81,8 @@ Frontend/
       Leap.jsx         ad-hoc router; the view never changes from its initial one
       data.js          seed dataset, stage definitions, derived helpers (dead)
       api.js           /leapapi fetch wrappers + useList hook
-      components/      NewPositionModal (the app), Sidebar, and unreachable ones
+      components/      NewPositionModal (the app), CompareModal, Sidebar, and
+                       unreachable ones
       Leap.css         every class for the module
 ```
 
@@ -91,7 +93,16 @@ Frontend/
   `S16` requires it. Sessions live in the backend's process memory, so a backend restart
   logs everyone out. There is **no authorization** yet — any valid account can read and
   write against any constituency.
-- The reachable UI is one screen: `components/NewPositionModal.jsx` (plus `Sidebar`).
+- A cadre search **stages** a candidate, it does not propose one. Several are staged and
+  ranked by their performance score, compared side by side in `CompareModal`, and only
+  the **Assign** button writes — one S11 call each, in score order, so a batch can partly
+  succeed when the slots run out.
+- Scores (`S17`) come from a **second, optional** database on the ratings pipeline's own
+  server. With `REPORT_RATINGS_DB_*` unset the API answers `{"configured": false}` and the
+  wizard renders without scores — "No score" badges, a note in the compare modal — rather
+  than erroring.
+- The reachable UI is one screen: `components/NewPositionModal.jsx` (plus `Sidebar` and
+  the `CompareModal` overlay).
   `PositionDetail`, `AllPositions`, `PositionCard` and `Dashboard` are all unreachable,
   as is most of `data.js`. See `CLAUDE.md` for the details and for the truncated
   `STAGES` pipeline caveat.

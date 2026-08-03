@@ -1452,6 +1452,34 @@
   color: #64748b;
 }
 
+.leap-seat-counts {
+  display: flex;
+  gap: 18px;
+  margin-left: auto;
+  margin-right: 18px;
+}
+
+.leap-seat-counts > span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.leap-seat-counts b {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.leap-seat-counts .filled b { color: #0f9d6e; }
+.leap-seat-counts .unfilled b { color: #b45309; }
+
 .leap-reservation-badge {
   background: #fff1f0;
   color: #c8291e;
@@ -1520,10 +1548,9 @@
   color: #dc2626;
 }
 
-.leap-members-seats {
+/* Kept to the right edge, where the seat count used to hold it. */
+.leap-members-group-head .leap-btn-ghost {
   margin-left: auto;
-  font-size: 12px;
-  color: #94a3b8;
 }
 
 .leap-members-empty {
@@ -1540,43 +1567,6 @@
   padding: 14px;
 }
 
-.leap-member-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  background: #fff;
-  padding: 12px;
-}
-
-.leap-member-card-top {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  min-width: 0;
-}
-
-.leap-member-photo {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  object-fit: cover;
-  background: #eef2f7;
-  flex: none;
-  display: block;
-}
-
-.leap-member-photo.initials {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 700;
-  color: #64748b;
-}
-
 .leap-member-photo-btn {
   border: none;
   background: none;
@@ -1585,10 +1575,6 @@
   cursor: zoom-in;
   flex: none;
   line-height: 0;
-}
-
-.leap-member-photo-btn:hover .leap-member-photo {
-  box-shadow: 0 0 0 3px rgba(15, 157, 110, 0.25);
 }
 
 .leap-photo-viewer {
@@ -1606,66 +1592,6 @@
   object-fit: contain;
   border-radius: 12px;
   background: #f1f5f9;
-}
-
-.leap-member-headline {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-
-.leap-member-name {
-  font-size: 14px;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.leap-member-relative {
-  font-size: 12px;
-  color: #64748b;
-}
-
-.leap-member-id {
-  align-self: flex-start;
-  margin-top: 2px;
-  background: #f1f5f9;
-  color: #475569;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 10px;
-  border-radius: 999px;
-}
-
-.leap-member-detail-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 8px;
-}
-
-.leap-member-detail-grid > div {
-  background: #f8fafc;
-  border: 1px solid #eef2f7;
-  border-radius: 8px;
-  padding: 7px 10px;
-  min-width: 0;
-}
-
-.leap-member-detail-grid span {
-  display: block;
-  font-size: 9.5px;
-  color: #94a3b8;
-  letter-spacing: 0.04em;
-  margin-bottom: 3px;
-}
-
-.leap-member-detail-grid b {
-  display: block;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: #0f172a;
-  overflow-wrap: anywhere;
 }
 
 .leap-chip-list {
@@ -1799,6 +1725,15 @@
   color: #0f172a;
 }
 
+.leap-position-card-proposed {
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
 .leap-position-card-open {
   background: #e0f2fe;
   color: #0369a1;
@@ -1826,6 +1761,627 @@
 .leap-position-card.selected .leap-position-card-name::before {
   content: '✓ ';
 }
+
+/* ---------- Staged candidates (step 6) ---------- */
+.leap-btn-ghost {
+  margin-left: auto;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid #ddd6fe;
+  background: #f5f3ff;
+  color: #6d28d9;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.leap-btn-ghost:hover {
+  background: #ede9fe;
+}
+
+.leap-staged {
+  margin-top: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.leap-staged-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+.leap-staged-head b {
+  font-size: 13.5px;
+  color: #0f172a;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* Same card as the proposed members below, so the same track width. */
+.leap-staged-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+
+/* Score tiers. 'none' is its own tier rather than a zero: a cadre the ratings pipeline
+   has never seen must not read as the worst candidate staged. */
+.tier-high { background: #dcfce7; color: #15803d; }
+.tier-mid  { background: #fef3c7; color: #b45309; }
+.tier-low  { background: #fee2e2; color: #b91c1c; }
+.tier-none { background: #f1f5f9; color: #94a3b8; }
+
+/* ---------- Candidate comparison ---------- */
+/* Its own overlay rather than .leap-modal-overlay: the table wants the full width of
+   the window, and its header bar goes to the edges instead of sitting on a padded card. */
+.leap-cmp-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(15, 23, 42, 0.62);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.leap-cmp {
+  background: #fff;
+  border-radius: 20px;
+  width: 100%;
+  max-width: calc(100vw - 80px);
+  max-height: calc(100vh - 100px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 32px 80px rgba(15, 23, 42, 0.38);
+}
+
+.leap-cmp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 18px;
+  background: linear-gradient(135deg, #1e40af 0%, #1d4ed8 100%);
+  flex: none;
+}
+
+.leap-cmp-head-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.leap-cmp-head-sub {
+  margin-top: 1px;
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.leap-cmp-head-close {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.leap-cmp-head-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.leap-cmp-state {
+  padding: 40px 24px;
+  text-align: center;
+  font-size: 13.5px;
+  color: #64748b;
+}
+
+.leap-cmp-state.error {
+  color: #dc2626;
+}
+
+.leap-cmp-scroll {
+  flex: 1;
+  overflow: auto;
+}
+
+.leap-cmp-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12.5px;
+}
+
+/* The metric column stays put while the candidate columns scroll sideways, and the
+   candidate headers stay put while the metrics scroll up. */
+.leap-cmp-metric,
+.leap-cmp-rowhead {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #f8fafc;
+  text-align: left;
+  white-space: nowrap;
+  min-width: 170px;
+  max-width: 270px;
+}
+
+.leap-cmp-metric {
+  top: 0;
+  z-index: 6;
+  padding: 0 16px 12px;
+  vertical-align: bottom;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  color: #94a3b8;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.leap-cmp-rowhead {
+  padding: 4px 12px 4px 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #4b5563;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.leap-cmp-candhead {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  min-width: 215px;
+  max-width: 265px;
+  padding: 9px 12px;
+  vertical-align: top;
+  text-align: left;
+  background: #fff;
+  border-bottom: 2px solid #e2e8f0;
+  border-left: 1px solid #e5e7eb;
+  cursor: grab;
+}
+
+.leap-cmp-candhead:active { cursor: grabbing; }
+.leap-cmp-candhead.dragging { opacity: 0.45; }
+
+.leap-cmp-candhead.winner {
+  border-top: 3px solid #d97706;
+  background: #fffcf0;
+}
+
+.leap-cmp-cand {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.leap-cmp-cand-top {
+  position: absolute;
+  top: -12px;
+  right: -14px;
+  background: #d97706;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 0 0 0 8px;
+  white-space: nowrap;
+}
+
+.leap-cmp-dismiss {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.leap-cmp-dismiss:hover {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.leap-cmp-photo {
+  flex: none;
+  display: block;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #e5e7eb;
+  border: 2px solid #e2e8f0;
+}
+
+.leap-cmp-photo.initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.leap-cmp-cand-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.leap-cmp-name {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leap-cmp-mid {
+  display: block;
+  margin-top: 1px;
+  font-size: 10px;
+  color: #9ca3af;
+}
+
+/* Colour comes from the tier inline; the tint stays a class so the pill matches the
+   staged card's badge. */
+.leap-cmp-score {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  margin-top: 3px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.leap-cmp-score i {
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 600;
+  opacity: 0.6;
+}
+
+.leap-cmp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.leap-cmp-chip {
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: #374151;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.leap-cmp-section {
+  position: sticky;
+  left: 0;
+  padding: 5px 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.leap-cmp-section span {
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+}
+
+.leap-cmp-section i {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-style: normal;
+  font-size: 9.5px;
+  font-weight: 800;
+  vertical-align: middle;
+}
+
+.leap-cmp-val {
+  padding: 4px 12px;
+  text-align: center;
+  vertical-align: middle;
+  font-size: 12px;
+  color: #374151;
+  background: #fff;
+  border-bottom: 1px solid #f1f5f9;
+  border-left: 1px solid #f1f5f9;
+}
+
+.leap-cmp-val.empty { color: #d1d5db; }
+.leap-cmp-val.best { background: #f0fdf4; }
+
+.leap-cmp-row:nth-child(even) .leap-cmp-val { background: #fafbfc; }
+.leap-cmp-row:nth-child(even) .leap-cmp-val.best { background: #f0fdf4; }
+.leap-cmp-row:nth-child(even) .leap-cmp-rowhead { background: #f4f6f8; }
+.leap-cmp-row.pts .leap-cmp-rowhead { font-weight: 700; }
+
+.leap-cmp-row.total .leap-cmp-rowhead {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.leap-cmp-pill {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.leap-cmp-pill.best {
+  background: #d97706;
+  color: #fff;
+  border: 1px solid transparent;
+  box-shadow: 0 1px 4px rgba(217, 119, 6, 0.4);
+}
+
+.leap-cmp-row.total .leap-cmp-pill {
+  padding: 4px 14px;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.leap-cmp-row.total .leap-cmp-pill.best {
+  background: #059669;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.38);
+}
+
+/* ---------- Proposed member card ---------- */
+.leap-mcard {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+.leap-mcard-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px 8px;
+}
+
+.leap-mcard-photo {
+  flex: none;
+  display: block;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #eef2f7;
+  border: 2px solid #e2e8f0;
+}
+
+.leap-member-photo-btn:hover .leap-mcard-photo {
+  box-shadow: 0 0 0 3px rgba(15, 157, 110, 0.25);
+}
+
+.leap-mcard-photo.initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.leap-mcard-head-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.leap-mcard-name-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.leap-mcard-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.leap-mcard-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 2px #d1fae5;
+}
+
+.leap-mcard-name-right {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+}
+
+.leap-mcard-remove {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+  background: #fff2f2;
+  color: #dc2626;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.leap-mcard-remove:hover {
+  background: #ffe1e1;
+}
+
+.leap-mcard-score {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--sc) 10%, #fff);
+  border: 1.5px solid color-mix(in srgb, var(--sc) 28%, #e5e7eb);
+}
+
+.leap-mcard-score b {
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--sc);
+}
+
+.leap-mcard-score i {
+  font-style: normal;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--sc);
+  opacity: 0.8;
+}
+
+.leap-mcard-considered {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+.leap-mcard-considered b {
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.leap-mcard-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.leap-mcard-pills span {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+.leap-mcard-section {
+  padding: 7px 12px 6px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.leap-mcard-section-label {
+  margin-bottom: 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: #94a3b8;
+}
+
+/* Six columns the fields span, as on the card this mirrors. */
+.leap-mcard-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 3px;
+}
+
+.leap-mcard-field {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 4px 7px;
+  background: #f8fafc;
+  border: 1px solid #eef0f4;
+  border-radius: 6px;
+}
+
+.leap-mcard-field.span2 { grid-column: span 2; }
+.leap-mcard-field.span3 { grid-column: span 3; }
+.leap-mcard-field.span6 { grid-column: span 6; }
+
+.leap-mcard-field span {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: #94a3b8;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Ellipsised rather than wrapped, so every card in a row is the same height; the full
+   value is on the element's title. */
+.leap-mcard-field b {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.leap-mcard-field b.caste { color: #5b21b6; }
+.leap-mcard-field b.cat-BC { color: #92400e; }
+.leap-mcard-field b.cat-OC { color: #1e40af; }
+.leap-mcard-field b.cat-SC { color: #6b21a8; }
+.leap-mcard-field b.cat-ST { color: #9d174d; }
+.leap-mcard-field b.accent { color: #b45309; }
+.leap-mcard-field b.highlight { color: #0f9d6e; }
 
 @media (max-width: 960px) {
   .leap-stat-row { grid-template-columns: repeat(3, 1fr); }

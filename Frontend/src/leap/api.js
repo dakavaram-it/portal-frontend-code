@@ -86,6 +86,12 @@ export const searchCadre = (proposalConstituencyId, searchType, searchValue) =>
 export const getProposalCandidates = (proposalPositionId) =>
   get(`/S13getProposalCandidatesByProposalPositionId?proposal_position_id=${proposalPositionId}`)
 
+// One candidate card and the whole compare table are the same payload, so they are the
+// same call. Answers {configured: false} with no candidates when the ratings database is
+// not wired up, which is a state the UI has to render rather than an error.
+export const getCadreScores = (membershipIds) =>
+  get(`/S17getCadreScores?mids=${encodeURIComponent(membershipIds.join(','))}`)
+
 // Loads a list on mount / when deps change. Returns [] until it resolves,
 // and [] again if the request fails (error is logged, not shown).
 export function useList(load, deps) {

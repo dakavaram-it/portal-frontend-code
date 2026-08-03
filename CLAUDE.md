@@ -47,7 +47,7 @@ Two top-level screens, switched by a boolean in `Frontend/src/App.jsx`:
 | `AllPositions` | `view.name === 'positions'` | **Unreachable** — nothing sets this view |
 | `PositionCard` | rendered by `AllPositions` | therefore also unreachable |
 
-### `NewPositionModal` (694 lines — read it before changing anything here)
+### `NewPositionModal` (844 lines — read it before changing anything here)
 
 Six steps, rendered top to bottom in one scrolling panel, each gated on `stepNDone`:
 
@@ -55,14 +55,28 @@ Six steps, rendered top to bottom in one scrolling panel, each gated on `stepNDo
 2. **Assembly** — S2, `searchable` (the list is every assembly in the state).
 3. **Mandal/Town** — S3 + S4 merged into one picklist. The two halves resolve through different endpoints, so option values are tagged `m:<tehsil_id>` / `t:<town_id>` and split back apart by `locationKey.split(':')` — keep that encoding.
 4. **Local body** — S5 (for `m:`) or S6 (for `t:`). Its heading is `localBodyLabel`, i.e. the step-1 election type name. Auto-selects when exactly one row comes back.
-5. **Reservation & Members** — S9 for the reservation badge, S7 for the roles, then a fork: **View Members** or **Add Members**.
-6. **Cadre search** — S12 search, S11 assign. Only rendered in the `add` branch, once a role is picked.
+5. **Reservation & Members** — S9 for the reservation badge, S7 for the roles and the Total / Filled / Unfilled seat counts, then a fork: **View Members** or **Add Members**. **A "seat" here is a `max_proposals` slot, not a `max_positions` one**: total is `Σ max_proposals`, filled is `Σ proposed_cnt`, and unfilled is the difference — so two roles of three read as six seats with each candidate proposed filling one. That is the same number the per-role "N open" badges count down; `max_positions` is shown separately, as the role's "N seat(s)".
+6. **Cadre search** — S12 search (membership id only), S17 score, S11 assign. Only rendered in the `add` branch, once a role is picked.
+
+### `CompareModal`
+
+Side-by-side comparison of cadre, one column each, opened from the staged list in step 6 and from any View Members role holding more than one cadre. Takes cadre rows in the **backend's own shape**, reads the header's name/photo/chips straight off them and fetches only the score half, via `getCadreScores`. **The table is scores alone** — the profile fields it used to repeat as rows are on the column header and on the member card, and listing them again pushed the first weighted section off the screen. Columns are drag-reorderable (with edge auto-scroll while a drag is live, since a column past the right edge could otherwise never be dropped on the left one) and individually dismissable, both view-only; the header of the highest `total_score` column carries a ★ TOP flag, and only when someone actually has a score, since with the ratings database unwired every column is `null` and there is no winner to point at.
+
+Its layout mirrors the membership-analytics platform's own compare table (`PositionDetailScreen.jsx` in that repo), so the two read the same way: a sticky metric column and sticky candidate headers, then `PERFORMANCE_SECTIONS` — the weighted groups (`PEDALA SEVALO 15%`, `D2D CAMPAIGN 30%`, …) whose rows name the report's own column names (`'ACH % (Booth D2D)'`, `'BOOTH 15%'`, …), which is why S17 returns the row unrenamed. **Only `pts`/`score` rows carry the best-of highlight**, and only when the maximum is unique — a tie has no winner to point at. Two things that platform shows are absent here because this backend has no endpoint for them: `MY TDP APP USAGE` and the per-candidate Documents overlay. `PREVIOUS POSITIONS` reads the report's `'2018 - 2020'` / `'2016 - 2018'` / `'2014 - 2016'` columns rather than that platform's `cadre_details.previous_role`.
 
 Selecting anything at step *N* clears steps *N+1…6* (the `select*` handlers). Picking a different role additionally clears the search results, selection, error and success text.
 
-**View Members** fans S13 out over every role from S7 (`Promise.all`, one call per role) and renders each cadre as a card: photo, name, relative, membership id, plus the fields in `MEMBER_FIELDS`. `img_url` is an S3 URL built by S12/S13 and is `''` when the cadre has no photo — the card falls back to `initials()`. Clicking a photo opens the `zoomed` lightbox. `members[id] === undefined` means S13 is still in flight, `[]` means it returned none; the two render differently.
+**View Members** fans S13 out over every role from S7 (`Promise.all`, one call per role), then makes **one** S17 call for every membership id the whole fan-out returned, and renders each cadre as a `MemberCard` — the membership-analytics `cand-card`, field for field: a header (photo, name, score badge tinted by `scoreTier`, "Proposed for &lt;role&gt;", membership-id and mobile pills) over `PROFILE` and `LOCATION & MEMBERSHIP` on a six-column grid the fields `span`. **The fields this backend cannot fill are still rendered, as `—`** (Date of Birth, Occupation, Education, Parliament, Caste Community %) so the two cards read the same; Voter ID and Panchayat are the only two fields added, because that card has no slot for them. Colour carries meaning and matches: caste by category (BC/OC/SC/ST), Member Since and Renewals green, Caste Community % amber. Everything comes off the S13 row except **Member Since** and **Renewals**, which are the report's `'YEAR'` and `'NO OF TIME'`, and the badge, which is `total_score`. That S17 call is decoration on a list that already rendered, so its failure is logged and the badge and those two fields go blank rather than the view erroring. `img_url` is an S3 URL built by S12/S13 and is `''` when the cadre has no photo — the card falls back to `initials()`. Clicking a photo opens the `zoomed` lightbox. `members[id] === undefined` means S13 is still in flight, `[]` means it returned none; the two render differently.
 
-**Add Members** shows the roles as cards, disabled when `max_proposals - proposed_cnt <= 0`, then the search row. Results are capped at `MAX_RESULTS` (50) with a "refine your search" hint — a `Name` search is a substring match over the whole constituency and routinely returns thousands. After a successful assign, `positionsKey` is bumped so S7 re-reads and the open-slot counts update in place.
+**`MemberCard` renders the staged cards in step 6 too**, so a cadre looks the same before and after they are proposed. `onRemove` is what tells the two apart: with it the card gets a drop button, loses the live dot, and reads "Considered for" rather than "Proposed for" — nothing is proposed until you assign, and the staged list must not claim otherwise.
+
+**Add Members** shows the roles as cards, disabled when `max_proposals - proposed_cnt <= 0`, then the search row.
+
+**Search is by membership id only** (`SEARCH_TYPE = 'MembershipId'`), because it is the one field S12 matches exactly, so a search resolves to a single cadre rather than a page of near-matches — the `Name` filter is a `LIKE '%value%'` over `first_name` with no location filter and routinely returns thousands. `sanitizeSearchValue` strips the box to 8 digits on typing and on paste, and `runSearch` refuses anything shorter. S12 still returns matched-but-ineligible cadre (see the eligibility trap below), which is what lets "no such id", "already staged" and "barred by the reservation" read as three different messages rather than one blank result.
+
+**A search stages a cadre, it does not assign one.** `staged` holds the cadre rows; `scores` holds their whole S17 row (the card wants the report behind the score, for Member Since and Renewals, not just the number), keyed by `membership_id` and fetched one MID at a time as each is staged, so a slow score never blocks the card. `stagedByScore` sorts best-first on `total_score` with unscored cadre last (`?? -1`) rather than as zeros. Each staged card is a `MemberCard` with `onRemove` — same layout as a proposed member, plus the photo lightbox and a score badge tiered by `scoreTier` (≥70 / ≥40 / below / none). **Compare** appears once two are staged.
+
+`assignStaged` then calls S11 **sequentially**, in score order — the proposal slots are exactly what the staged candidates compete for, and S11 re-checks the count on every write, so the server has to see them one at a time. A batch can therefore partly succeed: whoever went in is dropped from `staged` and named in the success line, and the rest stay staged with S11's own `{detail}` text. After any success `positionsKey` is bumped so S7 re-reads and the open-slot counts update in place.
 
 `Dropdown` is a hand-rolled replacement for `<select>`, used by steps 2/3/4 and the search-type picker. It exists because Chrome flips a long native popup *upward*; this one always drops below. `searchable` adds a filter input (step 2 only). It closes on outside `mousedown` and on Escape.
 
@@ -87,6 +101,8 @@ Central source of both the seed dataset and the domain vocabulary. It exports:
 
 One thin `get`/`post` pair over `${API_BASE}/*` — `API_BASE` is `/leapapi` (Vite proxies it; see above for why not `/api`) — one named function per endpoint, plus `useList(load, deps)` — the hook every picklist uses. `useList` returns `[]` until the promise resolves **and `[]` again on failure**, logging the error rather than surfacing it: a failed picklist is indistinguishable from an empty one in the UI. `post` unwraps FastAPI's `{detail: "..."}` into the thrown `Error.message`, which is what the S11 error banner shows.
 
+`getCadreScores(mids)` is the one call behind both the staged card's score badge and the whole compare table — same payload, so the same endpoint (`S17`, `?mids=` comma-separated). It answers `{configured: false, questions: [], candidates: []}` rather than failing when the ratings database is unset on the server, which is a state the UI renders ("No score", and a note in the compare modal) rather than an error. **The score half is optional; the profile half never is** — everything the compare table shows above the Performance section comes off the S12/S13 row the caller already had.
+
 Both `get` and `post` route a `401` through `checkUnauthorized` before throwing: it calls the handler registered by `App.jsx` via `setUnauthorizedHandler`, which clears `user` and returns to the login screen. **`AUTH_PATHS` (`S14`/`S15`/`S16`) is exempt and must stay that way** — `S14` answers `401` for bad credentials and `S15` answers `401` on a normal first visit, so treating those as expiries would wipe the login form's own error banner. Only `401` triggers it: a `429` from the login throttle and a `500` from a dead backend must not log anyone out. Adding an endpoint that can legitimately `401` without meaning "session over" means adding it to `AUTH_PATHS`.
 
 ## Traps to know before editing
@@ -101,7 +117,7 @@ Both `get` and `post` route a `401` through `checkUnauthorized` before throwing:
 
 If you touch `STAGES`, check every one of the consumers above.
 
-**"Step N" and "SN" are different numbering schemes and no longer line up.** `S1`…`S13` are backend endpoints; steps 1–6 are the wizard's visible sections. Wizard step 3 calls S3+S4, step 4 calls S5 *or* S6, step 5 calls S9+S7+S13, step 6 calls S12+S11. Say which you mean.
+**"Step N" and "SN" are different numbering schemes and no longer line up.** `S1`…`S17` are backend endpoints; steps 1–6 are the wizard's visible sections. Wizard step 3 calls S3+S4, step 4 calls S5 *or* S6, step 5 calls S9+S7+S13, step 6 calls S12+S17+S11. Say which you mean.
 
 **Only one path through the wizard reaches live data.** The database holds exactly one
 `proposal_consituency` row, reachable only via **ACHANTA (`constituency_id` 181) →
@@ -120,16 +136,39 @@ originally `is_active = NULL, order_no = NULL` — S1 hid the one type the data 
 it has since been activated. If step 1 ever shows no Panchayat option again, check
 those two columns first.
 
-**Candidate eligibility is location + reservation, enforced in two places.** A cadre may
-be proposed only if their `user_address` matches the proposal constituency's own address
-(assembly + mandal + panchayat, or local election body for towns) *and* satisfies its
-reservation. `S12` applies it to the search pool, `S11` re-checks it on write — both via
-the shared `proposal_context()` / `eligibility_filter()` in the backend repo's `main.py`.
-Change eligibility there, not in either endpoint, and not in this repo.
+**Candidate eligibility is the reservation alone — location is not part of it.** A cadre's
+`user_address` no longer has to match the proposal constituency's chain (assembly → mandal
+→ panchayat/town), so cadre from anywhere may be proposed. What is checked is the
+constituency's `constituency_reservation`: `caste_category_id` when set, and `gender = 'F'`
+when set. Both come from `proposal_context()` in the backend repo's `main.py`, the SQL from
+`eligibility_flag()` there. Change eligibility there, not in either endpoint, and not in
+this repo. A cadre with no caste category on record compares NULL and so is ineligible.
 
-Some seeded `proposal_candidate` rows pre-date the rule and would fail it now (rows 1/6/7
-are KUPPAM cadre on a VALLURU position). `S13` still returns them — it reports what *is*
-assigned, and filtering it would desync the list from `S7`'s `proposed_cnt`.
+**`S12` flags eligibility, it does not filter.** `eligibility_flag()` returns a SELECT
+expression (`… AS eligible`, `'Y'`/`'N'`), not a WHERE clause, so S12 returns every cadre
+the search matched. That is deliberate: "no cadre has that membership id" and "that cadre
+is barred by the reservation" are different states and `runSearch` says different things
+for each — the second names the reservation. Only `eligible === 'Y'` rows can be staged.
+`S11` re-checks the same rules on write and answers `409` with the reservation type in
+`detail`, which is what the error banner shows.
+
+**Scores come from a second, optional database.** `S17getCadreScores` reads
+`report_ratings` — `cadre_performace_report` (the table's name really is spelt that way)
+for the per-category points and `leader_feedback` for the per-question ones, with the
+question labels coming from `members_track.question` on the same server. **Total Score is
+half of each**: `(Σ the 11 POINTS columns ÷ 2) + (Σ the feedback answer points ÷ 2)`,
+matching the membership-analytics platform, and it is `null` — never `0` — when a cadre has
+neither, so unrated does not sort as worst. S17 is *lookup-first*: a membership id whose
+report row already exists is served from the table, and the `cadre_performance_update` /
+`cadre_performance_report` procedures (seconds per id) run only for the rest.
+`REPORT_RATINGS_DB_HOST`/`USER`/`PASSWORD` are all optional — with any of them unset
+`RATINGS_DB` stays `None` and S17 answers `{"configured": false}`, so the wizard renders
+without scores instead of erroring. `Backend/test_score.py` covers the arithmetic and the
+membership-id key matching (the report stores it as varchar, `leader_feedback` as an INT).
+
+Some seeded `proposal_candidate` rows would fail the reservation check now. `S13` still
+returns them — it reports what *is* assigned, and filtering it would desync the list from
+`S7`'s `proposed_cnt`.
 
 **A "proposal constituency" is the local body being contested** — for this data a
 *panchayat* (`VALLURU`, `constituency_id` 58153, `election_scope_id` 33), one level below
@@ -150,13 +189,13 @@ just don't read the name as a description.
 
 ## Styling
 
-`Frontend/src/leap/Leap.css` (~1820 lines) holds every class for the leap module; `Login.css` (~180) covers the login screen; `index.css` is a 17-line reset. Classes are flat and prefixed `leap-`. No CSS modules, no utility framework — add styles to the existing file matching the surrounding naming. Fonts (Montserrat, Inter) load from Google Fonts in `index.html`.
+`Frontend/src/leap/Leap.css` (~2400 lines) holds every class for the leap module; `Login.css` (~180) covers the login screen; `index.css` is a 17-line reset. Classes are flat and prefixed `leap-`. No CSS modules, no utility framework — add styles to the existing file matching the surrounding naming. Fonts (Montserrat, Inter) load from Google Fonts in `index.html`.
 
 A large share of the file styles components that no longer render (`.leap-card-*`, `.leap-stage-*`, `.leap-candidate-*`, `.leap-cadre-search-modal`, `.leap-detail-*`, …). Grep the JSX before assuming a rule is live — and before deleting one, since the dead components still reference them.
 
 ## Known dead / inert code
 
-This is now most of the `leap/` module — 630 of its ~1400 JSX lines. Mention rather
+Still a third of the `leap/` module — 630 of its ~1900 JSX lines. Mention rather
 than silently remove:
 
 - **`PositionDetail.jsx` (339 lines) became unreachable** when `createPosition` was dropped

@@ -9,46 +9,22 @@ import {
   getPositionsOverview,
   getReservation,
   getProposalCandidates,
+  getCadreScores,
   searchCadre,
   assignCandidate,
   useList,
 } from '../api.js'
+import CompareModal, { scoreTier } from './CompareModal.jsx'
 
-// Values must match the backend's CADRE_SEARCH_FILTERS keys.
-const SEARCH_TYPES = [
-  { value: 'Name', label: 'Name' },
-  { value: 'MembershipId', label: 'Membership ID' },
-  { value: 'MobileNo', label: 'Mobile No' },
-]
+// Cadre are searched by membership id alone. It is the one field S12 matches exactly, so
+// a search resolves to a single cadre to weigh up rather than to a page of near-matches —
+// a name search is a substring match over the whole constituency and routinely returns
+// four figures of rows. Must stay one of the backend's CADRE_SEARCH_FILTERS keys.
+const SEARCH_TYPE = 'MembershipId'
 
-// A name search is a substring match over the whole constituency and routinely
-// returns four figures of rows; only the first page gets rendered.
-const MAX_RESULTS = 50
-
-// membership_id is an 8-digit number, and S12 matches it exactly, so anything else
-// in the box can only ever return nothing. Applied on typing, on paste and when the
-// search type changes with a value already in the box.
-const sanitizeSearchValue = (type, value) =>
-  type === 'MembershipId' ? value.replace(/\D/g, '').slice(0, 8) : value
-
-// S13 is keyed per position, so the member list is the same cadre shape the
-// detail screen renders. Every field it returns is shown except the internal
-// ids and img_url (which is the photo itself).
-const MEMBER_FIELDS = [
-  { label: 'MOBILE', value: (c) => c.mobile_no },
-  { label: 'GENDER', value: (c) => c.gender },
-  { label: 'AGE', value: (c) => c.age },
-  { label: 'CATEGORY', value: (c) => c.category_name },
-  { label: 'CASTE', value: (c) => c.caste_name },
-  { label: 'VOTER ID', value: (c) => c.voter_id_card_no },
-  { label: 'PANCHAYAT', value: (c) => c.panchayat_name },
-  { label: 'MANDAL / TOWN', value: (c) => c.mandal_town_name },
-  { label: 'ASSEMBLY', value: (c) => c.constituency_name },
-]
-
-function relativeOf(c) {
-  return [c.relative_type, c.relative_name].filter(Boolean).join(' ')
-}
+// membership_id is an 8-digit number and S12 matches it exactly, so anything else in the
+// box can only ever return nothing. Applied on typing and on paste.
+const sanitizeSearchValue = (value) => value.replace(/\D/g, '').slice(0, 8)
 
 function memberIds(c) {
   return [c.membership_id || `Cadre #${c.tdp_cadre_id}`, c.mobile_no].filter(Boolean).join(' · ')
@@ -226,6 +202,106 @@ const ELECTION_TYPE_ICONS = {
   Corporation: IconFactory,
 }
 
+// Score tiers colour the badge the same way the compare table's does.
+const TIER_COLOR = { none: '#9ca3af', high: '#059669', mid: '#d97706', low: '#dc2626' }
+
+// A cadre proposed for a role, or — with `onRemove` — one only staged for it, which is
+// the same card with a drop button and the verb the staged list depends on: nothing is
+// proposed until you assign. Laid out field for field like the
+// membership-analytics card it mirrors — including the fields this backend cannot fill,
+// which render '—' rather than being dropped, so the two cards read the same. `span` is
+// the number of the grid's six columns the field takes. Voter ID and Panchayat are the
+// two fields that card has no slot for; they are the only additions.
+function MemberCard({ cadre, role, rating, onZoom, onRemove }) {
+  const score = rating?.total_score
+  const report = rating?.performance
+  const caste = [cadre.category_name, cadre.caste_name].filter(Boolean).join(' · ')
+  const renewals = report?.['NO OF TIME']
+  const profile = [
+    { label: 'Gender', value: cadre.gender, span: 2 },
+    { label: 'Age', value: cadre.age, span: 2 },
+    { label: 'Date of Birth', value: null, span: 2 },
+    { label: 'Caste / Sub-caste', value: caste, span: 6, cls: `caste cat-${cadre.category_name}` },
+    { label: 'Occupation', value: null, span: 3 },
+    { label: 'Education', value: null, span: 3 },
+    { label: 'Voter ID', value: cadre.voter_id_card_no, span: 6 },
+  ]
+  const location = [
+    { label: 'Parliament', value: null, span: 6 },
+    { label: 'Assembly', value: cadre.constituency_name, span: 3 },
+    { label: 'Mandal / Town', value: cadre.mandal_town_name, span: 3 },
+    { label: 'Panchayat', value: cadre.panchayat_name, span: 6 },
+    { label: 'Caste Community %', value: null, span: 6, cls: 'accent' },
+    { label: 'Member Since', value: report?.['YEAR'], span: 3, cls: 'highlight' },
+    { label: 'Renewals', value: renewals != null ? `${renewals}×` : null, span: 3, cls: 'highlight' },
+  ]
+  return (
+    <div className="leap-mcard">
+      <div className="leap-mcard-head">
+        {cadre.img_url ? (
+          <button
+            type="button"
+            className="leap-member-photo-btn"
+            title={`Enlarge ${cadre.member_name}'s photo`}
+            onClick={onZoom}
+          >
+            <img className="leap-mcard-photo" src={cadre.img_url} alt={cadre.member_name} />
+          </button>
+        ) : (
+          <span className="leap-mcard-photo initials">{initials(cadre.member_name)}</span>
+        )}
+        <div className="leap-mcard-head-info">
+          <div className="leap-mcard-name-row">
+            <span className="leap-mcard-name">
+              {!onRemove && <i className="leap-mcard-dot" />}
+              {cadre.member_name}
+            </span>
+            <span className="leap-mcard-name-right">
+              {score !== undefined && score !== null && (
+                <span className="leap-mcard-score" style={{ '--sc': TIER_COLOR[scoreTier(score)] }}>
+                  <b>{Math.round(score * 10) / 10}</b>
+                  <i>SCORE</i>
+                </span>
+              )}
+              {onRemove && (
+                <button
+                  type="button"
+                  className="leap-mcard-remove"
+                  title={`Remove ${cadre.member_name}`}
+                  onClick={onRemove}
+                >
+                  ✕
+                </button>
+              )}
+            </span>
+          </div>
+          <div className="leap-mcard-considered">
+            {onRemove ? 'Considered for' : 'Proposed for'} <b>{role}</b>
+          </div>
+          <div className="leap-mcard-pills">
+            <span>{cadre.membership_id || `Cadre #${cadre.tdp_cadre_id}`}</span>
+            {cadre.mobile_no && <span>{cadre.mobile_no}</span>}
+          </div>
+        </div>
+      </div>
+
+      {[['PROFILE', profile], ['LOCATION & MEMBERSHIP', location]].map(([section, fields]) => (
+        <div className="leap-mcard-section" key={section}>
+          <div className="leap-mcard-section-label">{section}</div>
+          <div className="leap-mcard-grid">
+            {fields.map(({ label, value, span, cls }) => (
+              <div className={`leap-mcard-field span${span}`} key={label}>
+                <span>{label}</span>
+                <b className={cls} title={value || undefined}>{value || '—'}</b>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function NewPositionModal() {
   const [electionTypeId, setElectionTypeId] = useState('')
   const [assemblyId, setAssemblyId] = useState('')
@@ -236,15 +312,20 @@ export default function NewPositionModal() {
 
   const [positionId, setPositionId] = useState('')
 
-  // Step 6 — cadre search (S12) and assign (S11).
-  const [searchType, setSearchType] = useState('Name')
+  // Step 6 — cadre search (S12), their scores (S17) and assign (S11). A search stages a
+  // cadre rather than assigning one, so several can be weighed against each other before
+  // any of them is proposed.
   const [searchValue, setSearchValue] = useState('')
-  const [results, setResults] = useState([])
-  const [searched, setSearched] = useState(false)
+  const [staged, setStaged] = useState([])
+  // membership_id -> the S17 row, the same shape `memberScores` holds: the card wants the
+  // report behind the score as well as the score. Kept apart from `staged` so a row
+  // arriving late does not have to rewrite the cadre it belongs to.
+  const [scores, setScores] = useState({})
   const [busy, setBusy] = useState(false)
-  const [selectedCadreId, setSelectedCadreId] = useState(null)
   const [error, setError] = useState('')
   const [assigned, setAssigned] = useState('')
+  // { candidates, title } for the comparison overlay, or null.
+  const [comparing, setComparing] = useState(null)
   // Bumped after a successful assign so S7's proposed_cnt / open slots re-read.
   const [positionsKey, setPositionsKey] = useState(0)
 
@@ -279,6 +360,9 @@ export default function NewPositionModal() {
   // "View Members" wants the cadre themselves, and S13 is per position — one
   // call per role, only once the user asks for the view.
   const [members, setMembers] = useState(null)
+  // membership_id -> the S17 row behind the member card's score badge and its
+  // Member Since / Renewals fields. One call for every member on the screen.
+  const [memberScores, setMemberScores] = useState({})
   // The member whose photo is open in the lightbox.
   const [zoomed, setZoomed] = useState(null)
   useEffect(() => {
@@ -286,9 +370,20 @@ export default function NewPositionModal() {
     let cancelled = false
     Promise.all(positions.map((p) => getProposalCandidates(p.proposal_position_id)))
       .then((lists) => {
-        if (!cancelled) {
-          setMembers(Object.fromEntries(positions.map((p, i) => [p.proposal_position_id, lists[i]])))
-        }
+        if (cancelled) return
+        setMembers(Object.fromEntries(positions.map((p, i) => [p.proposal_position_id, lists[i]])))
+        const mids = lists.flat().map((c) => c.membership_id).filter(Boolean)
+        if (mids.length === 0) return
+        // The scores decorate a list that already renders, so a ratings database that is
+        // unset or slow leaves the badge and those two fields blank rather than failing
+        // the whole view.
+        getCadreScores(mids)
+          .then((data) => {
+            if (!cancelled) {
+              setMemberScores(Object.fromEntries(data.candidates.map((c) => [String(c.membership_id), c])))
+            }
+          })
+          .catch((err) => console.error(err))
       })
       .catch((err) => { if (!cancelled) { console.error(err); setMembers({}) } })
     return () => { cancelled = true }
@@ -321,11 +416,19 @@ export default function NewPositionModal() {
 
   const openSlots = (p) => p.max_proposals - p.proposed_cnt
 
-  // S12 returns everyone the search matched and flags whether the reservation lets
-  // them stand, so "matched nobody" and "matched only ineligible cadre" can say
-  // different things. Only the eligible ones are offered for assignment.
-  const eligibleResults = results.filter((c) => c.eligible === 'Y')
-  const ineligibleResults = results.filter((c) => c.eligible !== 'Y')
+  // A seat here is a `max_proposals` slot, summed over the roles — the same number the
+  // per-role "N open" badge counts down, not `max_positions`. Two roles of three each
+  // read as six seats, and each candidate proposed fills one of them.
+  const totalSeats = positions.reduce((n, p) => n + p.max_proposals, 0)
+  const filledSeats = positions.reduce((n, p) => n + p.proposed_cnt, 0)
+  const unfilledSeats = totalSeats - filledSeats
+
+  // Best first — the whole point of holding candidates back from assignment is to see
+  // them ranked. An unscored cadre sorts last rather than as a zero.
+  const stagedByScore = [...staged].sort(
+    (a, b) =>
+      (scores[b.membership_id]?.total_score ?? -1) - (scores[a.membership_id]?.total_score ?? -1)
+  )
 
   const step1Done = !!electionTypeId
   const step2Done = step1Done && !!assemblyId
@@ -363,54 +466,90 @@ export default function NewPositionModal() {
     setPositionId('')
   }
 
-  // Picking a different role invalidates the search below it — S12's pool is
-  // per constituency, but the selection and any assign result are per position.
+  // Picking a different role invalidates everything staged below it — S12's pool is
+  // per constituency, but a staged candidate is staged *for a position*.
   const selectPosition = (id) => {
     setPositionId(id)
-    setResults([])
-    setSearched(false)
-    setSelectedCadreId(null)
+    setStaged([])
+    setSearchValue('')
     setError('')
     setAssigned('')
   }
 
+  // The score decides the order the staged cards are shown in, so it is fetched as each
+  // cadre is staged rather than waiting for the compare view. Its absence is not an
+  // error — the ratings database is optional, and the cards read "No score" without it.
+  const loadScore = (membershipId) => {
+    getCadreScores([membershipId])
+      .then((data) =>
+        setScores((prev) => ({
+          ...prev,
+          ...Object.fromEntries(data.candidates.map((c) => [String(c.membership_id), c])),
+        }))
+      )
+      .catch((err) => console.error(err))
+  }
+
+  // A membership id matches at most one cadre, so a search either stages that cadre or
+  // says why it could not. S12 returns matched-but-ineligible rows on purpose, which is
+  // what lets "no such id" and "barred by the reservation" read as different answers.
   const runSearch = async () => {
-    if (!searchValue.trim()) return
+    const mid = searchValue.trim()
+    if (mid.length !== 8) {
+      setError('Enter the full 8-digit Membership ID.')
+      return
+    }
+    if (staged.some((c) => c.membership_id === mid)) {
+      setError('That candidate is already staged below.')
+      return
+    }
     setBusy(true)
     setError('')
     setAssigned('')
-    setSelectedCadreId(null)
     try {
-      setResults(await searchCadre(proposalConstituencyId, searchType, searchValue.trim()))
+      const [cadre] = await searchCadre(proposalConstituencyId, SEARCH_TYPE, mid)
+      if (!cadre) {
+        setError(`No cadre found for Membership ID ${mid}.`)
+      } else if (cadre.eligible !== 'Y') {
+        setError(`${cadre.member_name} is not eligible — this position is reserved for ${reservation}.`)
+      } else {
+        setStaged((prev) => [...prev, cadre])
+        setSearchValue('')
+        loadScore(cadre.membership_id)
+      }
     } catch (err) {
-      setResults([])
       setError(err.message)
     } finally {
-      setSearched(true)
       setBusy(false)
     }
   }
 
-  // S11 re-checks eligibility and the slot count on write, so its {detail} text
-  // is the real reason a proposal was refused.
-  const handleAssign = async () => {
-    if (!selectedCadreId) return
-    const cadre = results.find((c) => c.tdp_cadre_id === selectedCadreId)
+  // S11 takes one cadre at a time and re-checks eligibility and the slot count on each
+  // write, so a batch can partly succeed — the slot count is exactly what the staged
+  // candidates are competing for. Assign in score order, one at a time so the server can
+  // enforce that, then report who went in and leave the rest staged with S11's own
+  // {detail} text, which is the real reason a proposal was refused.
+  const assignStaged = async () => {
     setBusy(true)
     setError('')
-    try {
-      await assignCandidate(position.proposal_position_id, selectedCadreId)
-      setAssigned(`${cadre.member_name} assigned to ${position.role_name}.`)
-      setResults([])
-      setSearched(false)
-      setSearchValue('')
-      setSelectedCadreId(null)
-      setPositionsKey((k) => k + 1)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setBusy(false)
+    setAssigned('')
+    const done = []
+    const failed = []
+    for (const cadre of stagedByScore) {
+      try {
+        await assignCandidate(position.proposal_position_id, cadre.tdp_cadre_id)
+        done.push(cadre)
+      } catch (err) {
+        failed.push(`${cadre.member_name}: ${err.message}`)
+      }
     }
+    setStaged((prev) => prev.filter((c) => !done.includes(c)))
+    if (done.length) {
+      setAssigned(`${done.map((c) => c.member_name).join(', ')} assigned to ${position.role_name}.`)
+      setPositionsKey((k) => k + 1)
+    }
+    if (failed.length) setError(failed.join(' · '))
+    setBusy(false)
   }
 
   return (
@@ -497,6 +636,11 @@ export default function NewPositionModal() {
               <b>{proposalConstituencyName}</b>
               <span>{electionType} · {locationName} · {assemblyName}</span>
             </div>
+            <span className="leap-seat-counts">
+              <span><b>{totalSeats}</b>Total seats</span>
+              <span className="filled"><b>{filledSeats}</b>Filled</span>
+              <span className={unfilledSeats > 0 ? 'unfilled' : ''}><b>{unfilledSeats}</b>Unfilled</span>
+            </span>
             <span className={`leap-reservation-badge ${reservation ? '' : 'open'}`}>
               {reservation || 'Unreserved'}
             </span>
@@ -532,42 +676,28 @@ export default function NewPositionModal() {
                       <span className={`leap-members-badge ${open <= 0 ? 'full' : ''}`}>
                         {open <= 0 ? 'Full' : `${open} open`}
                       </span>
-                      <span className="leap-members-seats">{row.max_positions} seat{row.max_positions > 1 ? 's' : ''}</span>
+                      {rows?.length > 1 && (
+                        <button
+                          type="button"
+                          className="leap-btn-ghost"
+                          onClick={() => setComparing({ candidates: rows, title: row.role_name })}
+                        >
+                          Compare
+                        </button>
+                      )}
                     </div>
                     {rows === undefined && <div className="leap-members-empty">Loading members…</div>}
                     {rows?.length === 0 && <div className="leap-members-empty">No members proposed yet.</div>}
                     {rows?.length > 0 && (
                       <div className="leap-member-grid">
                         {rows.map((c) => (
-                          <div className="leap-member-card" key={c.proposal_candidate_id}>
-                            <div className="leap-member-card-top">
-                              {c.img_url ? (
-                                <button
-                                  type="button"
-                                  className="leap-member-photo-btn"
-                                  title={`Enlarge ${c.member_name}'s photo`}
-                                  onClick={() => setZoomed(c)}
-                                >
-                                  <img className="leap-member-photo" src={c.img_url} alt={c.member_name} />
-                                </button>
-                              ) : (
-                                <span className="leap-member-photo initials">{initials(c.member_name)}</span>
-                              )}
-                              <div className="leap-member-headline">
-                                <span className="leap-member-name">{c.member_name}</span>
-                                {relativeOf(c) && <span className="leap-member-relative">{relativeOf(c)}</span>}
-                                <span className="leap-member-id">{c.membership_id || `Cadre #${c.tdp_cadre_id}`}</span>
-                              </div>
-                            </div>
-                            <div className="leap-member-detail-grid">
-                              {MEMBER_FIELDS.map(({ label, value }) => (
-                                <div key={label}>
-                                  <span>{label}</span>
-                                  <b>{value(c) || '—'}</b>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
+                          <MemberCard
+                            key={c.proposal_candidate_id}
+                            cadre={c}
+                            role={row.role_name}
+                            rating={memberScores[c.membership_id]}
+                            onZoom={() => setZoomed(c)}
+                          />
                         ))}
                       </div>
                     )}
@@ -597,6 +727,7 @@ export default function NewPositionModal() {
                       <span className="leap-position-card-name">{row.role_name}</span>
                       <span className="leap-position-card-badges">
                         <span className="leap-position-card-total">{row.max_positions}</span>
+                        <span className="leap-position-card-proposed">{row.proposed_cnt} proposed</span>
                         <span className={`leap-position-card-open ${open <= 0 ? 'zero' : ''}`}>{open} open</span>
                       </span>
                     </button>
@@ -620,19 +751,11 @@ export default function NewPositionModal() {
           </div>
 
           <div className="leap-cadre-search-row">
-            <Dropdown
-              value={searchType}
-              onChange={(type) => {
-                setSearchType(type)
-                setSearchValue((v) => sanitizeSearchValue(type, v))
-              }}
-              options={SEARCH_TYPES}
-            />
             <input
               value={searchValue}
-              onChange={(e) => setSearchValue(sanitizeSearchValue(searchType, e.target.value))}
+              onChange={(e) => setSearchValue(sanitizeSearchValue(e.target.value))}
               onKeyDown={(e) => { if (e.key === 'Enter') runSearch() }}
-              placeholder="Search…"
+              placeholder="Enter an 8-digit Membership ID…"
             />
             <button
               type="button"
@@ -647,45 +770,33 @@ export default function NewPositionModal() {
           {error && <div className="leap-form-error">{error}</div>}
           {assigned && <div className="leap-form-success">✓ {assigned}</div>}
 
-          {searched && (
-            <div className="leap-cadre-results">
-              {results.length === 0 && !error && (
-                <div className="leap-empty">
-                  No cadre matched that search.
-                </div>
-              )}
-              {eligibleResults.length === 0 && ineligibleResults.length > 0 && (
-                <div className="leap-empty">
-                  {ineligibleResults.length === 1
-                    ? 'This candidate is not eligible'
-                    : `These ${ineligibleResults.length} candidates are not eligible`}
-                  {' '}as this position is reserved for {reservation}.
-                </div>
-              )}
-              {eligibleResults.slice(0, MAX_RESULTS).map((c) => (
-                <button
-                  type="button"
-                  key={c.tdp_cadre_id}
-                  className={`leap-cadre-result ${selectedCadreId === c.tdp_cadre_id ? 'selected' : ''}`}
-                  onClick={() => setSelectedCadreId(c.tdp_cadre_id)}
-                >
-                  <span className="leap-cadre-radio">{selectedCadreId === c.tdp_cadre_id ? '●' : '○'}</span>
-                  <span className="leap-cadre-body">
-                    <span className="leap-cadre-name">{c.member_name}</span>
-                    <span className="leap-cadre-meta">{memberIds(c)}</span>
-                    <span className="leap-cadre-meta">
-                      {[c.gender, c.age && `${c.age} yrs`, c.category_name, c.caste_name]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </span>
-                  </span>
-                </button>
-              ))}
-              {eligibleResults.length > MAX_RESULTS && (
-                <div className="leap-field-hint">
-                  Showing the first {MAX_RESULTS} of {eligibleResults.length} matches — refine your search.
-                </div>
-              )}
+          {staged.length > 0 && (
+            <div className="leap-staged">
+              <div className="leap-staged-head">
+                <b>{staged.length} staged</b>
+                <span>Nothing is proposed until you assign.</span>
+                {staged.length > 1 && (
+                  <button
+                    type="button"
+                    className="leap-btn-ghost"
+                    onClick={() => setComparing({ candidates: stagedByScore, title: position.role_name })}
+                  >
+                    Compare
+                  </button>
+                )}
+              </div>
+              <div className="leap-staged-grid">
+                {stagedByScore.map((c) => (
+                  <MemberCard
+                    key={c.tdp_cadre_id}
+                    cadre={c}
+                    role={position.role_name}
+                    rating={scores[c.membership_id]}
+                    onZoom={() => setZoomed(c)}
+                    onRemove={() => setStaged((prev) => prev.filter((x) => x !== c))}
+                  />
+                ))}
+              </div>
             </div>
           )}
 
@@ -693,13 +804,25 @@ export default function NewPositionModal() {
             <button
               type="button"
               className="leap-btn-primary"
-              disabled={busy || !selectedCadreId}
-              onClick={handleAssign}
+              disabled={busy || staged.length === 0}
+              onClick={assignStaged}
             >
-              {busy ? 'Assigning…' : 'Assign Candidate'}
+              {busy
+                ? 'Assigning…'
+                : staged.length > 1
+                ? `Assign ${staged.length} Candidates`
+                : 'Assign Candidate'}
             </button>
           </div>
         </div>
+        )}
+
+        {comparing && (
+          <CompareModal
+            candidates={comparing.candidates}
+            title={comparing.title}
+            onClose={() => setComparing(null)}
+          />
         )}
 
         {zoomed && (
