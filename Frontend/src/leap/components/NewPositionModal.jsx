@@ -212,7 +212,7 @@ const TIER_COLOR = { none: '#9ca3af', high: '#059669', mid: '#d97706', low: '#dc
 // which render '—' rather than being dropped, so the two cards read the same. `span` is
 // the number of the grid's six columns the field takes. Voter ID and Panchayat are the
 // two fields that card has no slot for; they are the only additions.
-function MemberCard({ cadre, role, rating, onZoom, onRemove }) {
+function MemberCard({ cadre, role, rating, onZoom, onRemove, selected, onSelect }) {
   const score = rating?.total_score
   const report = rating?.performance
   const caste = [cadre.category_name, cadre.caste_name].filter(Boolean).join(' · ')
@@ -236,7 +236,7 @@ function MemberCard({ cadre, role, rating, onZoom, onRemove }) {
     { label: 'Renewals', value: renewals != null ? `${renewals}×` : null, span: 3, cls: 'highlight' },
   ]
   return (
-    <div className="leap-mcard">
+    <div className={`leap-mcard${selected ? ' selected' : ''}`}>
       <div className="leap-mcard-head">
         {cadre.img_url ? (
           <button
@@ -298,6 +298,16 @@ function MemberCard({ cadre, role, rating, onZoom, onRemove }) {
           </div>
         </div>
       ))}
+
+      {onSelect && (
+        <button
+          type="button"
+          className={`leap-mcard-select${selected ? ' selected' : ''}`}
+          onClick={onSelect}
+        >
+          {selected ? '✓ Selected' : 'Select Candidate'}
+        </button>
+      )}
     </div>
   )
 }
@@ -317,6 +327,9 @@ export default function NewPositionModal() {
   // any of them is proposed.
   const [searchValue, setSearchValue] = useState('')
   const [staged, setStaged] = useState([])
+  // tdp_cadre_id of the staged cadre picked with "Select Candidate". Assign writes these
+  // alone, so a search that stages someone to compare does not also propose them.
+  const [selectedIds, setSelectedIds] = useState([])
   // membership_id -> the S17 row, the same shape `memberScores` holds: the card wants the
   // report behind the score as well as the score. Kept apart from `staged` so a row
   // arriving late does not have to rewrite the cadre it belongs to.
@@ -430,6 +443,8 @@ export default function NewPositionModal() {
       (scores[b.membership_id]?.total_score ?? -1) - (scores[a.membership_id]?.total_score ?? -1)
   )
 
+  const selectedByScore = stagedByScore.filter((c) => selectedIds.includes(c.tdp_cadre_id))
+
   const step1Done = !!electionTypeId
   const step2Done = step1Done && !!assemblyId
   const step3Done = step2Done && !!proposalConstituencyId
@@ -471,6 +486,7 @@ export default function NewPositionModal() {
   const selectPosition = (id) => {
     setPositionId(id)
     setStaged([])
+    setSelectedIds([])
     setSearchValue('')
     setError('')
     setAssigned('')
@@ -535,7 +551,7 @@ export default function NewPositionModal() {
     setAssigned('')
     const done = []
     const failed = []
-    for (const cadre of stagedByScore) {
+    for (const cadre of selectedByScore) {
       try {
         await assignCandidate(position.proposal_position_id, cadre.tdp_cadre_id)
         done.push(cadre)
@@ -544,6 +560,7 @@ export default function NewPositionModal() {
       }
     }
     setStaged((prev) => prev.filter((c) => !done.includes(c)))
+    setSelectedIds((prev) => prev.filter((id) => !done.some((c) => c.tdp_cadre_id === id)))
     if (done.length) {
       setAssigned(`${done.map((c) => c.member_name).join(', ')} assigned to ${position.role_name}.`)
       setPositionsKey((k) => k + 1)
@@ -773,8 +790,8 @@ export default function NewPositionModal() {
           {staged.length > 0 && (
             <div className="leap-staged">
               <div className="leap-staged-head">
-                <b>{staged.length} staged</b>
-                <span>Nothing is proposed until you assign.</span>
+                <b>{staged.length} staged · {selectedIds.length} selected</b>
+                <span>Only selected candidates are assigned.</span>
                 {staged.length > 1 && (
                   <button
                     type="button"
@@ -793,7 +810,18 @@ export default function NewPositionModal() {
                     role={position.role_name}
                     rating={scores[c.membership_id]}
                     onZoom={() => setZoomed(c)}
-                    onRemove={() => setStaged((prev) => prev.filter((x) => x !== c))}
+                    onRemove={() => {
+                      setStaged((prev) => prev.filter((x) => x !== c))
+                      setSelectedIds((prev) => prev.filter((id) => id !== c.tdp_cadre_id))
+                    }}
+                    selected={selectedIds.includes(c.tdp_cadre_id)}
+                    onSelect={() =>
+                      setSelectedIds((prev) =>
+                        prev.includes(c.tdp_cadre_id)
+                          ? prev.filter((id) => id !== c.tdp_cadre_id)
+                          : [...prev, c.tdp_cadre_id]
+                      )
+                    }
                   />
                 ))}
               </div>
@@ -804,13 +832,13 @@ export default function NewPositionModal() {
             <button
               type="button"
               className="leap-btn-primary"
-              disabled={busy || staged.length === 0}
+              disabled={busy || selectedIds.length === 0}
               onClick={assignStaged}
             >
               {busy
                 ? 'Assigning…'
-                : staged.length > 1
-                ? `Assign ${staged.length} Candidates`
+                : selectedIds.length > 1
+                ? `Assign ${selectedIds.length} Candidates`
                 : 'Assign Candidate'}
             </button>
           </div>

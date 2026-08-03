@@ -2176,6 +2176,34 @@
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }
 
+.leap-mcard.selected {
+  border-color: #5cb85c;
+  box-shadow: 0 0 0 2px rgba(92, 184, 92, 0.25);
+}
+
+/* Sits at the foot of a staged card, like the login screen's SIGN IN button. */
+.leap-mcard-select {
+  margin-top: auto;
+  padding: 11px;
+  border: 1px solid #4cae4c;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  background: #5cb85c;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.leap-mcard-select:hover {
+  background: #449d44;
+}
+
+.leap-mcard-select.selected {
+  background: #eaf7ea;
+  color: #2f7d32;
+}
+
 .leap-mcard-head {
   display: flex;
   align-items: flex-start;
