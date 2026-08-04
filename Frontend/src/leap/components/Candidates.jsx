@@ -5,7 +5,6 @@ import {
   getCadreScores,
   removeProposalCandidate,
   updateProposalCandidateStatus,
-  useList,
 } from '../api.js'
 import CompareModal from './CompareModal.jsx'
 import { AddMembersPanel, MemberCard, PhotoViewer, STATUS_META } from './NewPositionModal.jsx'
@@ -62,7 +61,26 @@ export default function Candidates() {
   const [roleId, setRoleId] = useState('')
   const [statusId, setStatusId] = useState('')
 
-  const rows = useList(getPositionsWithCandidates, [reloadKey])
+  // S19 by hand rather than through useList: that hook reports a failed load as an empty
+  // list, so an unreachable backend or a 404 would read as "nobody has been proposed yet".
+  // This is the only screen with a single endpoint behind everything it shows, so the
+  // difference is the whole screen rather than one picklist.
+  const [rows, setRows] = useState([])
+  const [loadError, setLoadError] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoadError(null)
+    getPositionsWithCandidates()
+      .then((data) => { if (!cancelled) setRows(data) })
+      .catch((err) => {
+        if (cancelled) return
+        console.error(err)
+        setRows([])
+        setLoadError(err.message)
+      })
+    return () => { cancelled = true }
+  }, [reloadKey])
 
   const filtered = useMemo(
     () =>
@@ -143,7 +161,22 @@ export default function Candidates() {
       </div>
 
       <div className="leap-cand-list">
-        {filtered.length === 0 ? (
+        {loadError ? (
+          <div className="leap-cand-empty leap-cand-error">
+            <div className="leap-cand-empty-title">Could not load positions</div>
+            <div className="leap-cand-empty-sub">
+              The server did not answer this list, so nothing here is the state of the
+              database. ({loadError})
+            </div>
+            <button
+              type="button"
+              className="leap-cand-retry"
+              onClick={() => setReloadKey((k) => k + 1)}
+            >
+              Retry
+            </button>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="leap-cand-empty">
             <div className="leap-cand-empty-title">No positions found</div>
             <div className="leap-cand-empty-sub">
