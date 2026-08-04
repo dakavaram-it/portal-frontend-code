@@ -8,7 +8,7 @@ import {
   useList,
 } from '../api.js'
 import CompareModal from './CompareModal.jsx'
-import { MemberCard, STATUS_META, memberIds } from './NewPositionModal.jsx'
+import { AddMembersPanel, MemberCard, PhotoViewer, STATUS_META } from './NewPositionModal.jsx'
 
 // The three proposal_status rows, in the order the filter offers them. Their ids are what
 // S19 counts per position (a position can hold candidates of all three at once) and what
@@ -254,6 +254,9 @@ function PositionCandidates({ position, onBack, onChanged }) {
   const [pending, setPending] = useState({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState('')
+  // Whether the cadre search panel is open. Only offered while the position has a
+  // proposal slot left — S11 would refuse the write otherwise.
+  const [adding, setAdding] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -360,7 +363,26 @@ function PositionCandidates({ position, onBack, onChanged }) {
             Compare All
           </button>
         )}
+        {open > 0 && (
+          <button type="button" className="leap-btn-ghost" onClick={() => setAdding((a) => !a)}>
+            {adding ? 'Close' : 'Add Members'}
+          </button>
+        )}
       </div>
+
+      {/* The wizard's step 6, against the position already open here — S19 carries the
+          proposal_constituency_id its cadre search needs. A successful assign re-reads
+          S13 for the new cards and tells the list its counts moved. */}
+      {adding && open > 0 && (
+        <AddMembersPanel
+          key={position.proposal_position_id}
+          position={position}
+          proposalConstituencyId={position.proposal_constituency_id}
+          reservation={position.reservation_type}
+          placeName={position.local_body_name}
+          onAssigned={() => { setReloadKey((k) => k + 1); onChanged() }}
+        />
+      )}
 
       {error && <div className="leap-form-error">{error}</div>}
       {saved && <div className="leap-form-success">✓ {saved}</div>}
@@ -417,20 +439,7 @@ function PositionCandidates({ position, onBack, onChanged }) {
         />
       )}
 
-      {zoomed && (
-        <div className="leap-modal-overlay" onClick={() => setZoomed(null)}>
-          <div className="leap-photo-viewer" onClick={(e) => e.stopPropagation()}>
-            <div className="leap-modal-title-row">
-              <div>
-                <h3>{zoomed.member_name}</h3>
-                <p>{memberIds(zoomed)}</p>
-              </div>
-              <button type="button" className="leap-modal-close" onClick={() => setZoomed(null)}>✕</button>
-            </div>
-            <img className="leap-photo-viewer-img" src={zoomed.img_url} alt={zoomed.member_name} />
-          </div>
-        </div>
-      )}
+      {zoomed && <PhotoViewer cadre={zoomed} onClose={() => setZoomed(null)} />}
     </div>
   )
 }

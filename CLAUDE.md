@@ -57,7 +57,7 @@ Six steps, rendered top to bottom in one scrolling panel, each gated on `stepNDo
 3. **Mandal/Town** — S3 + S4 merged into one picklist. The two halves resolve through different endpoints, so option values are tagged `m:<tehsil_id>` / `t:<town_id>` and split back apart by `locationKey.split(':')` — keep that encoding.
 4. **Local body** — S5 (for `m:`) or S6 (for `t:`). Its heading is `localBodyLabel`, i.e. the step-1 election type name. Auto-selects when exactly one row comes back.
 5. **Reservation & Members** — S9 for the reservation badge, S7 for the roles and the Total / Filled / Unfilled seat counts, then a fork: **View Members** or **Add Members**. **A "seat" here is a `max_proposals` slot, not a `max_positions` one**: total is `Σ max_proposals`, filled is `Σ proposed_cnt`, and unfilled is the difference — so two roles of three read as six seats with each candidate proposed filling one. That is the same number the per-role "N open" badges count down; `max_positions` is shown separately, as the role's "N seat(s)".
-6. **Cadre search** — S12 search (membership id only), S17 score, S11 assign. Only rendered in the `add` branch, once a role is picked.
+6. **Cadre search** — S12 search (membership id only), S17 score, S11 assign. Only rendered in the `add` branch, once a role is picked. It is `AddMembersPanel`, exported from this file and mounted **keyed by `proposal_position_id`** — picking another role remounts it, which is what clears the staged list, the picked statuses and the banners. The Candidates screen mounts the same component (see below), so both live paths to a proposal are one implementation.
 
 ### `CompareModal`
 
@@ -125,8 +125,19 @@ the new truth about every status. `S7`'s counts do not move on a status change (
 are live rows in one `max_proposals` slot), but `S19`'s per-status pills do, which is what
 `onChanged` refreshes.
 
-`MemberCard`, `STATUS_META` and `memberIds` are imported from `NewPositionModal.jsx`
-rather than copied: a proposed member must look identical on both screens.
+**It also proposes.** When the open position still has a proposal slot free
+(`max_proposals - proposed_cnt > 0`) the section head carries an **Add Members** toggle
+that mounts the wizard's own step 6, `AddMembersPanel` — same S12 search, same staging
+and compare, same sequential S11 write. S19 returns `proposal_constituency_id`, which is
+the one thing the cadre search needs and the drill-down would otherwise have supplied;
+reservation, role and local body name come off the same row. A successful assign bumps
+the detail's `reloadKey` (S13, for the new cards) *and* calls `onChanged` (S19, for the
+slot and per-status counts) — the toggle then disappears on its own once the last slot
+fills, because `open` is recomputed from the refreshed row.
+
+`MemberCard`, `AddMembersPanel`, `PhotoViewer` and `STATUS_META` are imported from
+`NewPositionModal.jsx` rather than copied: a proposed member must look identical on both
+screens, and so must the search that proposed them.
 
 ### `PositionDetail` (unreachable)
 

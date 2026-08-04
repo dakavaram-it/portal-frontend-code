@@ -351,6 +351,239 @@ export function MemberCard({ cadre, role, rating, onZoom, onRemove, onDelete, st
   )
 }
 
+// The photo lightbox, shared by every screen that renders a MemberCard.
+export function PhotoViewer({ cadre, onClose }) {
+  return (
+    <div className="leap-modal-overlay" onClick={onClose}>
+      <div className="leap-photo-viewer" onClick={(e) => e.stopPropagation()}>
+        <div className="leap-modal-title-row">
+          <div>
+            <h3>{cadre.member_name}</h3>
+            <p>{memberIds(cadre)}</p>
+          </div>
+          <button type="button" className="leap-modal-close" onClick={onClose}>✕</button>
+        </div>
+        <img className="leap-photo-viewer-img" src={cadre.img_url} alt={cadre.member_name} />
+      </div>
+    </div>
+  )
+}
+
+/* Search a cadre by membership id (S12), stage several against one position to weigh them
+   up, then write them all with S11. The wizard's step 6 and the Candidates screen's "Add
+   Members" are the same thing, so they are the same component — mount it keyed by
+   proposal_position_id, since a staged list belongs to the position it was staged for.
+   `num` is the wizard's step number; the Candidates screen has no step to number. */
+export function AddMembersPanel({ proposalConstituencyId, position, reservation, placeName, num, onAssigned }) {
+  const [searchValue, setSearchValue] = useState('')
+  const [staged, setStaged] = useState([])
+  // tdp_cadre_id -> the proposal_status_id its button picked (1 Proposed, 2 Shortlisted).
+  // Assign writes these alone, so a search that stages someone to compare does not also
+  // propose them, and the two buttons are what decides which status the row gets.
+  const [selection, setSelection] = useState({})
+  // membership_id -> the S17 row: the card wants the report behind the score as well as
+  // the score. Kept apart from `staged` so a row arriving late does not have to rewrite
+  // the cadre it belongs to.
+  const [scores, setScores] = useState({})
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [assigned, setAssigned] = useState('')
+  const [comparing, setComparing] = useState(false)
+  const [zoomed, setZoomed] = useState(null)
+
+  const openSlots = position.max_proposals - position.proposed_cnt
+
+  // Best first — the whole point of holding candidates back from assignment is to see
+  // them ranked. An unscored cadre sorts last rather than as a zero.
+  const stagedByScore = [...staged].sort(
+    (a, b) =>
+      (scores[b.membership_id]?.total_score ?? -1) - (scores[a.membership_id]?.total_score ?? -1)
+  )
+
+  // Every staged cadre is saved; the buttons only say *as what*. An untouched card is a
+  // proposal, so staging someone and hitting save does what it did before the shortlist
+  // existed rather than silently saving nobody.
+  const statusOf = (cadre) => selection[cadre.tdp_cadre_id] || DEFAULT_STATUS_ID
+
+  // The score decides the order the staged cards are shown in, so it is fetched as each
+  // cadre is staged rather than waiting for the compare view. Its absence is not an
+  // error — the ratings database is optional, and the cards read "No score" without it.
+  const loadScore = (membershipId) => {
+    getCadreScores([membershipId])
+      .then((data) =>
+        setScores((prev) => ({
+          ...prev,
+          ...Object.fromEntries(data.candidates.map((c) => [String(c.membership_id), c])),
+        }))
+      )
+      .catch((err) => console.error(err))
+  }
+
+  // A membership id matches at most one cadre, so a search either stages that cadre or
+  // says why it could not. S12 returns matched-but-ineligible rows on purpose, which is
+  // what lets "no such id" and "barred by the reservation" read as different answers.
+  const runSearch = async () => {
+    const mid = searchValue.trim()
+    if (mid.length !== 8) {
+      setError('Enter the full 8-digit Membership ID.')
+      return
+    }
+    if (staged.some((c) => c.membership_id === mid)) {
+      setError('That candidate is already staged below.')
+      return
+    }
+    setBusy(true)
+    setError('')
+    setAssigned('')
+    try {
+      const [cadre] = await searchCadre(proposalConstituencyId, SEARCH_TYPE, mid)
+      if (!cadre) {
+        setError(`No cadre found for Membership ID ${mid}.`)
+      } else if (cadre.eligible !== 'Y') {
+        setError(`${cadre.member_name} is not eligible — this position is reserved for ${reservation}.`)
+      } else {
+        setStaged((prev) => [...prev, cadre])
+        setSearchValue('')
+        loadScore(cadre.membership_id)
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // S11 takes one cadre at a time and re-checks eligibility and the slot count on each
+  // write, so a batch can partly succeed — the slot count is exactly what the staged
+  // candidates are competing for. Assign in score order, one at a time so the server can
+  // enforce that, then report who went in and leave the rest staged with S11's own
+  // {detail} text, which is the real reason a proposal was refused.
+  const assignStaged = async () => {
+    setBusy(true)
+    setError('')
+    setAssigned('')
+    const done = []
+    const failed = []
+    for (const cadre of stagedByScore) {
+      try {
+        await assignCandidate(position.proposal_position_id, cadre.tdp_cadre_id, statusOf(cadre))
+        done.push(cadre)
+      } catch (err) {
+        failed.push(`${cadre.member_name}: ${err.message}`)
+      }
+    }
+    setStaged((prev) => prev.filter((c) => !done.includes(c)))
+    setSelection((prev) =>
+      Object.fromEntries(
+        Object.entries(prev).filter(([id]) => !done.some((c) => String(c.tdp_cadre_id) === id))
+      )
+    )
+    if (done.length) {
+      // Names carry their status: the batch can hold both, and "assigned" alone would
+      // not say which of the two each one was written as.
+      const named = done.map((c) => {
+        const s = PROPOSAL_STATUSES.find((x) => x.id === statusOf(c))
+        return `${c.member_name} (${s.done})`
+      })
+      setAssigned(`${named.join(', ')} saved for ${position.role_name}.`)
+      onAssigned()
+    }
+    if (failed.length) setError(failed.join(' · '))
+    setBusy(false)
+  }
+
+  return (
+    <div className="leap-modal-step">
+      <div className="leap-modal-step-header">
+        {num && <span className="num">{num}</span>}
+        <b>Cadre Search</b>
+        <p>
+          Search cadre eligible for <b>{position.role_name}</b> in {placeName}
+          {reservation ? ` · ${reservation}` : ''} · {openSlots} proposal slot
+          {openSlots !== 1 ? 's' : ''} left.
+        </p>
+      </div>
+
+      <div className="leap-cadre-search-row">
+        <input
+          value={searchValue}
+          onChange={(e) => setSearchValue(sanitizeSearchValue(e.target.value))}
+          onKeyDown={(e) => { if (e.key === 'Enter') runSearch() }}
+          placeholder="Enter an 8-digit Membership ID…"
+        />
+        <button
+          type="button"
+          className="leap-btn-primary"
+          disabled={busy || !searchValue.trim()}
+          onClick={runSearch}
+        >
+          {busy ? 'Searching…' : 'Search'}
+        </button>
+      </div>
+
+      {error && <div className="leap-form-error">{error}</div>}
+      {assigned && <div className="leap-form-success">✓ {assigned}</div>}
+
+      {staged.length > 0 && (
+        <div className="leap-staged">
+          <div className="leap-staged-head">
+            <b>{staged.length} staged</b>
+            <span>All staged candidates are saved — unmarked ones as Proposed.</span>
+            {staged.length > 1 && (
+              <button type="button" className="leap-btn-ghost" onClick={() => setComparing(true)}>
+                Compare
+              </button>
+            )}
+          </div>
+          <div className="leap-staged-grid">
+            {stagedByScore.map((c) => (
+              <MemberCard
+                key={c.tdp_cadre_id}
+                cadre={c}
+                role={position.role_name}
+                rating={scores[c.membership_id]}
+                onZoom={() => setZoomed(c)}
+                onRemove={() => {
+                  setStaged((prev) => prev.filter((x) => x !== c))
+                  setSelection(({ [c.tdp_cadre_id]: _, ...rest }) => rest)
+                }}
+                status={selection[c.tdp_cadre_id]}
+                onStatus={(statusId) =>
+                  setSelection((prev) => {
+                    const { [c.tdp_cadre_id]: _, ...rest } = prev
+                    return statusId ? { ...rest, [c.tdp_cadre_id]: statusId } : rest
+                  })
+                }
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="leap-modal-actions-row">
+        <button
+          type="button"
+          className="leap-btn-primary"
+          disabled={busy || staged.length === 0}
+          onClick={assignStaged}
+        >
+          {busy ? 'Saving…' : staged.length > 1 ? `Save ${staged.length} Candidates` : 'Save Candidate'}
+        </button>
+      </div>
+
+      {comparing && (
+        <CompareModal
+          candidates={stagedByScore}
+          title={position.role_name}
+          onClose={() => setComparing(false)}
+        />
+      )}
+
+      {zoomed && <PhotoViewer cadre={zoomed} onClose={() => setZoomed(null)} />}
+    </div>
+  )
+}
+
 export default function NewPositionModal() {
   const [electionTypeId, setElectionTypeId] = useState('')
   const [assemblyId, setAssemblyId] = useState('')
@@ -361,22 +594,6 @@ export default function NewPositionModal() {
 
   const [positionId, setPositionId] = useState('')
 
-  // Step 6 — cadre search (S12), their scores (S17) and assign (S11). A search stages a
-  // cadre rather than assigning one, so several can be weighed against each other before
-  // any of them is proposed.
-  const [searchValue, setSearchValue] = useState('')
-  const [staged, setStaged] = useState([])
-  // tdp_cadre_id -> the proposal_status_id its button picked (1 Proposed, 2 Shortlisted).
-  // Assign writes these alone, so a search that stages someone to compare does not also
-  // propose them, and the two buttons are what decides which status the row gets.
-  const [selection, setSelection] = useState({})
-  // membership_id -> the S17 row, the same shape `memberScores` holds: the card wants the
-  // report behind the score as well as the score. Kept apart from `staged` so a row
-  // arriving late does not have to rewrite the cadre it belongs to.
-  const [scores, setScores] = useState({})
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [assigned, setAssigned] = useState('')
   // { candidates, title } for the comparison overlay, or null.
   const [comparing, setComparing] = useState(null)
   // Bumped after a successful assign so S7's proposed_cnt / open slots re-read.
@@ -479,18 +696,6 @@ export default function NewPositionModal() {
   const filledSeats = positions.reduce((n, p) => n + p.proposed_cnt, 0)
   const unfilledSeats = totalSeats - filledSeats
 
-  // Best first — the whole point of holding candidates back from assignment is to see
-  // them ranked. An unscored cadre sorts last rather than as a zero.
-  const stagedByScore = [...staged].sort(
-    (a, b) =>
-      (scores[b.membership_id]?.total_score ?? -1) - (scores[a.membership_id]?.total_score ?? -1)
-  )
-
-  // Every staged cadre is saved; the buttons only say *as what*. An untouched card is a
-  // proposal, so staging someone and hitting save does what it did before the shortlist
-  // existed rather than silently saving nobody.
-  const statusOf = (cadre) => selection[cadre.tdp_cadre_id] || DEFAULT_STATUS_ID
-
   const step1Done = !!electionTypeId
   const step2Done = step1Done && !!assemblyId
   const step3Done = step2Done && !!proposalConstituencyId
@@ -527,65 +732,6 @@ export default function NewPositionModal() {
     setPositionId('')
   }
 
-  // Picking a different role invalidates everything staged below it — S12's pool is
-  // per constituency, but a staged candidate is staged *for a position*.
-  const selectPosition = (id) => {
-    setPositionId(id)
-    setStaged([])
-    setSelection({})
-    setSearchValue('')
-    setError('')
-    setAssigned('')
-  }
-
-  // The score decides the order the staged cards are shown in, so it is fetched as each
-  // cadre is staged rather than waiting for the compare view. Its absence is not an
-  // error — the ratings database is optional, and the cards read "No score" without it.
-  const loadScore = (membershipId) => {
-    getCadreScores([membershipId])
-      .then((data) =>
-        setScores((prev) => ({
-          ...prev,
-          ...Object.fromEntries(data.candidates.map((c) => [String(c.membership_id), c])),
-        }))
-      )
-      .catch((err) => console.error(err))
-  }
-
-  // A membership id matches at most one cadre, so a search either stages that cadre or
-  // says why it could not. S12 returns matched-but-ineligible rows on purpose, which is
-  // what lets "no such id" and "barred by the reservation" read as different answers.
-  const runSearch = async () => {
-    const mid = searchValue.trim()
-    if (mid.length !== 8) {
-      setError('Enter the full 8-digit Membership ID.')
-      return
-    }
-    if (staged.some((c) => c.membership_id === mid)) {
-      setError('That candidate is already staged below.')
-      return
-    }
-    setBusy(true)
-    setError('')
-    setAssigned('')
-    try {
-      const [cadre] = await searchCadre(proposalConstituencyId, SEARCH_TYPE, mid)
-      if (!cadre) {
-        setError(`No cadre found for Membership ID ${mid}.`)
-      } else if (cadre.eligible !== 'Y') {
-        setError(`${cadre.member_name} is not eligible — this position is reserved for ${reservation}.`)
-      } else {
-        setStaged((prev) => [...prev, cadre])
-        setSearchValue('')
-        loadScore(cadre.membership_id)
-      }
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
   // Removing a proposed member is a write with no undo on this screen, so it asks first.
   // Bumping positionsKey re-reads S7, and the new `positions` array re-runs the effect
   // that loads the members — one bump refreshes both the counts and the list.
@@ -598,45 +744,6 @@ export default function NewPositionModal() {
     } catch (err) {
       setMembersError(err.message)
     }
-  }
-
-  // S11 takes one cadre at a time and re-checks eligibility and the slot count on each
-  // write, so a batch can partly succeed — the slot count is exactly what the staged
-  // candidates are competing for. Assign in score order, one at a time so the server can
-  // enforce that, then report who went in and leave the rest staged with S11's own
-  // {detail} text, which is the real reason a proposal was refused.
-  const assignStaged = async () => {
-    setBusy(true)
-    setError('')
-    setAssigned('')
-    const done = []
-    const failed = []
-    for (const cadre of stagedByScore) {
-      try {
-        await assignCandidate(position.proposal_position_id, cadre.tdp_cadre_id, statusOf(cadre))
-        done.push(cadre)
-      } catch (err) {
-        failed.push(`${cadre.member_name}: ${err.message}`)
-      }
-    }
-    setStaged((prev) => prev.filter((c) => !done.includes(c)))
-    setSelection((prev) =>
-      Object.fromEntries(
-        Object.entries(prev).filter(([id]) => !done.some((c) => String(c.tdp_cadre_id) === id))
-      )
-    )
-    if (done.length) {
-      // Names carry their status: the batch can hold both, and "assigned" alone would
-      // not say which of the two each one was written as.
-      const named = done.map((c) => {
-        const s = PROPOSAL_STATUSES.find((x) => x.id === statusOf(c))
-        return `${c.member_name} (${s.done})`
-      })
-      setAssigned(`${named.join(', ')} saved for ${position.role_name}.`)
-      setPositionsKey((k) => k + 1)
-    }
-    if (failed.length) setError(failed.join(' · '))
-    setBusy(false)
   }
 
   return (
@@ -811,7 +918,9 @@ export default function NewPositionModal() {
                       className={`leap-position-card ${positionId === String(row.proposal_position_id) ? 'selected' : ''}`}
                       disabled={open <= 0}
                       title={open <= 0 ? 'Position has reached its maximum proposals' : undefined}
-                      onClick={() => selectPosition(String(row.proposal_position_id))}
+                      // Everything staged below belongs to the role it was staged for, and
+                      // the panel is keyed by it — picking another role remounts it empty.
+                      onClick={() => setPositionId(String(row.proposal_position_id))}
                     >
                       <span className="leap-position-card-name">{row.role_name}</span>
                       <span className="leap-position-card-badges">
@@ -829,91 +938,15 @@ export default function NewPositionModal() {
         )}
 
         {step5Done && (
-        <div className="leap-modal-step">
-          <div className="leap-modal-step-header">
-            <span className="num">6</span><b>Cadre Search</b>
-            <p>
-              Search cadre eligible for <b>{position.role_name}</b> in {proposalConstituencyName}
-              {reservation ? ` · ${reservation}` : ''} · {openSlots(position)} proposal slot
-              {openSlots(position) !== 1 ? 's' : ''} left.
-            </p>
-          </div>
-
-          <div className="leap-cadre-search-row">
-            <input
-              value={searchValue}
-              onChange={(e) => setSearchValue(sanitizeSearchValue(e.target.value))}
-              onKeyDown={(e) => { if (e.key === 'Enter') runSearch() }}
-              placeholder="Enter an 8-digit Membership ID…"
-            />
-            <button
-              type="button"
-              className="leap-btn-primary"
-              disabled={busy || !searchValue.trim()}
-              onClick={runSearch}
-            >
-              {busy ? 'Searching…' : 'Search'}
-            </button>
-          </div>
-
-          {error && <div className="leap-form-error">{error}</div>}
-          {assigned && <div className="leap-form-success">✓ {assigned}</div>}
-
-          {staged.length > 0 && (
-            <div className="leap-staged">
-              <div className="leap-staged-head">
-                <b>{staged.length} staged</b>
-                <span>All staged candidates are saved — unmarked ones as Proposed.</span>
-                {staged.length > 1 && (
-                  <button
-                    type="button"
-                    className="leap-btn-ghost"
-                    onClick={() => setComparing({ candidates: stagedByScore, title: position.role_name })}
-                  >
-                    Compare
-                  </button>
-                )}
-              </div>
-              <div className="leap-staged-grid">
-                {stagedByScore.map((c) => (
-                  <MemberCard
-                    key={c.tdp_cadre_id}
-                    cadre={c}
-                    role={position.role_name}
-                    rating={scores[c.membership_id]}
-                    onZoom={() => setZoomed(c)}
-                    onRemove={() => {
-                      setStaged((prev) => prev.filter((x) => x !== c))
-                      setSelection(({ [c.tdp_cadre_id]: _, ...rest }) => rest)
-                    }}
-                    status={selection[c.tdp_cadre_id]}
-                    onStatus={(statusId) =>
-                      setSelection((prev) => {
-                        const { [c.tdp_cadre_id]: _, ...rest } = prev
-                        return statusId ? { ...rest, [c.tdp_cadre_id]: statusId } : rest
-                      })
-                    }
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="leap-modal-actions-row">
-            <button
-              type="button"
-              className="leap-btn-primary"
-              disabled={busy || staged.length === 0}
-              onClick={assignStaged}
-            >
-              {busy
-                ? 'Saving…'
-                : staged.length > 1
-                ? `Save ${staged.length} Candidates`
-                : 'Save Candidate'}
-            </button>
-          </div>
-        </div>
+          <AddMembersPanel
+            key={position.proposal_position_id}
+            num={6}
+            position={position}
+            proposalConstituencyId={proposalConstituencyId}
+            reservation={reservation}
+            placeName={proposalConstituencyName}
+            onAssigned={() => setPositionsKey((k) => k + 1)}
+          />
         )}
 
         {comparing && (
@@ -924,20 +957,7 @@ export default function NewPositionModal() {
           />
         )}
 
-        {zoomed && (
-        <div className="leap-modal-overlay" onClick={() => setZoomed(null)}>
-          <div className="leap-photo-viewer" onClick={(e) => e.stopPropagation()}>
-            <div className="leap-modal-title-row">
-              <div>
-                <h3>{zoomed.member_name}</h3>
-                <p>{memberIds(zoomed)}</p>
-              </div>
-              <button type="button" className="leap-modal-close" onClick={() => setZoomed(null)}>✕</button>
-            </div>
-            <img className="leap-photo-viewer-img" src={zoomed.img_url} alt={zoomed.member_name} />
-          </div>
-        </div>
-        )}
+        {zoomed && <PhotoViewer cadre={zoomed} onClose={() => setZoomed(null)} />}
     </div>
   )
 }
