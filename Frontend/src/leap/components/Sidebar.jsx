@@ -1,5 +1,3 @@
-import { PARTY_SHORT } from '../data.js'
-
 function LogoutIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
@@ -22,7 +20,7 @@ export default function Sidebar({ user, onLogout, view, onNavigate }) {
   return (
     <aside className="leap-sidebar">
       <div className="leap-sidebar-brand">
-        <span className="leap-brand-mark">{PARTY_SHORT}</span>
+        <span className="leap-brand-mark"><img src="/tdp-logo.png" alt="TDP" /></span>
         <div>
           <div className="leap-brand-title">Telugu Desam Party</div>
         </div>
