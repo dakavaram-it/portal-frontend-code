@@ -10,12 +10,12 @@ export default defineConfig({
   server: {
     port: 9001,
     host: '0.0.0.0',
-    proxy: { '/leapapi': { target: 'http://127.0.0.1:4000', rewrite: (p) => p.replace(/^\/leapapi/, '/portal-frontend-code') } },
+    proxy: { '/leapapi': { target: 'http://127.0.0.1:6644', rewrite: (p) => p.replace(/^\/leapapi/, '/portal-frontend-code') } },
   },
   preview: {
     port: 9001,
     host: '0.0.0.0',
     allowedHosts: ['portalnew.mypartydashboard.com'],
-    proxy: { '/leapapi': { target: 'http://127.0.0.1:4000', rewrite: (p) => p.replace(/^\/leapapi/, '/portal-frontend-code') } },
+    proxy: { '/leapapi': { target: 'http://127.0.0.1:6644', rewrite: (p) => p.replace(/^\/leapapi/, '/portal-frontend-code') } },
   },
 })

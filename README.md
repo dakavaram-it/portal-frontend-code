@@ -20,7 +20,7 @@ backend existed and no longer reaches the screen.
 ## Talking to the API
 
 `Frontend/src/leap/api.js` calls `/leapapi/*`. `Frontend/vite.config.js` proxies that
-prefix to `http://127.0.0.1:4000`, rewriting `/leapapi` to `/portal-frontend-code`, in
+prefix to `http://127.0.0.1:6644`, rewriting `/leapapi` to `/portal-frontend-code`, in
 both `dev` and `preview`. The backend is served by the PSA gateway (`gateway.py`), which
 mounts each project's FastAPI app under a prefix named after it — hence the rewrite
 rather than a strip. **Point that `target` at wherever the gateway actually runs** — it
