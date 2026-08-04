@@ -73,18 +73,38 @@ export const getReservation = (proposalConstituencyId) =>
   get(`/S9getProposalConstituencyReservation?proposal_constituency_id=${proposalConstituencyId}`)
 export const checkPositionAvailability = (proposalPositionId) =>
   get(`/S10checkProposalPositionAvailability?proposal_position_id=${proposalPositionId}`)
-export const assignCandidate = (proposalPositionId, tdpCadreId) =>
+// proposal_status_id is proposal_status's own id — 1 Proposed, 2 Shortlisted. The backend
+// defaults it to Proposed, so a caller that does not care may leave it out.
+export const assignCandidate = (proposalPositionId, tdpCadreId, proposalStatusId) =>
   post('/S11assignProposalCandidate', {
     proposal_position_id: proposalPositionId,
     tdp_cadre_id: tdpCadreId,
+    ...(proposalStatusId ? { proposal_status_id: proposalStatusId } : {}),
   })
 export const searchCadre = (proposalConstituencyId, searchType, searchValue) =>
   get(
     `/S12cadreSearch?proposal_constituency_id=${proposalConstituencyId}` +
       `&search_type=${searchType}&search_value=${encodeURIComponent(searchValue)}`
   )
+// Moves an assigned candidate between Proposed / Shortlisted / Confirmed. The only write
+// that edits a proposal_candidate row in place — it changes the status alone, so the slot
+// it occupies and S7's proposed_cnt do not move.
+export const updateProposalCandidateStatus = (proposalCandidateId, proposalStatusId) =>
+  post('/S20updateProposalCandidateStatus', {
+    proposal_candidate_id: proposalCandidateId,
+    proposal_status_id: proposalStatusId,
+  })
+// Drops a candidate from a position. The backend flips is_active to 'N' rather than
+// deleting, so the row leaves S13 and S7's count and the slot reopens.
+export const removeProposalCandidate = (proposalCandidateId) =>
+  post('/S18removeProposalCandidate', { proposal_candidate_id: proposalCandidateId })
 export const getProposalCandidates = (proposalPositionId) =>
   get(`/S13getProposalCandidatesByProposalPositionId?proposal_position_id=${proposalPositionId}`)
+
+// Every position holding at least one candidate, state-wide. The Candidates screen does not
+// drill down S1..S6, so it has no proposal_constituency_id to key off — this is the whole
+// list, and it filters client-side (the same rows feed its Role dropdown).
+export const getPositionsWithCandidates = () => get('/S19getProposalPositionsWithCandidates')
 
 // One candidate card and the whole compare table are the same payload, so they are the
 // same call. Answers {configured: false} with no candidates when the ratings database is

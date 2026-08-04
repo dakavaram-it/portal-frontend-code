@@ -25,7 +25,7 @@ A prototype of a nomination workflow for local body elections, styled as a party
 
 The reachable flow is backend-driven end to end and holds **no application state of its own**: picklists, reservation, positions, cadre search, candidate assignment and the member list all hit the database, keyed by ids the user picks. Nothing survives in memory across a reload except the wizard's own selections, and nothing needs to — `proposal_position_id` is the only handle the writes use.
 
-**The entire reachable app is `Sidebar` + `NewPositionModal`.** `NewPositionModal` is a single scrolling screen that does everything (pick a body → view its members, or add one), takes no props, and never navigates. Everything else in `leap/` — the `positions` dataset, `PositionDetail`, `AllPositions`, `PositionCard`, `Dashboard`, and the whole `STAGES` pipeline — is unreachable. See "Known dead / inert code".
+**The reachable app is `Sidebar` + `NewPositionModal` + `Candidates`.** `NewPositionModal` is a single scrolling screen that does everything (pick a body → view its members, or add one), takes no props, and never navigates; `Candidates` is the read-across-everything counterpart, reached from the sidebar. Everything else in `leap/` — the `positions` dataset, `PositionDetail`, `AllPositions`, `PositionCard`, `Dashboard`, and the whole `STAGES` pipeline — is unreachable. See "Known dead / inert code".
 
 Two top-level screens, switched by a boolean in `Frontend/src/App.jsx`:
 - `Frontend/src/Login.jsx` — real login. `handleSubmit` posts to `S14`, which validates the credentials against the `user` table, and calls `onLoginSuccess(user)` only on `200`; a `401` renders in `.login-error`. S14 opens a server-side session and sets an **httpOnly** cookie, so the token is never reachable from JS and there is nothing in `localStorage` to steal. `App.jsx` cannot read the cookie either — it calls `S15` on mount to ask whether a session is live, which is what makes a reload keep you logged in, and renders `null` until that answers so the login screen does not flash. `onLogout` calls `S16`, which drops the session server-side. **Every endpoint except S14 requires the session.**
@@ -35,14 +35,15 @@ Two top-level screens, switched by a boolean in `Frontend/src/App.jsx`:
 
 `Leap.jsx` is a 48-line ad-hoc router around a `view` discriminated object (`{ name: 'newPosition' | 'positions' | 'detail', id?, filter? }`). Adding a screen means adding a `view.name` branch, not a route.
 
-**`view` starts at `newPosition` and nothing ever changes it.** The only `setView` calls live inside props passed to `AllPositions` and `PositionDetail`, neither of which renders. `Leap.jsx` still holds `positions` (seeded from `POSITIONS`) and `advanceStage` for those two branches; both are effectively dead. `createPosition` was removed when the wizard stopped producing positions — nothing constructs a local position object any more, so the `_newId` counter is gone too.
+**`view` starts at `newPosition` and only the sidebar changes it**, between `newPosition` and `candidates` — `Sidebar`'s `onNavigate` is the one live `setView`. The others live inside props passed to `AllPositions` and `PositionDetail`, neither of which renders, so `detail` and `positions` stay unreachable. `Leap.jsx` still holds `positions` (seeded from `POSITIONS`) and `advanceStage` for those two branches; both are effectively dead. `createPosition` was removed when the wizard stopped producing positions — nothing constructs a local position object any more, so the `_newId` counter is gone too.
 
 ### Screens
 
 | Component | Reached via | Notes |
 |---|---|---|
 | `NewPositionModal` | `view.name === 'newPosition'` (initial, and permanent) | The whole app. 6 steps, each revealed only when the previous is filled |
-| `Sidebar` | always | The single nav button has no handler. Footer shows the logged-in user (`firstname lastname`, falling back to `username`) and a logout button that clears `App.jsx`'s `user` |
+| `Candidates` | `view.name === 'candidates'` (sidebar) | Every position holding candidates, state-wide, filtered client-side; opens one position full-screen |
+| `Sidebar` | always | Two nav buttons, `NAV` in that file, each switching `view.name`. Footer shows the logged-in user (`firstname lastname`, falling back to `username`) and a logout button that clears `App.jsx`'s `user` |
 | `PositionDetail` | `view.name === 'detail'` | **Unreachable** — nothing sets this view since `createPosition` was removed |
 | `AllPositions` | `view.name === 'positions'` | **Unreachable** — nothing sets this view |
 | `PositionCard` | rendered by `AllPositions` | therefore also unreachable |
@@ -68,7 +69,10 @@ Selecting anything at step *N* clears steps *N+1…6* (the `select*` handlers). 
 
 **View Members** fans S13 out over every role from S7 (`Promise.all`, one call per role), then makes **one** S17 call for every membership id the whole fan-out returned, and renders each cadre as a `MemberCard` — the membership-analytics `cand-card`, field for field: a header (photo, name, score badge tinted by `scoreTier`, "Proposed for &lt;role&gt;", membership-id and mobile pills) over `PROFILE` and `LOCATION & MEMBERSHIP` on a six-column grid the fields `span`. **The fields this backend cannot fill are still rendered, as `—`** (Date of Birth, Occupation, Education, Parliament, Caste Community %) so the two cards read the same; Voter ID and Panchayat are the only two fields added, because that card has no slot for them. Colour carries meaning and matches: caste by category (BC/OC/SC/ST), Member Since and Renewals green, Caste Community % amber. Everything comes off the S13 row except **Member Since** and **Renewals**, which are the report's `'YEAR'` and `'NO OF TIME'`, and the badge, which is `total_score`. That S17 call is decoration on a list that already rendered, so its failure is logged and the badge and those two fields go blank rather than the view erroring. `img_url` is an S3 URL built by S12/S13 and is `''` when the cadre has no photo — the card falls back to `initials()`. Clicking a photo opens the `zoomed` lightbox. `members[id] === undefined` means S13 is still in flight, `[]` means it returned none; the two render differently.
 
-**`MemberCard` renders the staged cards in step 6 too**, so a cadre looks the same before and after they are proposed. `onRemove` is what tells the two apart: with it the card gets a drop button, loses the live dot, and reads "Considered for" rather than "Proposed for" — nothing is proposed until you assign, and the staged list must not claim otherwise.
+Each member card carries **its status where a staged card carries the two buttons** — a read-only `.leap-mcard-status` block reading Proposed / Shortlisted / Confirmed off `STATUS_META[cadre.proposal_status_id]`, defaulting to Proposed for the rows that predate the column. It is deliberately not clickable *here*: this screen writes a status (S11) and never
+changes one — changing one is the Candidates screen's job, via S20. The ✕ on the header **removes the member** — `removeMember` confirms, calls S18 and bumps `positionsKey`, which re-reads S7 *and*, because `positions` is then a new array, re-runs the effect that loads the members, so the card and the open-slot counts update from one bump. A failure renders in `membersError`, since step 6's `error` banner is not on the screen in this branch.
+
+**`MemberCard` renders the staged cards in step 6 too**, so a cadre looks the same before and after they are proposed. `onRemove` is what tells the two apart: with it the card loses the live dot and the status block, and reads "Considered for" rather than "Proposed for" — nothing is proposed until you assign, and the staged list must not claim otherwise.
 
 **Add Members** shows the roles as cards, disabled when `max_proposals - proposed_cnt <= 0`, then the search row.
 
@@ -76,11 +80,53 @@ Selecting anything at step *N* clears steps *N+1…6* (the `select*` handlers). 
 
 **A search stages a cadre, it does not assign one.** `staged` holds the cadre rows; `scores` holds their whole S17 row (the card wants the report behind the score, for Member Since and Renewals, not just the number), keyed by `membership_id` and fetched one MID at a time as each is staged, so a slow score never blocks the card. `stagedByScore` sorts best-first on `total_score` with unscored cadre last (`?? -1`) rather than as zeros. Each staged card is a `MemberCard` with `onRemove` — same layout as a proposed member, plus the photo lightbox and a score badge tiered by `scoreTier` (≥70 / ≥40 / below / none). **Compare** appears once two are staged.
 
+**Each staged card ends in two blocks, `Propose Candidate` and `Shortlist Candidate`** (`PROPOSAL_STATUSES`), replacing the single "Select Candidate" toggle. They are the same pick — `selection` maps `tdp_cadre_id` to the `proposal_status_id` the button chose (1 Proposed, 2 Shortlisted; 3 Confirmed exists in the table but this screen never writes it) — so choosing one switches away from the other and clicking the lit one clears it. **The buttons say what a staged cadre is saved as, not whether they are saved** — save writes every staged card, and one nobody marked goes in as `DEFAULT_STATUS_ID` (Proposed), so a mixed list of one shortlisted and one untouched saves as one of each. The status travels to S11 as `proposal_status_id`. **Both statuses consume a `max_proposals` slot**: they are rows in the same `proposal_candidate` table, and S7's `proposed_cnt` counts every active row whatever its status. S13 now returns `proposal_status` (the `status_name`), which is the verb a proposed member's card reads back — `null` on rows written before the column existed, which render as "Proposed".
+
 `assignStaged` then calls S11 **sequentially**, in score order — the proposal slots are exactly what the staged candidates compete for, and S11 re-checks the count on every write, so the server has to see them one at a time. A batch can therefore partly succeed: whoever went in is dropped from `staged` and named in the success line, and the rest stay staged with S11's own `{detail}` text. After any success `positionsKey` is bumped so S7 re-reads and the open-slot counts update in place.
 
 `Dropdown` is a hand-rolled replacement for `<select>`, used by steps 2/3/4 and the search-type picker. It exists because Chrome flips a long native popup *upward*; this one always drops below. `searchable` adds a filter input (step 2 only). It closes on outside `mousedown` and on Escape.
 
 Candidates use the **backend cadre shape** everywhere (`member_name`, `membership_id`, `mobile_no`, `category_name`, `panchayat_name`, `mandal_town_name`, `img_url`, …) — not the `data.js` `candidate()` shape (`name`, `score`, `idNo`, `phone`).
+
+### `Candidates`
+
+The other reachable screen, and the only one that reads across constituencies. It mirrors
+the membership-analytics platform (`/cde/`): the positions list is that app's
+`PositionsScreen` card list, and opening a card is its `Step2View` ("Adding Profiles") —
+a header, then `MAPPED CANDIDATES` as a grid of the same `MemberCard` the wizard renders,
+with Compare All over them.
+
+**One endpoint, all the filtering in the browser.** `S19` returns every
+`proposal_position` with at least one active candidate — the join to `proposal_candidate`
+is inner, so a position nobody was proposed for never appears — carrying its election
+type, assembly, mandal/town, local body, role, reservation, slot counts and a
+**per-status breakdown** (`proposed_status_cnt` / `shortlisted_status_cnt` /
+`conformed_status_cnt` — the SQL aliases kept their old spelling when the status was
+renamed to Confirmed — a `COALESCE` to Proposed for the rows written before the column).
+It takes no query parameters on purpose: the four filters (Election Type, Assembly, Role,
+Status) get their options from the *unfiltered* rows, so filtering server-side would empty
+the dropdowns the filter was picked from. Status filters positions that hold at least one
+candidate of it, not the cards inside.
+
+The detail is `S13` + `S17`, the same pair as View Members, and the ✕ is the same `S18`
+removal — dropping the last candidate takes the position out of `S19` entirely, which is
+why `onChanged` bumps the list and the effect falls back to the list rather than rendering
+a position that no longer exists.
+
+**This is the one screen that *changes* a status.** Where View Members shows the read-only
+`.leap-mcard-status` block, here the card carries all three statuses as buttons with the
+saved one lit — `MemberCard`'s `statuses` prop, which defaults to the wizard's two and is
+passed `STATUS_FILTERS` (all three) here. Nothing is written until **Save Status**: the
+buttons move `pending` (only the ids the user touched), and Save writes one `S20` per card
+whose status actually moved, sequentially so a failure can name the candidate. Pressing the
+lit button is a no-op — the wizard clears its pick there, but a saved candidate always has
+a status, so `onStatus(null)` is ignored. A reload clears `pending`, because `S13` is then
+the new truth about every status. `S7`'s counts do not move on a status change (all three
+are live rows in one `max_proposals` slot), but `S19`'s per-status pills do, which is what
+`onChanged` refreshes.
+
+`MemberCard`, `STATUS_META` and `memberIds` are imported from `NewPositionModal.jsx`
+rather than copied: a proposed member must look identical on both screens.
 
 ### `PositionDetail` (unreachable)
 
@@ -100,6 +146,16 @@ Central source of both the seed dataset and the domain vocabulary. It exports:
 ### `Frontend/src/leap/api.js`
 
 One thin `get`/`post` pair over `${API_BASE}/*` — `API_BASE` is `/leapapi` (Vite proxies it; see above for why not `/api`) — one named function per endpoint, plus `useList(load, deps)` — the hook every picklist uses. `useList` returns `[]` until the promise resolves **and `[]` again on failure**, logging the error rather than surfacing it: a failed picklist is indistinguishable from an empty one in the UI. `post` unwraps FastAPI's `{detail: "..."}` into the thrown `Error.message`, which is what the S11 error banner shows.
+
+**No write here sends a user id.** S11 stamps `inserted_user_id` and S20 stamps
+`updated_user_id` from the session the httpOnly cookie identifies, server-side — the
+frontend has no `user_id` to pass and must not start passing one, since a body-supplied id
+would let a browser forge the audit trail.
+
+`getPositionsWithCandidates()` (S19) is the Candidates screen's whole list — see that
+section for why it takes no filter arguments. `updateProposalCandidateStatus()` (S20) is
+the only write that edits a `proposal_candidate` row rather than creating (S11) or
+deactivating (S18) one.
 
 `getCadreScores(mids)` is the one call behind both the staged card's score badge and the whole compare table — same payload, so the same endpoint (`S17`, `?mids=` comma-separated). It answers `{configured: false, questions: [], candidates: []}` rather than failing when the ratings database is unset on the server, which is a state the UI renders ("No score", and a note in the compare modal) rather than an error. **The score half is optional; the profile half never is** — everything the compare table shows above the Performance section comes off the S12/S13 row the caller already had.
 

@@ -10,8 +10,9 @@ The API (FastAPI + PyMySQL) lives in a **separate repository** and is deployed
 separately. This repo contains no backend code and no database credentials.
 
 Everything the reachable UI shows comes from that API — picklists, reservation,
-positions, cadre search, cadre performance scores and the proposed candidates — and
-assignments persist. The
+positions, cadre search, cadre performance scores and the proposed candidates with their
+Proposed / Shortlisted / Confirmed status — and assignments, removals and status changes
+persist. The
 frontend keeps no dataset of its own; only the wizard's current selections reset on
 reload. The seed data in `Frontend/src/leap/data.js` is left over from before the
 backend existed and no longer reaches the screen.
@@ -96,13 +97,27 @@ Frontend/
 - A cadre search **stages** a candidate, it does not propose one. Several are staged and
   ranked by their performance score, compared side by side in `CompareModal`, and only
   the **Assign** button writes — one S11 call each, in score order, so a batch can partly
-  succeed when the slots run out.
+  succeed when the slots run out. Each staged card is saved as **Proposed** or
+  **Shortlisted**; both are rows in the same table and both consume a `max_proposals`
+  slot, so the counts do not tell them apart.
+- The ✕ on a member card **removes** that candidate (S18) — `is_active` goes to `'N'`,
+  the slot reopens, and the row survives. Nothing here is deleted. Each staged card is saved as **Proposed** or
+  **Shortlisted**; both are rows in the same table and both consume a `max_proposals`
+  slot, so the counts do not tell them apart.
+- The ✕ on a member card **removes** that candidate (S18) — `is_active` goes to `'N'`,
+  the slot reopens, and the row survives. Nothing here is deleted.
 - Scores (`S17`) come from a **second, optional** database on the ratings pipeline's own
   server. With `REPORT_RATINGS_DB_*` unset the API answers `{"configured": false}` and the
   wizard renders without scores — "No score" badges, a note in the compare modal — rather
   than erroring.
-- The reachable UI is one screen: `components/NewPositionModal.jsx` (plus `Sidebar` and
-  the `CompareModal` overlay).
+- The reachable UI is two screens, switched by the sidebar:
+  `components/NewPositionModal.jsx` (the wizard: pick a local body, view or propose its
+  members) and `components/Candidates.jsx` (every position holding candidates, state-wide).
+  Plus `Sidebar` and the `CompareModal` overlay.
   `PositionDetail`, `AllPositions`, `PositionCard` and `Dashboard` are all unreachable,
   as is most of `data.js`. See `CLAUDE.md` for the details and for the truncated
   `STAGES` pipeline caveat.
+- **Candidates is the only screen that changes a status.** It reads one endpoint (S19,
+  no query parameters — all four filters run in the browser off the unfiltered rows) and
+  writes S20 on **Save Status**, one call per card whose status actually moved. The
+  wizard writes a status once, at assign time, and never edits one.

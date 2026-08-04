@@ -12,6 +12,7 @@ import {
   getCadreScores,
   searchCadre,
   assignCandidate,
+  removeProposalCandidate,
   useList,
 } from '../api.js'
 import CompareModal, { scoreTier } from './CompareModal.jsx'
@@ -26,7 +27,7 @@ const SEARCH_TYPE = 'MembershipId'
 // box can only ever return nothing. Applied on typing and on paste.
 const sanitizeSearchValue = (value) => value.replace(/\D/g, '').slice(0, 8)
 
-function memberIds(c) {
+export function memberIds(c) {
   return [c.membership_id || `Cadre #${c.tdp_cadre_id}`, c.mobile_no].filter(Boolean).join(' · ')
 }
 
@@ -205,6 +206,25 @@ const ELECTION_TYPE_ICONS = {
 // Score tiers colour the badge the same way the compare table's does.
 const TIER_COLOR = { none: '#9ca3af', high: '#059669', mid: '#d97706', low: '#dc2626' }
 
+// proposal_status, by id. `done` is the verb a card reads back — the same word for a
+// staged cadre whose button is on and for a saved member's status block, so the two say
+// the same thing. Confirmed is here to be *read*: this screen never writes it. `cls` is a
+// CSS class, not a label — it stayed `conform` when the status was renamed.
+export const STATUS_META = {
+  1: { done: 'Proposed', cls: 'propose' },
+  2: { done: 'Shortlisted', cls: 'shortlist' },
+  3: { done: 'Confirmed', cls: 'conform' },
+}
+
+// The two the staged card's buttons write.
+const PROPOSAL_STATUSES = [
+  { id: 1, label: 'Propose Candidate' },
+  { id: 2, label: 'Shortlist Candidate' },
+]
+
+// What a staged cadre nobody marked is saved as.
+const DEFAULT_STATUS_ID = PROPOSAL_STATUSES[0].id
+
 // A cadre proposed for a role, or — with `onRemove` — one only staged for it, which is
 // the same card with a drop button and the verb the staged list depends on: nothing is
 // proposed until you assign. Laid out field for field like the
@@ -212,7 +232,16 @@ const TIER_COLOR = { none: '#9ca3af', high: '#059669', mid: '#d97706', low: '#dc
 // which render '—' rather than being dropped, so the two cards read the same. `span` is
 // the number of the grid's six columns the field takes. Voter ID and Panchayat are the
 // two fields that card has no slot for; they are the only additions.
-function MemberCard({ cadre, role, rating, onZoom, onRemove, selected, onSelect }) {
+// `statuses` is which buttons `onStatus` offers. It defaults to the two this wizard
+// writes; the Candidates screen passes all three, because there it is an existing status
+// being moved rather than a new one being chosen.
+export function MemberCard({ cadre, role, rating, onZoom, onRemove, onDelete, status, onStatus, statuses = PROPOSAL_STATUSES }) {
+  // A staged card takes its status from the buttons; a saved one from S13. Rows written
+  // before the column have neither id nor name and are proposals.
+  const picked = STATUS_META[status]
+  const saved = STATUS_META[cadre.proposal_status_id] || STATUS_META[DEFAULT_STATUS_ID]
+  // Staged cards drop from the list; saved ones are removed from the position.
+  const drop = onRemove || onDelete
   const score = rating?.total_score
   const report = rating?.performance
   const caste = [cadre.category_name, cadre.caste_name].filter(Boolean).join(' · ')
@@ -236,7 +265,7 @@ function MemberCard({ cadre, role, rating, onZoom, onRemove, selected, onSelect 
     { label: 'Renewals', value: renewals != null ? `${renewals}×` : null, span: 3, cls: 'highlight' },
   ]
   return (
-    <div className={`leap-mcard${selected ? ' selected' : ''}`}>
+    <div className={`leap-mcard${picked ? ` selected ${picked.cls}` : ''}`}>
       <div className="leap-mcard-head">
         {cadre.img_url ? (
           <button
@@ -263,12 +292,12 @@ function MemberCard({ cadre, role, rating, onZoom, onRemove, selected, onSelect 
                   <i>SCORE</i>
                 </span>
               )}
-              {onRemove && (
+              {drop && (
                 <button
                   type="button"
                   className="leap-mcard-remove"
                   title={`Remove ${cadre.member_name}`}
-                  onClick={onRemove}
+                  onClick={drop}
                 >
                   ✕
                 </button>
@@ -276,7 +305,7 @@ function MemberCard({ cadre, role, rating, onZoom, onRemove, selected, onSelect 
             </span>
           </div>
           <div className="leap-mcard-considered">
-            {onRemove ? 'Considered for' : 'Proposed for'} <b>{role}</b>
+            {onRemove ? 'Considered for' : `${saved.done} for`} <b>{role}</b>
           </div>
           <div className="leap-mcard-pills">
             <span>{cadre.membership_id || `Cadre #${cadre.tdp_cadre_id}`}</span>
@@ -299,14 +328,24 @@ function MemberCard({ cadre, role, rating, onZoom, onRemove, selected, onSelect 
         </div>
       ))}
 
-      {onSelect && (
-        <button
-          type="button"
-          className={`leap-mcard-select${selected ? ' selected' : ''}`}
-          onClick={onSelect}
-        >
-          {selected ? '✓ Selected' : 'Select Candidate'}
-        </button>
+      {onStatus ? (
+        <div className="leap-mcard-actions">
+          {statuses.map((s) => (
+            <button
+              type="button"
+              key={s.id}
+              className={`leap-mcard-action ${STATUS_META[s.id].cls}${status === s.id ? ' selected' : ''}`}
+              onClick={() => onStatus(status === s.id ? null : s.id)}
+            >
+              {status === s.id ? `✓ ${STATUS_META[s.id].done}` : s.label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        // Where the staged card's buttons are, a saved member carries what was written
+        // instead — Proposed, Shortlisted or Confirmed. Read-only: nothing here changes
+        // a saved row's status.
+        !onRemove && <div className={`leap-mcard-status ${saved.cls}`}>{saved.done}</div>
       )}
     </div>
   )
@@ -327,9 +366,10 @@ export default function NewPositionModal() {
   // any of them is proposed.
   const [searchValue, setSearchValue] = useState('')
   const [staged, setStaged] = useState([])
-  // tdp_cadre_id of the staged cadre picked with "Select Candidate". Assign writes these
-  // alone, so a search that stages someone to compare does not also propose them.
-  const [selectedIds, setSelectedIds] = useState([])
+  // tdp_cadre_id -> the proposal_status_id its button picked (1 Proposed, 2 Shortlisted).
+  // Assign writes these alone, so a search that stages someone to compare does not also
+  // propose them, and the two buttons are what decides which status the row gets.
+  const [selection, setSelection] = useState({})
   // membership_id -> the S17 row, the same shape `memberScores` holds: the card wants the
   // report behind the score as well as the score. Kept apart from `staged` so a row
   // arriving late does not have to rewrite the cadre it belongs to.
@@ -378,6 +418,9 @@ export default function NewPositionModal() {
   const [memberScores, setMemberScores] = useState({})
   // The member whose photo is open in the lightbox.
   const [zoomed, setZoomed] = useState(null)
+  // S18's {detail} when a removal fails. Step 6's `error` is not it — that banner is not
+  // on the screen in the view branch.
+  const [membersError, setMembersError] = useState('')
   useEffect(() => {
     if (membersAction !== 'view' || positions.length === 0) return
     let cancelled = false
@@ -443,7 +486,10 @@ export default function NewPositionModal() {
       (scores[b.membership_id]?.total_score ?? -1) - (scores[a.membership_id]?.total_score ?? -1)
   )
 
-  const selectedByScore = stagedByScore.filter((c) => selectedIds.includes(c.tdp_cadre_id))
+  // Every staged cadre is saved; the buttons only say *as what*. An untouched card is a
+  // proposal, so staging someone and hitting save does what it did before the shortlist
+  // existed rather than silently saving nobody.
+  const statusOf = (cadre) => selection[cadre.tdp_cadre_id] || DEFAULT_STATUS_ID
 
   const step1Done = !!electionTypeId
   const step2Done = step1Done && !!assemblyId
@@ -486,7 +532,7 @@ export default function NewPositionModal() {
   const selectPosition = (id) => {
     setPositionId(id)
     setStaged([])
-    setSelectedIds([])
+    setSelection({})
     setSearchValue('')
     setError('')
     setAssigned('')
@@ -540,6 +586,20 @@ export default function NewPositionModal() {
     }
   }
 
+  // Removing a proposed member is a write with no undo on this screen, so it asks first.
+  // Bumping positionsKey re-reads S7, and the new `positions` array re-runs the effect
+  // that loads the members — one bump refreshes both the counts and the list.
+  const removeMember = async (cadre) => {
+    if (!window.confirm(`Remove ${cadre.member_name} from this position?`)) return
+    setMembersError('')
+    try {
+      await removeProposalCandidate(cadre.proposal_candidate_id)
+      setPositionsKey((k) => k + 1)
+    } catch (err) {
+      setMembersError(err.message)
+    }
+  }
+
   // S11 takes one cadre at a time and re-checks eligibility and the slot count on each
   // write, so a batch can partly succeed — the slot count is exactly what the staged
   // candidates are competing for. Assign in score order, one at a time so the server can
@@ -551,18 +611,28 @@ export default function NewPositionModal() {
     setAssigned('')
     const done = []
     const failed = []
-    for (const cadre of selectedByScore) {
+    for (const cadre of stagedByScore) {
       try {
-        await assignCandidate(position.proposal_position_id, cadre.tdp_cadre_id)
+        await assignCandidate(position.proposal_position_id, cadre.tdp_cadre_id, statusOf(cadre))
         done.push(cadre)
       } catch (err) {
         failed.push(`${cadre.member_name}: ${err.message}`)
       }
     }
     setStaged((prev) => prev.filter((c) => !done.includes(c)))
-    setSelectedIds((prev) => prev.filter((id) => !done.some((c) => c.tdp_cadre_id === id)))
+    setSelection((prev) =>
+      Object.fromEntries(
+        Object.entries(prev).filter(([id]) => !done.some((c) => String(c.tdp_cadre_id) === id))
+      )
+    )
     if (done.length) {
-      setAssigned(`${done.map((c) => c.member_name).join(', ')} assigned to ${position.role_name}.`)
+      // Names carry their status: the batch can hold both, and "assigned" alone would
+      // not say which of the two each one was written as.
+      const named = done.map((c) => {
+        const s = PROPOSAL_STATUSES.find((x) => x.id === statusOf(c))
+        return `${c.member_name} (${s.done})`
+      })
+      setAssigned(`${named.join(', ')} saved for ${position.role_name}.`)
       setPositionsKey((k) => k + 1)
     }
     if (failed.length) setError(failed.join(' · '))
@@ -681,6 +751,7 @@ export default function NewPositionModal() {
 
           {membersAction === 'view' && (
             <div className="leap-members-view">
+              {membersError && <div className="leap-form-error">{membersError}</div>}
               {positions.map((row) => {
                 const open = openSlots(row)
                 // undefined while S13 is still in flight; [] once it says none.
@@ -714,6 +785,7 @@ export default function NewPositionModal() {
                             role={row.role_name}
                             rating={memberScores[c.membership_id]}
                             onZoom={() => setZoomed(c)}
+                            onDelete={() => removeMember(c)}
                           />
                         ))}
                       </div>
@@ -790,8 +862,8 @@ export default function NewPositionModal() {
           {staged.length > 0 && (
             <div className="leap-staged">
               <div className="leap-staged-head">
-                <b>{staged.length} staged · {selectedIds.length} selected</b>
-                <span>Only selected candidates are assigned.</span>
+                <b>{staged.length} staged</b>
+                <span>All staged candidates are saved — unmarked ones as Proposed.</span>
                 {staged.length > 1 && (
                   <button
                     type="button"
@@ -812,15 +884,14 @@ export default function NewPositionModal() {
                     onZoom={() => setZoomed(c)}
                     onRemove={() => {
                       setStaged((prev) => prev.filter((x) => x !== c))
-                      setSelectedIds((prev) => prev.filter((id) => id !== c.tdp_cadre_id))
+                      setSelection(({ [c.tdp_cadre_id]: _, ...rest }) => rest)
                     }}
-                    selected={selectedIds.includes(c.tdp_cadre_id)}
-                    onSelect={() =>
-                      setSelectedIds((prev) =>
-                        prev.includes(c.tdp_cadre_id)
-                          ? prev.filter((id) => id !== c.tdp_cadre_id)
-                          : [...prev, c.tdp_cadre_id]
-                      )
+                    status={selection[c.tdp_cadre_id]}
+                    onStatus={(statusId) =>
+                      setSelection((prev) => {
+                        const { [c.tdp_cadre_id]: _, ...rest } = prev
+                        return statusId ? { ...rest, [c.tdp_cadre_id]: statusId } : rest
+                      })
                     }
                   />
                 ))}
@@ -832,14 +903,14 @@ export default function NewPositionModal() {
             <button
               type="button"
               className="leap-btn-primary"
-              disabled={busy || selectedIds.length === 0}
+              disabled={busy || staged.length === 0}
               onClick={assignStaged}
             >
               {busy
-                ? 'Assigning…'
-                : selectedIds.length > 1
-                ? `Assign ${selectedIds.length} Candidates`
-                : 'Assign Candidate'}
+                ? 'Saving…'
+                : staged.length > 1
+                ? `Save ${staged.length} Candidates`
+                : 'Save Candidate'}
             </button>
           </div>
         </div>

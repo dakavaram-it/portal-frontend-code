@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar.jsx'
 import AllPositions from './components/AllPositions.jsx'
 import PositionDetail from './components/PositionDetail.jsx'
 import NewPositionModal from './components/NewPositionModal.jsx'
+import Candidates from './components/Candidates.jsx'
 import './Leap.css'
 
 export default function Leap({ user, onLogout }) {
@@ -22,9 +23,15 @@ export default function Leap({ user, onLogout }) {
 
   return (
     <div className="leap-app">
-      <Sidebar user={user} onLogout={onLogout} />
+      <Sidebar
+        user={user}
+        onLogout={onLogout}
+        view={view.name}
+        onNavigate={(name) => setView({ name })}
+      />
       <main className="leap-main">
         {view.name === 'newPosition' && <NewPositionModal />}
+        {view.name === 'candidates' && <Candidates />}
         {view.name === 'positions' && (
           <AllPositions
             positions={positions}

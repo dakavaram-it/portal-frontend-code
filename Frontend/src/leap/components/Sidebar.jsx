@@ -8,7 +8,13 @@ function LogoutIcon() {
   )
 }
 
-export default function Sidebar({ user, onLogout }) {
+// The nav's own entries, by the `view.name` each one switches Leap to.
+const NAV = [
+  { view: 'newPosition', label: 'Local Body Elections' },
+  { view: 'candidates', label: 'Candidates' },
+]
+
+export default function Sidebar({ user, onLogout, view, onNavigate }) {
   // Most `user` rows carry no firstname/lastname, so fall back to the login name.
   const displayName = [user.firstname, user.lastname].filter(Boolean).join(' ') || user.username
   const initials = displayName.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()
@@ -23,7 +29,16 @@ export default function Sidebar({ user, onLogout }) {
       </div>
 
       <nav className="leap-nav">
-        <button type="button" className="leap-nav-btn active">Local Body Elections</button>
+        {NAV.map((item) => (
+          <button
+            type="button"
+            key={item.view}
+            className={`leap-nav-btn ${view === item.view ? 'active' : ''}`}
+            onClick={() => onNavigate(item.view)}
+          >
+            {item.label}
+          </button>
+        ))}
       </nav>
 
       <div className="leap-sidebar-footer">

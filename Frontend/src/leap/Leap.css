@@ -1748,6 +1748,17 @@
   color: #dc2626;
 }
 
+/* A role with no proposal slot left is already `disabled` in the JSX, but the rules above
+   hand every card the pointer cursor and a hover lift — so a full role still read as
+   pickable. Both affordances go away with the click. */
+.leap-position-card:disabled {
+  cursor: not-allowed;
+}
+
+.leap-position-card:disabled:hover {
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 0 0 1px rgba(15, 23, 42, 0.04);
+}
+
 .leap-position-card.selected {
   border-color: #0f9d6e;
   background: rgba(15, 157, 110, 0.03);
@@ -2176,32 +2187,98 @@
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }
 
-.leap-mcard.selected {
+.leap-mcard.selected.propose {
   border-color: #5cb85c;
   box-shadow: 0 0 0 2px rgba(92, 184, 92, 0.25);
 }
 
-/* Sits at the foot of a staged card, like the login screen's SIGN IN button. */
-.leap-mcard-select {
+.leap-mcard.selected.shortlist {
+  border-color: #d97706;
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.25);
+}
+
+.leap-mcard.selected.conform {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.25);
+}
+
+/* Two blocks at the foot of a staged card — propose or shortlist, one of the two. They
+   write different proposal_status rows, so they are coloured apart rather than being one
+   button in two states. */
+/* Two columns for the wizard's staged cards, three on the Candidates screen — auto-fit
+   sizes to however many statuses the card was given. */
+.leap-mcard-actions {
   margin-top: auto;
-  padding: 11px;
-  border: 1px solid #4cae4c;
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-  background: #5cb85c;
-  color: #fff;
-  font-size: 13px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+}
+
+/* Unpicked blocks stay neutral: only the chosen status carries a colour, so a card says
+   at a glance which one it is rather than showing every option lit. */
+.leap-mcard-action {
+  padding: 11px 6px;
+  border: 1px solid #e5e7eb;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 12.5px;
   font-weight: 700;
   cursor: pointer;
 }
 
-.leap-mcard-select:hover {
-  background: #449d44;
+.leap-mcard-action:hover {
+  background: #eef2f6;
+  color: #334155;
 }
 
-.leap-mcard-select.selected {
+.leap-mcard-action.propose.selected,
+.leap-mcard-action.propose.selected:hover {
+  border-color: #4cae4c;
+  background: #5cb85c;
+  color: #fff;
+}
+
+.leap-mcard-action.shortlist.selected,
+.leap-mcard-action.shortlist.selected:hover {
+  border-color: #b45309;
+  background: #d97706;
+  color: #fff;
+}
+
+/* Only the Candidates screen offers this one — the wizard writes Proposed and Shortlisted
+   and never Confirmed. */
+.leap-mcard-action.conform.selected,
+.leap-mcard-action.conform.selected:hover {
+  border-color: #4338ca;
+  background: #4f46e5;
+  color: #fff;
+}
+
+/* Sits where a staged card's two buttons are, so a saved member reads the same way. Not a
+   button — this screen writes a status, it does not change one. */
+.leap-mcard-status {
+  margin-top: auto;
+  padding: 11px 6px;
+  border-top: 1px solid #e5e7eb;
+  text-align: center;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.leap-mcard-status.propose {
   background: #eaf7ea;
   color: #2f7d32;
+}
+
+.leap-mcard-status.shortlist {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.leap-mcard-status.conform {
+  background: #e0e7ff;
+  color: #3730a3;
 }
 
 .leap-mcard-head {
@@ -2410,6 +2487,375 @@
 .leap-mcard-field b.cat-ST { color: #9d174d; }
 .leap-mcard-field b.accent { color: #b45309; }
 .leap-mcard-field b.highlight { color: #0f9d6e; }
+
+/* ---------- Candidates screen ---------- */
+.leap-cand-screen {
+  display: flex;
+  flex-direction: column;
+}
+
+.leap-cand-header h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.leap-cand-header p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.leap-cand-filter-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px 0;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.leap-cand-filter-select {
+  min-width: 170px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #1f2430;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.leap-cand-filter-select:focus {
+  outline: none;
+  border-color: #f5c518;
+}
+
+.leap-cand-filter-reset {
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.leap-cand-filter-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.leap-cand-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.leap-cand-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.leap-cand-card:hover,
+.leap-cand-card:focus-visible {
+  border-color: #f5c518;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  outline: none;
+}
+
+.leap-cand-card-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.leap-cand-card-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 999px;
+}
+
+.leap-cand-card-kind-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d97706;
+}
+
+.leap-cand-card-eyebrow-meta {
+  font-size: 11.5px;
+  color: #94a3b8;
+}
+
+.leap-cand-card-reservation {
+  margin-left: auto;
+  padding: 3px 9px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #6b21a8;
+  background: #faf5ff;
+  border: 1px solid #e9d5ff;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.leap-cand-card-reservation.open {
+  color: #0f9d6e;
+  background: #f0fdf9;
+  border-color: #a7f3d0;
+}
+
+.leap-cand-card-identity h3 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.leap-cand-card-role {
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #b45309;
+}
+
+.leap-cand-card-progress-track {
+  height: 8px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.leap-cand-card-progress-fill {
+  height: 100%;
+  background: #0f9d6e;
+  border-radius: 4px;
+}
+
+.leap-cand-card-progress-fill.is-full {
+  background: #b45309;
+}
+
+.leap-cand-card-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.leap-cand-card-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.leap-cand-card-metric-val {
+  font-size: 19px;
+  font-weight: 800;
+  color: #0f172a;
+  text-align: center;
+}
+
+.leap-cand-card-metric.is-full .leap-cand-card-metric-val {
+  color: #b45309;
+}
+
+.leap-cand-card-metric-val span {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.leap-cand-card-metric-lbl {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.leap-cand-card-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Same three colours the member card's status block uses, so a pill and the card it
+   counts read as the same status. */
+.leap-cand-pill {
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+}
+
+.leap-cand-pill.propose {
+  color: #1e40af;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+.leap-cand-pill.shortlist {
+  color: #0f9d6e;
+  background: #f0fdf9;
+  border: 1px solid #a7f3d0;
+}
+
+.leap-cand-pill.conform {
+  color: #6b21a8;
+  background: #faf5ff;
+  border: 1px solid #e9d5ff;
+}
+
+.leap-cand-empty {
+  grid-column: 1 / -1;
+  padding: 40px 20px;
+  text-align: center;
+  background: #fff;
+  border: 1px dashed #e2e8f0;
+  border-radius: 14px;
+}
+
+.leap-cand-empty-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.leap-cand-empty-sub {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: #94a3b8;
+}
+
+.leap-cand-back {
+  align-self: flex-start;
+  margin-bottom: 10px;
+  padding: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #b45309;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.leap-cand-detail-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px 18px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+}
+
+.leap-cand-detail-eyebrow {
+  font-size: 11.5px;
+  color: #94a3b8;
+}
+
+.leap-cand-detail-head h2 {
+  margin: 2px 0 0;
+  font-size: 20px;
+}
+
+.leap-cand-detail-role {
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #b45309;
+}
+
+.leap-cand-detail-stats {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-left: auto;
+}
+
+.leap-cand-detail-stats > span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.leap-cand-detail-stats b {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.leap-cand-detail-stats .filled b { color: #0f9d6e; }
+.leap-cand-detail-stats .unfilled b { color: #b45309; }
+
+.leap-cand-detail-section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0 12px;
+}
+
+.leap-cand-detail-section-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #64748b;
+}
+
+.leap-cand-save-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.leap-cand-save-note {
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+.leap-cand-save-bar .leap-btn-primary {
+  margin-left: auto;
+}
 
 @media (max-width: 960px) {
   .leap-stat-row { grid-template-columns: repeat(3, 1fr); }
