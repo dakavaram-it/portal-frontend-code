@@ -52,7 +52,10 @@ export const login = (username, password) => post('/S14login', { username, passw
 export const me = () => get('/S15me')
 export const logout = () => post('/S16logout', {})
 export const getElectionTypes = () => get('/S1getProposalElectionTypes')
-export const getAssemblies = () => get('/S2getAssemblyConstituenciesInAState')
+// S21, not S2: the picklist is the assemblies this user is granted, which the backend
+// resolves from the session's user_id. S2 (every assembly in the state) still exists on
+// the backend and is no longer called from here.
+export const getAssemblies = () => get('/S21getUserAccessAssemblies')
 export const getMandals = (constituencyId) =>
   get(`/S3getMandalsInAConstituency?constituency_id=${constituencyId}`)
 export const getTowns = (constituencyId) =>
