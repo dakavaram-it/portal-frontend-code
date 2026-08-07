@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getAssemblies, getDashboardPositions, useList } from '../api.js'
+import { getAssemblies, getDashboardPositions, useLoadable } from '../api.js'
 import { Dropdown } from './NewPositionModal.jsx'
 
 const ICON_PROPS = {
@@ -83,22 +83,107 @@ function IconEye() {
   )
 }
 
+function IconRefresh() {
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+      <path d="M20 4v5h-5" />
+    </svg>
+  )
+}
+
+function IconSearch() {
+  return (
+    <svg {...ICON_PROPS}>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="M20 20l-3.6-3.6" />
+    </svg>
+  )
+}
+
 const NOMINATION_CLASS = {
   'Not Started': 'not-started',
   'In Progress': 'in-progress',
   Completed: 'completed',
 }
 
-function StatTile({ icon, label, value, accent }) {
+// Sort order for the Nomination column: the pipeline's own order, so sorting by it
+// groups the work still to do at one end rather than alphabetically scattering it.
+const NOMINATION_RANK = { 'Not Started': 0, 'In Progress': 1, Completed: 2 }
+
+const STATUS_FILTERS = ['All', 'Not Started', 'In Progress', 'Completed']
+
+const pct = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : 0)
+
+// One filled track, used for both the per-election-type headline and the per-location
+// row. Tone follows the nomination status so the bar and the badge beside it never
+// disagree; the value is always spelled out in text too, so the colour is decoration
+// rather than the only carrier of the number.
+function ProgressBar({ value, total, tone = 'in-progress', label, color }) {
+  const filled = pct(value, total)
+  return (
+    <div
+      className={`leap-progress ${tone}`}
+      role="progressbar"
+      aria-valuenow={value}
+      aria-valuemin={0}
+      aria-valuemax={total}
+      aria-label={label}
+    >
+      <div className="leap-progress-track">
+        {/* `color` is the stat tile's own accent: inside a tile the bar measures that
+            tile's metric, not a nomination status, so the status tones would be lying. */}
+        <div
+          className="leap-progress-fill"
+          style={{ width: `${filled}%`, ...(color ? { background: color } : null) }}
+        />
+      </div>
+      <span className="leap-progress-value">{filled}%</span>
+    </div>
+  )
+}
+
+// `of` is the denominator the count is measured against, and only three of the six tiles
+// have one — proposed and confirmed run against the proposal slots, not-started against
+// the roles. The other three (locations, required positions, max proposals) are totals
+// with nothing to reach, so they keep the plain count and their `sub` line: inventing a
+// target for them would read as progress toward something that does not exist.
+function StatTile({ icon, label, value, sub, of, accent }) {
+  const hasTarget = of !== undefined
   return (
     <div className="leap-stat-tile">
       <span className="leap-stat-icon" style={{ background: `${accent}1a`, color: accent }}>
         {icon}
       </span>
-      <div>
-        <div className="leap-stat-value">{value}</div>
+      <div className="leap-stat-body">
+        <div className="leap-stat-value">
+          {value}
+          {hasTarget && <span className="leap-stat-of">/ {of}</span>}
+        </div>
         <div className="leap-stat-label">{label}</div>
+        {hasTarget ? (
+          <ProgressBar value={value} total={of} color={accent} label={`${label}: ${value} of ${of}`} />
+        ) : (
+          sub && <div className="leap-stat-sub">{sub}</div>
+        )}
       </div>
+    </div>
+  )
+}
+
+// Shown while S22 is in flight. It mirrors the real layout — six tiles over a table —
+// so the screen does not jump when the data lands, and so the wait reads as "this is
+// filling in" rather than "there is nothing here".
+function DashboardSkeleton() {
+  return (
+    <div className="leap-skeleton" aria-hidden="true">
+      <div className="leap-dash-type-cards">
+        {[0, 1, 2].map((i) => <div key={i} className="leap-skel leap-skel-card" />)}
+      </div>
+      <div className="leap-stat-row">
+        {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="leap-skel leap-skel-tile" />)}
+      </div>
+      <div className="leap-skel leap-skel-table" />
     </div>
   )
 }
@@ -110,8 +195,11 @@ function StatTile({ icon, label, value, accent }) {
 export default function Dashboard({ user, onNavigate }) {
   const [assemblyId, setAssemblyId] = useState('')
   const [openTypeId, setOpenTypeId] = useState('')
+  // Bumped by the refresh button. S22's counts move whenever anyone proposes or removes
+  // a candidate, and this screen has no other reason to re-read them.
+  const [reloadKey, setReloadKey] = useState(0)
 
-  const assemblies = useList(getAssemblies, [])
+  const { items: assemblies, loading: assembliesLoading } = useLoadable(getAssemblies, [])
 
   // The user's own home constituency (`user.constituency_id`, from the `user` table —
   // distinct from S21's "assemblies this user is granted" list) pre-fills the dropdown
@@ -130,7 +218,6 @@ export default function Dashboard({ user, onNavigate }) {
   const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
-    setOpenTypeId('')
     if (!assemblyId) {
       setRows(null)
       return
@@ -147,7 +234,7 @@ export default function Dashboard({ user, onNavigate }) {
         setRows([])
       })
     return () => { cancelled = true }
-  }, [assemblyId])
+  }, [assemblyId, reloadKey])
 
   // One group per election type, in the order S22 already sorted them (by
   // election_type), each carrying just its own rows.
@@ -163,17 +250,21 @@ export default function Dashboard({ user, onNavigate }) {
 
   // The first election type's stats open on their own rather than waiting for a click —
   // there's always something worth showing as soon as the constituency is picked, and
-  // the cards are still there for switching to any other type.
+  // the cards are still there for switching to any other type. A refresh keeps whichever
+  // type was open, since the groups it rebuilds are the same ones.
   useEffect(() => {
-    if (electionTypeGroups.length > 0) {
-      setOpenTypeId(electionTypeGroups[0].id)
-    }
+    setOpenTypeId((current) =>
+      electionTypeGroups.some((g) => g.id === current)
+        ? current
+        : (electionTypeGroups[0]?.id ?? '')
+    )
   }, [electionTypeGroups])
 
   const openGroup = electionTypeGroups.find((g) => g.id === openTypeId) || null
 
   const assemblyPicked = !!assemblyId
   const loading = assemblyPicked && !loadError && rows === null
+  const assemblyName = assemblies.find((a) => String(a.constituency_id) === assemblyId)?.constituency_name
 
   return (
     <div className="leap-view">
@@ -181,34 +272,68 @@ export default function Dashboard({ user, onNavigate }) {
         <div className="leap-view-header-brand">
           <div>
             <h1>Dashboard</h1>
-            <p>Nomination progress across a state assembly, by election type.</p>
+            <p>
+              {assemblyName
+                ? `Nomination progress across ${assemblyName}, by election type.`
+                : 'Nomination progress across a state assembly, by election type.'}
+            </p>
           </div>
         </div>
-      </div>
 
-      <div className="leap-dash-filters">
-        <div className="leap-modal-step">
-          <div className="leap-modal-step-header"><span className="num">1</span><b>Assembly</b></div>
-          <Dropdown
-            value={assemblyId}
-            onChange={(id) => setAssemblyId(id)}
-            searchable
-            placeholder="Select…"
-            options={assemblies.map((a) => ({
-              value: String(a.constituency_id),
-              label: a.constituency_name,
-            }))}
-          />
+        <div className="leap-header-actions">
+          <div className="leap-dash-filter">
+            <label className="leap-dash-filter-label" htmlFor="dash-assembly">Assembly</label>
+            {assembliesLoading ? (
+              <div className="leap-skel leap-skel-input" aria-label="Loading assemblies" />
+            ) : (
+              <div id="dash-assembly">
+                <Dropdown
+                  value={assemblyId}
+                  onChange={(id) => setAssemblyId(id)}
+                  searchable
+                  placeholder="Select…"
+                  options={assemblies.map((a) => ({
+                    value: String(a.constituency_id),
+                    label: a.constituency_name,
+                  }))}
+                />
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            className="leap-refresh-btn"
+            onClick={() => setReloadKey((k) => k + 1)}
+            disabled={!assemblyPicked || loading}
+            title="Reload this assembly's counts"
+            aria-label="Reload this assembly's counts"
+          >
+            <IconRefresh />
+          </button>
         </div>
       </div>
 
-      {!assemblyPicked && <p className="leap-field-hint">Select an assembly to see its positions, by election type.</p>}
-
-      {assemblyPicked && loadError && <div className="leap-form-error">{loadError}</div>}
-
-      {assemblyPicked && !loadError && loading && (
-        <div className="leap-members-empty">Loading this assembly's positions…</div>
+      {!assemblyPicked && !assembliesLoading && assemblies.length === 0 && (
+        <div className="leap-members-empty">
+          No assembly is granted to this account, so there is nothing to show. Ask an
+          administrator for access to a constituency.
+        </div>
       )}
+
+      {!assemblyPicked && (assembliesLoading || assemblies.length > 0) && (
+        <p className="leap-field-hint">Select an assembly to see its positions, by election type.</p>
+      )}
+
+      {assemblyPicked && loadError && (
+        <div className="leap-form-error">
+          {loadError}
+          <button type="button" className="leap-inline-retry" onClick={() => setReloadKey((k) => k + 1)}>
+            Try again
+          </button>
+        </div>
+      )}
+
+      {assemblyPicked && !loadError && loading && <DashboardSkeleton />}
 
       {assemblyPicked && !loadError && !loading && electionTypeGroups.length === 0 && (
         <div className="leap-members-empty">No local body of any election type is configured under this assembly.</div>
@@ -219,16 +344,29 @@ export default function Dashboard({ user, onNavigate }) {
           {electionTypeGroups.map((group) => {
             const isOpen = group.id === openTypeId
             const locations = new Set(group.positions.map((p) => p.proposal_constituency_id)).size
+            // The same filled ratio the section below opens with, so the cards can be
+            // compared without opening each one.
+            const slots = group.positions.reduce((n, p) => n + p.max_proposals, 0)
+            const taken = group.positions.reduce((n, p) => n + p.proposed_cnt, 0)
             return (
               <button
                 type="button"
                 key={group.id}
                 className={`leap-dash-type-card ${isOpen ? 'open' : ''}`}
+                aria-expanded={isOpen}
                 onClick={() => setOpenTypeId(isOpen ? '' : group.id)}
               >
-                <div>
+                <div className="leap-dash-type-card-body">
                   <div className="leap-dash-type-card-label">{group.label}</div>
-                  <div className="leap-dash-type-card-sub">{locations} location{locations !== 1 ? 's' : ''}</div>
+                  <div className="leap-dash-type-card-sub">
+                    {locations} location{locations !== 1 ? 's' : ''} · {taken} of {slots} slots filled
+                  </div>
+                  <ProgressBar
+                    value={taken}
+                    total={slots}
+                    tone={taken === 0 ? 'not-started' : taken >= slots ? 'completed' : 'in-progress'}
+                    label={`${group.label} proposal slots filled`}
+                  />
                 </div>
                 <span className="leap-dash-type-card-chevron"><IconChevronDown /></span>
               </button>
@@ -239,6 +377,7 @@ export default function Dashboard({ user, onNavigate }) {
 
       {openGroup && (
         <ElectionTypeSection
+          key={openGroup.id}
           label={openGroup.label}
           positions={openGroup.positions}
           assemblyId={assemblyId}
@@ -253,12 +392,19 @@ export default function Dashboard({ user, onNavigate }) {
 // than inlined in a .map) so its derived stats memoize per group instead of recomputing
 // for every group on every render.
 function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('All')
+  const [sort, setSort] = useState({ key: 'name', dir: 'asc' })
+
   const stats = useMemo(() => {
     const requiredPositions = positions.reduce((n, p) => n + p.max_positions, 0)
     const maxProposals = positions.reduce((n, p) => n + p.max_proposals, 0)
     const proposed = positions.reduce((n, p) => n + p.proposed_status_cnt, 0)
     const confirmed = positions.reduce((n, p) => n + p.conformed_status_cnt, 0)
     const notStarted = positions.filter((p) => p.proposed_cnt === 0).length
+    // Every live candidate whatever their status — this is what fills a proposal slot,
+    // and so what the headline bar measures against maxProposals.
+    const filled = positions.reduce((n, p) => n + p.proposed_cnt, 0)
     return {
       totalLocations: new Set(positions.map((p) => p.proposal_constituency_id)).size,
       requiredPositions,
@@ -266,6 +412,8 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
       proposed,
       confirmed,
       notStarted,
+      filled,
+      roles: positions.length,
     }
   }, [positions])
 
@@ -276,10 +424,12 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
     const byLocation = new Map()
     for (const p of positions) {
       const id = p.proposal_constituency_id
-      if (!byLocation.has(id)) byLocation.set(id, { id, name: p.local_body_name, rows: [] })
+      if (!byLocation.has(id)) {
+        byLocation.set(id, { id, name: p.local_body_name, where: p.mandal_town_name, rows: [] })
+      }
       byLocation.get(id).rows.push(p)
     }
-    return [...byLocation.values()].map(({ id, name, rows: locRows }) => {
+    return [...byLocation.values()].map(({ id, name, where, rows: locRows }) => {
       const requiredPositions = locRows.reduce((n, p) => n + p.max_positions, 0)
       const maxProposals = locRows.reduce((n, p) => n + p.max_proposals, 0)
       const proposed = locRows.reduce((n, p) => n + p.proposed_status_cnt, 0)
@@ -290,22 +440,53 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
       // Any role at this location having a live candidate is what decides where the view
       // icon goes — not just the "Proposed" status column above, which is one of three.
       const proposedCnt = locRows.reduce((n, p) => n + p.proposed_cnt, 0)
+      // Which roles the required-positions count is made of. Deduped, in S22's own
+      // PR.order_no order — most locations here hold one role, but a local body can have
+      // several (President + Vice-President), and the bare number does not say which.
+      const roleNames = [...new Set(locRows.map((p) => p.role_name))].join(', ')
       const first = locRows[0]
       return {
         id,
         name,
+        where,
         requiredPositions,
+        roleNames,
         maxProposals,
         proposed,
         confirmed,
         status,
         proposedCnt,
+        filledPct: pct(proposedCnt, maxProposals),
         electionTypeId: first.proposal_election_type_id,
         tehsilId: first.tehsil_id,
         townId: first.town_id,
       }
     })
   }, [positions])
+
+  const statusCounts = useMemo(() => {
+    const counts = { All: locationStats.length, 'Not Started': 0, 'In Progress': 0, Completed: 0 }
+    for (const l of locationStats) counts[l.status] += 1
+    return counts
+  }, [locationStats])
+
+  const visible = useMemo(() => {
+    const needle = search.trim().toLowerCase()
+    const rows = locationStats.filter((l) => {
+      if (statusFilter !== 'All' && l.status !== statusFilter) return false
+      if (!needle) return true
+      return `${l.name} ${l.where || ''}`.toLowerCase().includes(needle)
+    })
+    const dir = sort.dir === 'asc' ? 1 : -1
+    return [...rows].sort((a, b) => {
+      if (sort.key === 'name') return dir * a.name.localeCompare(b.name)
+      if (sort.key === 'status') return dir * (NOMINATION_RANK[a.status] - NOMINATION_RANK[b.status])
+      return dir * (a[sort.key] - b[sort.key])
+    })
+  }, [locationStats, search, statusFilter, sort])
+
+  const toggleSort = (key) =>
+    setSort((prev) => ({ key, dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc' }))
 
   // Candidates already exist somewhere at this location — go look at them. Otherwise
   // there is nothing to look at yet, so jump the wizard straight to this location's
@@ -335,43 +516,111 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
 
   return (
     <div className="leap-dash-election-type">
-      <h2 className="leap-dash-election-type-title">{label}</h2>
+      <div className="leap-dash-election-type-head">
+        <h2 className="leap-dash-election-type-title">{label}</h2>
+        <div className="leap-dash-headline">
+          <span className="leap-dash-headline-label">
+            {stats.filled} of {stats.maxProposals} proposal slots filled
+          </span>
+          <ProgressBar
+            value={stats.filled}
+            total={stats.maxProposals}
+            tone={stats.filled === 0 ? 'not-started' : stats.filled >= stats.maxProposals ? 'completed' : 'in-progress'}
+            label={`${label} proposal slots filled`}
+          />
+        </div>
+      </div>
 
       <div className="leap-stat-row">
-        <StatTile icon={<IconPin />} accent="#2563eb" label="TOTAL LOCATIONS" value={stats.totalLocations} />
-        <StatTile icon={<IconSeats />} accent="#7c3aed" label="REQUIRED POSITIONS" value={stats.requiredPositions} />
-        <StatTile icon={<IconLayers />} accent="#d97706" label="MAX PROPOSALS" value={stats.maxProposals} />
-        <StatTile icon={<IconArrowUp />} accent="#0891b2" label="PROPOSED" value={stats.proposed} />
-        <StatTile icon={<IconCheck />} accent="#059669" label="CONFIRMED" value={stats.confirmed} />
-        <StatTile icon={<IconDashedCircle />} accent="#dc2626" label="NOT STARTED" value={stats.notStarted} />
+        <StatTile icon={<IconPin />} accent="#2563eb" label="TOTAL LOCATIONS" value={stats.totalLocations} sub={`${stats.roles} roles in all`} />
+        <StatTile icon={<IconSeats />} accent="#7c3aed" label="REQUIRED POSITIONS" value={stats.requiredPositions} sub="seats to be filled" />
+        <StatTile icon={<IconLayers />} accent="#d97706" label="MAX PROPOSALS" value={stats.maxProposals} sub="candidate slots" />
+        <StatTile icon={<IconArrowUp />} accent="#0891b2" label="PROPOSED" value={stats.proposed} of={stats.maxProposals} />
+        <StatTile icon={<IconCheck />} accent="#059669" label="CONFIRMED" value={stats.confirmed} of={stats.maxProposals} />
+        <StatTile icon={<IconDashedCircle />} accent="#dc2626" label="NOT STARTED" value={stats.notStarted} of={stats.roles} />
       </div>
 
       <div className="leap-section">
         <div className="leap-section-header">
           <h3>By Location</h3>
-          <span className="leap-section-sub">{locationStats.length} location{locationStats.length !== 1 ? 's' : ''}</span>
+          <span className="leap-section-sub">
+            {visible.length === locationStats.length
+              ? `${locationStats.length} location${locationStats.length !== 1 ? 's' : ''}`
+              : `${visible.length} of ${locationStats.length} locations`}
+          </span>
         </div>
+
+        <div className="leap-dash-toolbar">
+          <div className="leap-search-field">
+            <span className="leap-search-icon"><IconSearch /></span>
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search locations…"
+              aria-label="Search locations"
+            />
+          </div>
+          <div className="leap-filter-chips" role="group" aria-label="Filter by nomination status">
+            {STATUS_FILTERS.map((s) => (
+              <button
+                type="button"
+                key={s}
+                className={`leap-filter-chip ${statusFilter === s ? 'active' : ''} ${NOMINATION_CLASS[s] || ''}`}
+                aria-pressed={statusFilter === s}
+                onClick={() => setStatusFilter(s)}
+              >
+                {s} <span className="leap-filter-chip-count">{statusCounts[s]}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="leap-table-card">
           <table className="leap-table">
             <thead>
               <tr>
-                <th>LOCATION</th>
-                <th>REQUIRED POSITIONS</th>
-                <th>MAX PROPOSALS</th>
-                <th>PROPOSED</th>
-                <th>CONFIRMED</th>
-                <th>NOMINATION</th>
+                <SortHeader label="LOCATION" sortKey="name" sort={sort} onSort={toggleSort} />
+                <SortHeader label="REQUIRED POSITIONS" sortKey="requiredPositions" sort={sort} onSort={toggleSort} numeric />
+                <SortHeader label="MAX PROPOSALS" sortKey="maxProposals" sort={sort} onSort={toggleSort} numeric />
+                <SortHeader label="PROPOSED" sortKey="proposed" sort={sort} onSort={toggleSort} numeric />
+                <SortHeader label="CONFIRMED" sortKey="confirmed" sort={sort} onSort={toggleSort} numeric />
+                <SortHeader label="FILLED" sortKey="filledPct" sort={sort} onSort={toggleSort} />
+                <SortHeader label="NOMINATION" sortKey="status" sort={sort} onSort={toggleSort} />
                 <th>VIEW</th>
               </tr>
             </thead>
             <tbody>
-              {locationStats.map((l) => (
-                <tr key={l.id}>
-                  <td className="leap-table-title">{l.name}</td>
-                  <td>{l.requiredPositions}</td>
+              {visible.length === 0 && (
+                <tr className="leap-table-empty-row">
+                  <td colSpan={8}>No location here matches that search.</td>
+                </tr>
+              )}
+              {visible.map((l) => (
+                <tr
+                  key={l.id}
+                  onClick={() => viewLocation(l)}
+                  title={l.proposedCnt > 0 ? 'View candidates' : 'Add candidates'}
+                >
+                  <td className="leap-table-title">
+                    {l.name}
+                    {l.where && <div className="leap-table-sub">{l.where}</div>}
+                  </td>
+                  <td>
+                    {l.requiredPositions}
+                    {l.roleNames && <div className="leap-table-sub">{l.roleNames}</div>}
+                  </td>
                   <td>{l.maxProposals}</td>
                   <td>{l.proposed}</td>
                   <td>{l.confirmed}</td>
+                  <td className="leap-table-progress">
+                    <ProgressBar
+                      value={l.proposedCnt}
+                      total={l.maxProposals}
+                      tone={NOMINATION_CLASS[l.status]}
+                      label={`${l.name} proposal slots filled`}
+                    />
+                  </td>
                   <td>
                     <span className={`leap-nom-badge ${NOMINATION_CLASS[l.status]}`}>
                       <span className="dot" />
@@ -383,7 +632,10 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
                       type="button"
                       className="leap-table-view-btn"
                       title={l.proposedCnt > 0 ? 'View candidates' : 'Add candidates'}
-                      onClick={() => viewLocation(l)}
+                      aria-label={`${l.proposedCnt > 0 ? 'View' : 'Add'} candidates for ${l.name}`}
+                      // The row is clickable too; without this the button's click would
+                      // run the same navigation a second time.
+                      onClick={(e) => { e.stopPropagation(); viewLocation(l) }}
                     >
                       <IconEye />
                     </button>
@@ -395,5 +647,20 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
         </div>
       </div>
     </div>
+  )
+}
+
+function SortHeader({ label, sortKey, sort, onSort, numeric }) {
+  const active = sort.key === sortKey
+  return (
+    <th
+      className={numeric ? 'leap-th-numeric' : undefined}
+      aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      <button type="button" className={`leap-th-sort ${active ? 'active' : ''}`} onClick={() => onSort(sortKey)}>
+        {label}
+        <span className="leap-th-arrow">{active ? (sort.dir === 'asc' ? '▲' : '▼') : '↕'}</span>
+      </button>
+    </th>
   )
 }

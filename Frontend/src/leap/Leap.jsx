@@ -10,7 +10,10 @@ import './Leap.css'
 
 export default function Leap({ user, onLogout }) {
   const [positions, setPositions] = useState(POSITIONS)
-  const [view, setView] = useState({ name: 'newPosition' })
+  // The Dashboard, not the wizard: it is the sidebar's first entry and the only screen
+  // that answers "where does this constituency stand" without being asked a question
+  // first. Opening on the wizard started every session six empty dropdowns deep.
+  const [view, setView] = useState({ name: 'dashboard' })
 
   const openPosition = (id) => setView({ name: 'detail', id })
 

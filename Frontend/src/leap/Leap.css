@@ -90,9 +90,25 @@
   margin: 14px 8px 6px;
 }
 
+.leap-nav-icon {
+  flex: none;
+  display: flex;
+  margin-right: 10px;
+  opacity: 0.75;
+}
+
+.leap-nav-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.leap-nav-btn.active .leap-nav-icon {
+  opacity: 1;
+}
+
 .leap-nav-btn {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   background: transparent;
   border: none;
@@ -229,8 +245,125 @@
   flex-wrap: wrap;
 }
 
-.leap-dash-filters {
-  margin-bottom: 28px;
+/* The assembly picker sits in the header row next to the refresh button rather than in a
+   numbered wizard step — nothing about this screen is a sequence. */
+.leap-dash-filter {
+  min-width: 260px;
+}
+
+.leap-dash-filter-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.leap-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-end;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.leap-refresh-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.leap-refresh-btn:hover:not(:disabled) {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #2563eb;
+}
+
+.leap-refresh-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.leap-inline-retry {
+  margin-left: 12px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ---------- Progress bars ---------- */
+.leap-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 110px;
+}
+
+.leap-progress-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: #eef0f3;
+  overflow: hidden;
+}
+
+.leap-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #9ca3af;
+  transition: width 0.35s ease;
+}
+
+/* Tone tracks the nomination status so the bar and the badge in the next column can
+   never disagree. The percentage is spelled out beside it either way — colour here is
+   reinforcement, not the only carrier of the value. */
+.leap-progress.not-started .leap-progress-fill { background: #d1d5db; }
+.leap-progress.in-progress .leap-progress-fill { background: #d97706; }
+.leap-progress.completed .leap-progress-fill { background: #059669; }
+
+.leap-progress-value {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #4b5563;
+}
+
+/* ---------- Loading skeletons ---------- */
+/* Shaped like the layout they stand in for, so nothing jumps when the data lands. */
+.leap-skel {
+  background: linear-gradient(90deg, #eef0f3 25%, #f7f8fa 37%, #eef0f3 63%);
+  background-size: 400% 100%;
+  animation: leap-skel-shimmer 1.4s ease-in-out infinite;
+  border-radius: 12px;
+}
+
+@keyframes leap-skel-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+.leap-skel-card { height: 96px; min-width: 200px; flex: 1 1 200px; }
+.leap-skel-tile { height: 76px; }
+.leap-skel-table { height: 260px; }
+.leap-skel-input { display: block; height: 40px; border-radius: 10px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .leap-progress-fill { transition: none; }
+  .leap-skel { animation: none; }
 }
 
 .leap-dash-type-cards {
@@ -265,6 +398,11 @@
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
+.leap-dash-type-card-body {
+  min-width: 0;
+  flex: 1;
+}
+
 .leap-dash-type-card-label {
   font-size: 15px;
   font-weight: 700;
@@ -272,7 +410,7 @@
 }
 
 .leap-dash-type-card-sub {
-  margin-top: 2px;
+  margin: 2px 0 8px;
   font-size: 12px;
   color: #6b7280;
 }
@@ -306,19 +444,57 @@
   border-top: none;
 }
 
+.leap-dash-election-type-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-bottom: 16px;
+}
+
 .leap-dash-election-type-title {
-  margin: 0 0 16px;
+  margin: 0;
   font-size: 19px;
   font-weight: 700;
   color: #0f172a;
 }
 
+/* The one number that answers "how far along is this type" — kept beside the title so
+   it is read before the six tiles rather than reconstructed from them. */
+.leap-dash-headline {
+  min-width: 240px;
+  flex: 0 1 320px;
+}
+
+.leap-dash-headline-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
 /* ---------- Stat tiles ---------- */
+/* Three across, not auto-fit: there are six tiles, and letting them flow fits five on a
+   wide screen and strands the sixth on a row of its own. Two rows of three stay even at
+   every width the columns are dropped at. */
 .leap-stat-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 24px;
+}
+
+@media (max-width: 1100px) {
+  .leap-stat-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .leap-stat-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .leap-stat-tile {
@@ -353,6 +529,12 @@
   height: 22px;
 }
 
+/* The meter needs a width to stretch into, which the unclassed wrapper did not have. */
+.leap-stat-body {
+  flex: 1;
+  min-width: 0;
+}
+
 .leap-stat-label {
   font-size: 11px;
   color: #6b7280;
@@ -365,6 +547,19 @@
   font-weight: 800;
   line-height: 1.2;
   color: #0f172a;
+}
+
+/* The denominator is context for the count, not a second number of equal weight —
+   so it is smaller, lighter and grey, and the headline stays the value itself. */
+.leap-stat-of {
+  margin-left: 5px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #9ca3af;
+}
+
+.leap-stat-tile .leap-progress {
+  margin-top: 8px;
 }
 
 .leap-stat-sub {
@@ -582,8 +777,104 @@
 }
 
 /* ---------- Table ---------- */
+/* ---------- Table toolbar (search + status chips) ---------- */
+.leap-dash-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-bottom: 12px;
+}
+
+.leap-search-field {
+  position: relative;
+  flex: 0 1 260px;
+}
+
+.leap-search-field input {
+  width: 100%;
+  padding: 9px 12px 9px 34px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  color: #1f2430;
+}
+
+.leap-search-field input:focus {
+  outline: none;
+  border-color: #bfdbfe;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.leap-search-icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  color: #9ca3af;
+  pointer-events: none;
+}
+
+.leap-search-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.leap-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.leap-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4b5563;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.leap-filter-chip:hover {
+  border-color: #d1d5db;
+  background: #fafafa;
+}
+
+.leap-filter-chip-count {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.leap-filter-chip.active {
+  border-color: #1f2430;
+  background: #1f2430;
+  color: #fff;
+}
+
+.leap-filter-chip.active .leap-filter-chip-count {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* The status chips keep their own status colour when selected, so the chip that is on
+   and the badges it filtered to are visibly the same thing. */
+.leap-filter-chip.active.not-started { background: #6b7280; border-color: #6b7280; }
+.leap-filter-chip.active.in-progress { background: #b45309; border-color: #b45309; }
+.leap-filter-chip.active.completed { background: #047857; border-color: #047857; }
+
 .leap-table-card {
-  max-height: 360px;
+  max-height: 420px;
   overflow-y: auto;
   overflow-x: auto;
   background: #fff;
@@ -673,6 +964,56 @@
 .leap-step-name-inline {
   font-size: 12px;
   color: #4b5563;
+}
+
+/* ---------- Sortable headers ---------- */
+.leap-th-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.leap-th-sort:hover {
+  color: #4b5563;
+}
+
+.leap-th-sort.active {
+  color: #1f2430;
+  font-weight: 700;
+}
+
+.leap-th-arrow {
+  font-size: 9px;
+  line-height: 1;
+  opacity: 0.5;
+}
+
+.leap-th-sort.active .leap-th-arrow {
+  opacity: 1;
+}
+
+.leap-table-progress {
+  min-width: 130px;
+}
+
+.leap-table-empty-row td {
+  padding: 28px 14px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.leap-table-empty-row:hover td {
+  background: #fff;
 }
 
 .leap-table-title {

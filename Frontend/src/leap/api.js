@@ -48,14 +48,48 @@ const post = async (path, body) => {
 // The session is an httpOnly cookie, so it is never readable here; fetch attaches it
 // on its own (these are same-origin through the Vite proxy). S15 is how the app finds
 // out whether one is still live.
+// The two picklists every screen opens with cannot change inside one session — the
+// election types are configuration and the assemblies are this user's grants — but the
+// Dashboard and the wizard each mounted their own useList for them, so switching screens
+// re-paid the round trip and the dropdowns visibly refilled. Cache the *promise*, not the
+// resolved value, so two components mounting in the same tick share one request instead
+// of racing two. A rejection drops its entry, so the next mount retries rather than
+// caching the failure for the rest of the session.
+const sessionCache = new Map()
+
+const cached = (key, load) => () => {
+  if (!sessionCache.has(key)) {
+    sessionCache.set(key, load().catch((err) => {
+      sessionCache.delete(key)
+      throw err
+    }))
+  }
+  return sessionCache.get(key)
+}
+
+// Must run whenever the identity behind the session changes: the assemblies are that
+// user's own grants, so handing the previous user's list to the next one would be a
+// read-only but real access leak.
+export const clearSessionCache = () => sessionCache.clear()
+
+// Warm both picklists the moment the session is known, rather than waiting for a screen
+// to mount and ask. The first screen then renders against a request already in flight —
+// which is the difference between a dropdown that is filled when the app appears and one
+// that fills a beat later. Nothing awaits this; a failure is retried by whichever
+// component actually needs the list.
+export const prefetchSession = () => {
+  getElectionTypes().catch(() => {})
+  getAssemblies().catch(() => {})
+}
+
 export const login = (username, password) => post('/S14login', { username, password })
 export const me = () => get('/S15me')
 export const logout = () => post('/S16logout', {})
-export const getElectionTypes = () => get('/S1getProposalElectionTypes')
+export const getElectionTypes = cached('S1', () => get('/S1getProposalElectionTypes'))
 // S21, not S2: the picklist is the assemblies this user is granted, which the backend
 // resolves from the session's user_id. S2 (every assembly in the state) still exists on
 // the backend and is no longer called from here.
-export const getAssemblies = () => get('/S21getUserAccessAssemblies')
+export const getAssemblies = cached('S21', () => get('/S21getUserAccessAssemblies'))
 export const getMandals = (constituencyId) =>
   get(`/S3getMandalsInAConstituency?constituency_id=${constituencyId}`)
 export const getTowns = (constituencyId) =>
@@ -122,20 +156,33 @@ export const getDashboardPositions = (constituencyId) =>
 export const getCadreScores = (membershipIds) =>
   get(`/S17getCadreScores?mids=${encodeURIComponent(membershipIds.join(','))}`)
 
-// Loads a list on mount / when deps change. Returns [] until it resolves,
-// and [] again if the request fails (error is logged, not shown).
-export function useList(load, deps) {
-  const [items, setItems] = useState([])
+// Loads a list on mount / when deps change, reporting whether it is still in flight.
+// `loading` is what lets a caller draw a skeleton instead of an empty-state message —
+// without it "still fetching" and "there are none" are the same empty array, which is
+// how a slow picklist came to look like an unconfigured one.
+export function useLoadable(load, deps) {
+  const [state, setState] = useState({ items: [], loading: !!load, error: null })
   useEffect(() => {
     let cancelled = false
     if (!load) {
-      setItems([])
+      setState({ items: [], loading: false, error: null })
       return
     }
+    setState((prev) => ({ ...prev, loading: true, error: null }))
     load()
-      .then((data) => { if (!cancelled) setItems(data) })
-      .catch((err) => { if (!cancelled) { console.error(err); setItems([]) } })
+      .then((data) => { if (!cancelled) setState({ items: data, loading: false, error: null }) })
+      .catch((err) => {
+        if (cancelled) return
+        console.error(err)
+        setState({ items: [], loading: false, error: err })
+      })
     return () => { cancelled = true }
   }, deps)
-  return items
+  return state
+}
+
+// The same load, for the callers that only ever wanted the rows: [] until it resolves,
+// and [] again if the request fails (error is logged, not shown).
+export function useList(load, deps) {
+  return useLoadable(load, deps).items
 }

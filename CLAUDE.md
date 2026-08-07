@@ -15,7 +15,7 @@ npm run preview      # serve the built output on 0.0.0.0:9001
 
 There is no test runner, linter, or formatter configured — do not assume `npm test` or `npm run lint` exist. Verification means building (`npm run build`) and clicking through in the browser.
 
-`vite.config.js` proxies `/leapapi/*` to `http://127.0.0.1:6644`, rewriting the `/leapapi` prefix to `/portal-frontend-code`, configured identically for `dev` and `preview`. That target is the PSA gateway (`gateway.py` in the backend repo), which mounts each project's FastAPI app under a prefix named after the project — so the prefix is swapped, not stripped. Inside the mount the portal backend still sees its own bare paths (`/S14login`, …), because the gateway's `StripPrefix` removes the mount from `scope["path"]`. Merged Swagger for every project is at `http://localhost:6644/docs`. **The prefix is `/leapapi`, not `/api`, on purpose** — on the deployed host (`portalnew.mypartydashboard.com`) `/api` is already routed to the older party dashboard service, whose own routes live under `/api/v1`, so `/api/S14login` answers `404` from that service and never reaches this backend. The backend lives in a **separate repository** — it is not in this tree — and must be running and reachable at that `target` for anything to work. **When it isn't, every picklist is silently empty** — `useList` swallows fetch errors, so a dead backend looks exactly like a state with no assemblies in it. Check the console and network tab first when the wizard renders but won't populate. Note that this is now the signature of a *dead backend specifically*: a `401` no longer lands here, because `api.js` intercepts it and sends the app back to the login screen (see below), so a blank wizard means the backend is unreachable rather than the session having lapsed.
+`vite.config.js` proxies `/leapapi/*` to `http://127.0.0.1:6644`, rewriting the `/leapapi` prefix to `/portal-frontend-code`, configured identically for `dev` and `preview`. That target is the PSA gateway (`gateway.py` in the backend repo), which mounts each project's FastAPI app under a prefix named after the project — so the prefix is swapped, not stripped. Inside the mount the portal backend still sees its own bare paths (`/S14login`, …), because the gateway's `StripPrefix` removes the mount from `scope["path"]`. Merged Swagger for every project is at `http://localhost:6644/docs`. **The prefix is `/leapapi`, not `/api`, on purpose** — on the deployed host (`portalnew.mypartydashboard.com`) `/api` is already routed to the older party dashboard service, whose own routes live under `/api/v1`, so `/api/S14login` answers `404` from that service and never reaches this backend. The backend lives in a **separate repository** — it is not in this tree — and must be running and reachable at that `target` for anything to work. **When it isn't, every picklist is silently empty** — `useList` swallows fetch errors, so a dead backend looks exactly like a state with no assemblies in it. Check the console and network tab first when the wizard renders but won't populate. (The Dashboard is the exception: it uses `useLoadable`, so it distinguishes "still loading" from "loaded nothing", and reads S22 by hand so a failure shows the error rather than an empty screen.) Note that this is now the signature of a *dead backend specifically*: a `401` no longer lands here, because `api.js` intercepts it and sends the app back to the login screen (see below), so a blank wizard means the backend is unreachable rather than the session having lapsed.
 
 Deployment: `./install.sh` **from the repo root** installs frontend deps, builds, then (re)starts `portal-frontend` (`vite preview` on 9001) under PM2 using the root `ecosystem.config.cjs`. Frontend only — the backend is deployed from its own repo.
 
@@ -25,25 +25,27 @@ A prototype of a nomination workflow for local body elections, styled as a party
 
 The reachable flow is backend-driven end to end and holds **no application state of its own**: picklists, reservation, positions, cadre search, candidate assignment and the member list all hit the database, keyed by ids the user picks. Nothing survives in memory across a reload except the wizard's own selections, and nothing needs to — `proposal_position_id` is the only handle the writes use.
 
-**The reachable app is `Sidebar` + `NewPositionModal` + `Candidates`.** `NewPositionModal` is a single scrolling screen that does everything (pick a body → view its members, or add one), takes no props, and never navigates; `Candidates` is the read-across-everything counterpart, reached from the sidebar. Everything else in `leap/` — the `positions` dataset, `PositionDetail`, `AllPositions`, `PositionCard`, `Dashboard`, and the whole `STAGES` pipeline — is unreachable. See "Known dead / inert code".
+**The reachable app is `Sidebar` + `Dashboard` + `NewPositionModal` + `Candidates`.** `Dashboard` is where a session lands — one assembly's whole picture, read-only, and the jumping-off point into the other two. `NewPositionModal` is a single scrolling screen that does everything (pick a body → view its members, or add one) and never navigates on its own; `Candidates` is the read-across-everything counterpart. Everything else in `leap/` — the `positions` dataset, `PositionDetail`, `AllPositions`, `PositionCard`, and the whole `STAGES` pipeline — is unreachable. See "Known dead / inert code".
 
 Two top-level screens, switched by a boolean in `Frontend/src/App.jsx`:
-- `Frontend/src/Login.jsx` — real login. `handleSubmit` posts to `S14`, which validates the credentials against the `user` table, and calls `onLoginSuccess(user)` only on `200`; a `401` renders in `.login-error`. S14 opens a server-side session and sets an **httpOnly** cookie, so the token is never reachable from JS and there is nothing in `localStorage` to steal. `App.jsx` cannot read the cookie either — it calls `S15` on mount to ask whether a session is live, which is what makes a reload keep you logged in, and renders `null` until that answers so the login screen does not flash. `onLogout` calls `S16`, which drops the session server-side. **Every endpoint except S14 requires the session.**
+- `Frontend/src/Login.jsx` — real login. `handleSubmit` posts to `S14`, which validates the credentials against the `user` table, and calls `onLoginSuccess(user)` only on `200`; a `401` renders in `.login-error`. S14 opens a server-side session and sets an **httpOnly** cookie, so the token is never reachable from JS and there is nothing in `localStorage` to steal. `App.jsx` cannot read the cookie either — it calls `S15` on mount to ask whether a session is live, which is what makes a reload keep you logged in, and renders the `.app-splash` spinner (in `index.css`, not `Leap.css` — it has to paint before either screen's stylesheet matters) until that answers, so the login screen does not flash and a slow answer does not read as a white broken page. `onLogout` calls `S16`, which drops the session server-side. **Every endpoint except S14 requires the session.**
+- **Both ways in go through `App.jsx`'s `signIn`**, never `setUser` directly: it clears the session picklist cache (the cached assemblies are the *previous* user's grants) and calls `prefetchSession()` so S1 and S21 are already in flight by the time the Dashboard mounts. Logout and the 401 handler clear the cache too.
 - `Frontend/src/leap/Leap.jsx` — the actual app.
 
 ## The `leap/` module
 
-`Leap.jsx` is a 48-line ad-hoc router around a `view` discriminated object (`{ name: 'newPosition' | 'positions' | 'detail', id?, filter? }`). Adding a screen means adding a `view.name` branch, not a route.
+`Leap.jsx` is a short ad-hoc router around a `view` discriminated object (`{ name: 'dashboard' | 'newPosition' | 'candidates' | 'positions' | 'detail', id?, filter?, prefill? }`). Adding a screen means adding a `view.name` branch, not a route.
 
-**`view` starts at `newPosition` and only the sidebar changes it**, between `newPosition` and `candidates` — `Sidebar`'s `onNavigate` is the one live `setView`. The others live inside props passed to `AllPositions` and `PositionDetail`, neither of which renders, so `detail` and `positions` stay unreachable. `Leap.jsx` still holds `positions` (seeded from `POSITIONS`) and `advanceStage` for those two branches; both are effectively dead. `createPosition` was removed when the wizard stopped producing positions — nothing constructs a local position object any more, so the `_newId` counter is gone too.
+**`view` starts at `dashboard`** — the sidebar's first entry, and the only screen that says where a constituency stands without being asked a question first. Two things change it: `Sidebar`'s `onNavigate` (a bare `{ name }`), and the Dashboard's own per-location view icon, which hands over a full view object — `candidates` with a filter when that location already holds candidates, or `newPosition` with a `prefill` that jumps the wizard straight to that location's Add Members search when it does not. `detail` and `positions` are still unreachable: their setters live inside props passed to `AllPositions` and `PositionDetail`, neither of which renders. `Leap.jsx` still holds `positions` (seeded from `POSITIONS`) and `advanceStage` for those two branches; both are effectively dead. `createPosition` was removed when the wizard stopped producing positions — nothing constructs a local position object any more, so the `_newId` counter is gone too.
 
 ### Screens
 
 | Component | Reached via | Notes |
 |---|---|---|
-| `NewPositionModal` | `view.name === 'newPosition'` (initial, and permanent) | The whole app. 6 steps, each revealed only when the previous is filled |
-| `Candidates` | `view.name === 'candidates'` (sidebar) | Every position holding candidates, state-wide, filtered client-side; opens one position full-screen |
-| `Sidebar` | always | Two nav buttons, `NAV` in that file, each switching `view.name`. Footer shows the logged-in user (`firstname lastname`, falling back to `username`) and a logout button that clears `App.jsx`'s `user` |
+| `Dashboard` | `view.name === 'dashboard'` (**initial**, and the sidebar) | One assembly's positions across every election type, from S22 alone. Read-only; navigates into the other two |
+| `NewPositionModal` | `view.name === 'newPosition'` (sidebar, or the Dashboard's prefill) | 6 steps, each revealed only when the previous is filled. Takes an optional `initial` that pre-fills steps 1–4 |
+| `Candidates` | `view.name === 'candidates'` (sidebar, or the Dashboard's filter) | Every position holding candidates, state-wide, filtered client-side; opens one position full-screen |
+| `Sidebar` | always | Three nav buttons with inline SVG icons, `NAV` in that file, each switching `view.name` and carrying `aria-current`. Footer shows the logged-in user (`firstname lastname`, falling back to `username`) and a logout button that clears `App.jsx`'s `user` |
 | `PositionDetail` | `view.name === 'detail'` | **Unreachable** — nothing sets this view since `createPosition` was removed |
 | `AllPositions` | `view.name === 'positions'` | **Unreachable** — nothing sets this view |
 | `PositionCard` | rendered by `AllPositions` | therefore also unreachable |
@@ -88,9 +90,52 @@ changes one — changing one is the Candidates screen's job, via S20. The ✕ on
 
 Candidates use the **backend cadre shape** everywhere (`member_name`, `membership_id`, `mobile_no`, `category_name`, `panchayat_name`, `mandal_town_name`, `img_url`, …) — not the `data.js` `candidate()` shape (`name`, `score`, `idNo`, `phone`).
 
+### `Dashboard`
+
+Where a session lands. **One endpoint, one assembly, everything client-side after that.**
+`S22` returns every `proposal_position` under the chosen assembly across every election
+type and every local body — a LEFT JOIN, unlike S19's INNER, which is what makes a position
+nobody was proposed for countable as "Not Started". Grouping, the six stat tiles, the
+per-location rollup, search, the status chips and the column sort are all derived from that
+one array; nothing re-queries.
+
+- **The assembly picklist is S21 and it pre-fills.** `user.constituency_id` (the user's own
+  home constituency, from the `user` table — *not* the same thing as S21's grants list)
+  selects itself when it is one of the granted assemblies, so the screen has numbers on it
+  without anyone touching the dropdown. S22 cannot be fired before S21 answers: S22 is
+  unscoped by access grants, so the assembly has to come off the list the server vouched for.
+- **`useLoadable`, not `useList`, for the assemblies**, and a hand-rolled fetch for S22 —
+  `rows === null` is loading, `[]` is loaded-and-empty, and they render differently
+  (`DashboardSkeleton`, shaped like the real layout so nothing jumps, versus an empty-state
+  sentence). No grants at all gets its own message, because an empty dropdown otherwise
+  reads as a broken screen.
+- **A "slot" is a `max_proposals` slot**, the same unit as the wizard's step 5. The headline
+  bar and the FILLED column are `Σ proposed_cnt ÷ Σ max_proposals` — every live candidate
+  whatever their status — while the PROPOSED and CONFIRMED tiles are the per-status columns.
+  The two do not add up to each other on purpose.
+- **`StatTile`'s `of` prop is what splits the six tiles in two.** Only three have a real
+  denominator — proposed and confirmed against the proposal slots, not-started against the
+  roles — and those render `value / of` over a meter in the tile's own accent colour
+  (`ProgressBar`'s `color`, which overrides the status tones: inside a tile the bar measures
+  that tile's metric, not a nomination status). The other three are totals with nothing to
+  reach and keep the plain count and a `sub` line. Do not give them a target to make the row
+  look uniform — it would read as progress toward something that does not exist.
+- Per-location **Nomination** is rolled up, not stored: `Not Started` while every role there
+  is untouched, `Completed` once every role has used its proposal slots, `In Progress`
+  between. `NOMINATION_RANK` is what sorting that column uses, so it sorts by pipeline order
+  rather than alphabetically. The progress bar's tone follows the same status, and the
+  percentage is always spelled out beside it — colour reinforces the number, never carries it.
+- **The view icon is not a link to one place.** A location that already holds candidates goes
+  to `Candidates` filtered to it; one that does not goes to the wizard with a `prefill`
+  (S22 carries `tehsil_id`/`town_id`, exactly the inputs S5/S6 want), so the click is never a
+  dead end. The whole row is clickable too — the button `stopPropagation`s so it fires once.
+- The refresh button bumps a `reloadKey`; S22 is the only call it re-runs. The open election
+  type survives it, because the effect only re-opens the first group when the current one is
+  no longer in the rebuilt list.
+
 ### `Candidates`
 
-The other reachable screen, and the only one that reads across constituencies. It mirrors
+The other reachable screen that reads across constituencies. It mirrors
 the membership-analytics platform (`/cde/`): the positions list is that app's
 `PositionsScreen` card list, and opening a card is its `Step2View` ("Adding Profiles") —
 a header, then `MAPPED CANDIDATES` as a grid of the same `MemberCard` the wizard renders,
@@ -156,7 +201,24 @@ Central source of both the seed dataset and the domain vocabulary. It exports:
 
 ### `Frontend/src/leap/api.js`
 
-One thin `get`/`post` pair over `${API_BASE}/*` — `API_BASE` is `/leapapi` (Vite proxies it; see above for why not `/api`) — one named function per endpoint, plus `useList(load, deps)` — the hook every picklist uses. `useList` returns `[]` until the promise resolves **and `[]` again on failure**, logging the error rather than surfacing it: a failed picklist is indistinguishable from an empty one in the UI. `post` unwraps FastAPI's `{detail: "..."}` into the thrown `Error.message`, which is what the S11 error banner shows.
+One thin `get`/`post` pair over `${API_BASE}/*` — `API_BASE` is `/leapapi` (Vite proxies it; see above for why not `/api`) — one named function per endpoint, plus the two loading hooks. `post` unwraps FastAPI's `{detail: "..."}` into the thrown `Error.message`, which is what the S11 error banner shows.
+
+**`useLoadable(load, deps)` is the implementation; `useList` is a one-line wrapper over it.**
+`useLoadable` returns `{items, loading, error}`; `useList` returns `.items` alone — `[]`
+until the promise resolves **and `[]` again on failure**, logging the error rather than
+surfacing it, which is why a failed picklist is indistinguishable from an empty one for
+every caller that still uses it. Reach for `useLoadable` when the difference matters (the
+Dashboard's assembly dropdown does).
+
+**S1 and S21 are cached for the session** (`cached(key, load)` — it memoizes the *promise*,
+so two components mounting in the same tick share one request rather than racing two; a
+rejection drops the entry so the next mount retries). Neither can change while one user is
+signed in, and the wizard and the Dashboard both open with them, so without this every
+screen switch re-paid the round trip and the dropdowns visibly refilled. **`clearSessionCache()`
+must run whenever the identity behind the session changes** — login, logout, and the 401
+handler all call it, because the assemblies are that user's own grants. `prefetchSession()`
+warms both the moment the session is known, so the first screen renders against a request
+already in flight rather than starting one.
 
 **No write here sends a user id.** S11 stamps `inserted_user_id` and S20 stamps
 `updated_user_id` from the session the httpOnly cookie identifies, server-side — the
@@ -256,14 +318,20 @@ just don't read the name as a description.
 
 ## Styling
 
-`Frontend/src/leap/Leap.css` (~2400 lines) holds every class for the leap module; `Login.css` (~180) covers the login screen; `index.css` is a 17-line reset. Classes are flat and prefixed `leap-`. No CSS modules, no utility framework — add styles to the existing file matching the surrounding naming. Fonts (Montserrat, Inter) load from Google Fonts in `index.html`.
+`Frontend/src/leap/Leap.css` (~2600 lines) holds every class for the leap module; `Login.css` (~180) covers the login screen; `index.css` is the reset plus `.app-splash` (which has to paint before `Leap.css` is loaded at all). Classes are flat and prefixed `leap-`. No CSS modules, no utility framework — add styles to the existing file matching the surrounding naming. Fonts (Montserrat, Inter) load from Google Fonts in `index.html`.
+
+Anything that moves — the skeleton shimmer, the progress-bar fill, the splash spinner — has
+a `prefers-reduced-motion: reduce` branch that stills it without removing the signal. Keep
+that when adding animation. `.leap-stat-row` is a deliberate `repeat(3, …)` rather than
+`auto-fit`: there are six tiles, and auto-fit strands the sixth on a row of its own at wide
+widths; the column count drops at 1100px and 680px instead.
 
 A large share of the file styles components that no longer render (`.leap-card-*`, `.leap-stage-*`, `.leap-candidate-*`, `.leap-cadre-search-modal`, `.leap-detail-*`, …). Grep the JSX before assuming a rule is live — and before deleting one, since the dead components still reference them.
 
 ## Known dead / inert code
 
-Still a third of the `leap/` module — 630 of its ~1900 JSX lines. Mention rather
-than silently remove:
+Still around a quarter of the `leap/` module. Mention rather than silently remove
+(`Dashboard.jsx` used to be on this list and no longer is — it is the landing screen):
 
 - **`PositionDetail.jsx` (339 lines) became unreachable** when `createPosition` was dropped
   from `Leap.jsx`. It is still imported and still the only other caller of `searchCadre` /
@@ -271,7 +339,6 @@ than silently remove:
 - `AllPositions` and `PositionCard` are unreachable (see table above). `AllPositions`'s
   `onNewPosition` prop is never passed, and it renders `st.nomOnly`, a field `STAGES`
   entries no longer have.
-- `Frontend/src/leap/components/Dashboard.jsx` (167 lines) is not imported anywhere.
 - In `Leap.jsx`: the `positions` state, `advanceStage`, `openPosition` and the `POSITIONS`
   import exist only to feed the two unreachable branches.
 - `data.js` is dead except `PARTY_SHORT`: `STAGES`, `STAGE_COLORS`, `stagesFor`,

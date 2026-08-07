@@ -6,11 +6,52 @@ function LogoutIcon() {
   )
 }
 
+const NAV_ICON_PROPS = {
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.7,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+  'aria-hidden': true,
+}
+
+function IconGauge() {
+  return (
+    <svg {...NAV_ICON_PROPS}>
+      <rect x="3" y="3" width="7.5" height="8.5" rx="2" />
+      <rect x="13.5" y="3" width="7.5" height="5" rx="2" />
+      <rect x="3" y="14.5" width="7.5" height="6.5" rx="2" />
+      <rect x="13.5" y="11" width="7.5" height="10" rx="2" />
+    </svg>
+  )
+}
+
+function IconBallot() {
+  return (
+    <svg {...NAV_ICON_PROPS}>
+      <path d="M5 21V8.5L12 3l7 5.5V21z" />
+      <path d="M9.5 13.5l1.8 1.8 3.4-3.6" />
+    </svg>
+  )
+}
+
+function IconPeople() {
+  return (
+    <svg {...NAV_ICON_PROPS}>
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3.2 20a5.8 5.8 0 0 1 11.6 0" />
+      <circle cx="17.5" cy="9.2" r="2.4" />
+      <path d="M15.4 14.6A5.2 5.2 0 0 1 21 19.4" />
+    </svg>
+  )
+}
+
 // The nav's own entries, by the `view.name` each one switches Leap to.
 const NAV = [
-  { view: 'dashboard', label: 'Dashboard' },
-  { view: 'newPosition', label: 'Local Body Elections' },
-  { view: 'candidates', label: 'Candidates' },
+  { view: 'dashboard', label: 'Dashboard', icon: <IconGauge /> },
+  { view: 'newPosition', label: 'Local Body Elections', icon: <IconBallot /> },
+  { view: 'candidates', label: 'Candidates', icon: <IconPeople /> },
 ]
 
 export default function Sidebar({ user, onLogout, view, onNavigate }) {
@@ -33,8 +74,10 @@ export default function Sidebar({ user, onLogout, view, onNavigate }) {
             type="button"
             key={item.view}
             className={`leap-nav-btn ${view === item.view ? 'active' : ''}`}
+            aria-current={view === item.view ? 'page' : undefined}
             onClick={() => onNavigate(item.view)}
           >
+            <span className="leap-nav-icon">{item.icon}</span>
             {item.label}
           </button>
         ))}

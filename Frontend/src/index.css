@@ -15,3 +15,49 @@ body {
   color: #333;
   background-color: #fff;
 }
+
+/* The screen between "app booted" and "S15 answered". Lives here rather than in
+   Leap.css because it has to render before either screen's stylesheet matters. */
+.app-splash {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 100vh;
+  background: #f5f7fa;
+}
+
+.app-splash-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid #e6d9b8;
+  border-top-color: #f5c518;
+  animation: app-splash-spin 0.7s linear infinite;
+}
+
+.app-splash-text {
+  font-size: 13px;
+  color: #6b7280;
+  letter-spacing: 0.02em;
+}
+
+@keyframes app-splash-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes app-splash-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+/* Someone who asked for less motion still needs to see the app is working, so the spin
+   becomes a pulse rather than nothing at all. */
+@media (prefers-reduced-motion: reduce) {
+  .app-splash-mark {
+    animation: app-splash-pulse 1.4s ease-in-out infinite;
+    border-top-color: #e6d9b8;
+    background: #f5c518;
+  }
+}
