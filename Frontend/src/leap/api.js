@@ -109,6 +109,13 @@ export const getProposalCandidates = (proposalPositionId) =>
 // list, and it filters client-side (the same rows feed its Role dropdown).
 export const getPositionsWithCandidates = () => get('/S19getProposalPositionsWithCandidates')
 
+// Every position under one assembly, across every election type and every local body it
+// resolves to — the Dashboard screen's whole picture in one call. Unlike S19 this carries
+// positions nobody was proposed for too (S22 is a LEFT JOIN, not S19's INNER), which is
+// what the Dashboard's "Not Started" counts.
+export const getDashboardPositions = (constituencyId) =>
+  get(`/S22getDashboardPositionsByConstituencyId?constituency_id=${constituencyId}`)
+
 // One candidate card and the whole compare table are the same payload, so they are the
 // same call. Answers {configured: false} with no candidates when the ratings database is
 // not wired up, which is a state the UI has to render rather than an error.

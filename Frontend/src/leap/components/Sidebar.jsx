@@ -8,6 +8,7 @@ function LogoutIcon() {
 
 // The nav's own entries, by the `view.name` each one switches Leap to.
 const NAV = [
+  { view: 'dashboard', label: 'Dashboard' },
   { view: 'newPosition', label: 'Local Body Elections' },
   { view: 'candidates', label: 'Candidates' },
 ]

@@ -5,6 +5,7 @@ import AllPositions from './components/AllPositions.jsx'
 import PositionDetail from './components/PositionDetail.jsx'
 import NewPositionModal from './components/NewPositionModal.jsx'
 import Candidates from './components/Candidates.jsx'
+import Dashboard from './components/Dashboard.jsx'
 import './Leap.css'
 
 export default function Leap({ user, onLogout }) {
@@ -12,6 +13,11 @@ export default function Leap({ user, onLogout }) {
   const [view, setView] = useState({ name: 'newPosition' })
 
   const openPosition = (id) => setView({ name: 'detail', id })
+
+  // The sidebar only ever switches to a bare view; the Dashboard's location view icon
+  // hands over a full view object (name plus the election type/location it was on), so
+  // both go through the same setter.
+  const navigate = (next) => setView(next)
 
   const advanceStage = (id, delta) => {
     setPositions((prev) =>
@@ -27,11 +33,17 @@ export default function Leap({ user, onLogout }) {
         user={user}
         onLogout={onLogout}
         view={view.name}
-        onNavigate={(name) => setView({ name })}
+        onNavigate={(name) => navigate({ name })}
       />
       <main className="leap-main">
-        {view.name === 'newPosition' && <NewPositionModal />}
-        {view.name === 'candidates' && <Candidates />}
+        {view.name === 'dashboard' && <Dashboard user={user} onNavigate={navigate} />}
+        {view.name === 'newPosition' && (
+          <NewPositionModal
+            key={view.prefill ? JSON.stringify(view.prefill) : 'wizard'}
+            initial={view.prefill}
+          />
+        )}
+        {view.name === 'candidates' && <Candidates initialFilter={view.filter} />}
         {view.name === 'positions' && (
           <AllPositions
             positions={positions}

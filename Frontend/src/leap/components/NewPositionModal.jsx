@@ -45,7 +45,7 @@ function initials(name) {
 // A native <select> lets the browser choose which way its popup opens, and Chrome
 // flips a long list (S2 returns every assembly in the state) upward. This renders
 // the list itself so it always drops below the button.
-function Dropdown({ value, onChange, options, placeholder, disabled, searchable }) {
+export function Dropdown({ value, onChange, options, placeholder, disabled, searchable }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const ref = useRef(null)
@@ -584,13 +584,18 @@ export function AddMembersPanel({ proposalConstituencyId, position, reservation,
   )
 }
 
-export default function NewPositionModal() {
-  const [electionTypeId, setElectionTypeId] = useState('')
-  const [assemblyId, setAssemblyId] = useState('')
-  const [locationKey, setLocationKey] = useState('')
-  const [proposalConstituencyId, setProposalConstituencyId] = useState('')
+// `initial` jumps the wizard straight to a known location instead of making the user
+// click through steps 1-4: the Dashboard's location view already knows the election
+// type, assembly, mandal/town and local body, so it hands them over rather than making
+// the wizard re-derive them one picklist at a time. Only ids, not names — every name
+// still comes off the picklists once they load, same as a manual walk-through would.
+export default function NewPositionModal({ initial } = {}) {
+  const [electionTypeId, setElectionTypeId] = useState(initial?.electionTypeId || '')
+  const [assemblyId, setAssemblyId] = useState(initial?.assemblyId || '')
+  const [locationKey, setLocationKey] = useState(initial?.locationKey || '')
+  const [proposalConstituencyId, setProposalConstituencyId] = useState(initial?.proposalConstituencyId || '')
 
-  const [membersAction, setMembersAction] = useState('')
+  const [membersAction, setMembersAction] = useState(initial?.membersAction || '')
 
   const [positionId, setPositionId] = useState('')
 

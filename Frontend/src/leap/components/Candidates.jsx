@@ -49,15 +49,18 @@ function Select({ value, onChange, placeholder, items }) {
   )
 }
 
-export default function Candidates() {
+// `initialFilter` seeds the Election Type / Assembly filters when arriving from the
+// Dashboard's location view icon, so the list opens already narrowed to where that
+// location's candidates would show up rather than the full unfiltered state-wide list.
+export default function Candidates({ initialFilter } = {}) {
   // The proposal_position_id whose full-screen detail is open, or null for the list.
   const [openId, setOpenId] = useState(null)
   // Bumped after a removal so the list's counts re-read — a position whose last candidate
   // was dropped leaves S19 entirely.
   const [reloadKey, setReloadKey] = useState(0)
 
-  const [electionTypeId, setElectionTypeId] = useState('')
-  const [assemblyId, setAssemblyId] = useState('')
+  const [electionTypeId, setElectionTypeId] = useState(initialFilter?.electionTypeId || '')
+  const [assemblyId, setAssemblyId] = useState(initialFilter?.assemblyId || '')
   const [roleId, setRoleId] = useState('')
   const [statusId, setStatusId] = useState('')
 
