@@ -201,14 +201,19 @@ export default function Dashboard({ user, onNavigate }) {
 
   const { items: assemblies, loading: assembliesLoading } = useLoadable(getAssemblies, [])
 
-  // The user's own home constituency (`user.constituency_id`, from the `user` table —
-  // distinct from S21's "assemblies this user is granted" list) pre-fills the dropdown
-  // when it's one of the assemblies granted to them, so their own constituency's numbers
-  // are on screen without having to search for it first.
+  // An assembly always selects itself, so the screen opens with numbers on it rather than
+  // an empty dropdown and an instruction. Preference is the user's own home constituency
+  // (`user.constituency_id`, from the `user` table — distinct from S21's "assemblies this
+  // user is granted" list); when that is not one of their grants, or they have none on
+  // record, the first granted assembly stands in. S21 sorts by name, so that is
+  // alphabetically first and the same every time.
+  //
+  // `assemblyId` is read but deliberately not a dep: the effect must not re-run and
+  // re-pick after the user has chosen something else.
   useEffect(() => {
-    if (assemblyId || !user?.constituency_id || assemblies.length === 0) return
-    const own = assemblies.find((a) => String(a.constituency_id) === String(user.constituency_id))
-    if (own) setAssemblyId(String(own.constituency_id))
+    if (assemblyId || assemblies.length === 0) return
+    const own = assemblies.find((a) => String(a.constituency_id) === String(user?.constituency_id))
+    setAssemblyId(String((own || assemblies[0]).constituency_id))
   }, [assemblies, user])
 
   // Fetched by hand rather than through useList: that hook reports a failed load as an
@@ -263,7 +268,11 @@ export default function Dashboard({ user, onNavigate }) {
   const openGroup = electionTypeGroups.find((g) => g.id === openTypeId) || null
 
   const assemblyPicked = !!assemblyId
-  const loading = assemblyPicked && !loadError && rows === null
+  // Since the assembly picks itself, "the grants are still arriving" and "this assembly's
+  // rows are still arriving" are one uninterrupted wait from the user's side — one
+  // skeleton covers both, rather than flashing a "select an assembly" prompt at someone
+  // who is never going to have to.
+  const loading = assembliesLoading || (assemblyPicked && !loadError && rows === null)
   const assemblyName = assemblies.find((a) => String(a.constituency_id) === assemblyId)?.constituency_name
 
   return (
@@ -313,15 +322,11 @@ export default function Dashboard({ user, onNavigate }) {
         </div>
       </div>
 
-      {!assemblyPicked && !assembliesLoading && assemblies.length === 0 && (
+      {!assembliesLoading && assemblies.length === 0 && (
         <div className="leap-members-empty">
           No assembly is granted to this account, so there is nothing to show. Ask an
           administrator for access to a constituency.
         </div>
-      )}
-
-      {!assemblyPicked && (assembliesLoading || assemblies.length > 0) && (
-        <p className="leap-field-hint">Select an assembly to see its positions, by election type.</p>
       )}
 
       {assemblyPicked && loadError && (
@@ -333,7 +338,7 @@ export default function Dashboard({ user, onNavigate }) {
         </div>
       )}
 
-      {assemblyPicked && !loadError && loading && <DashboardSkeleton />}
+      {!loadError && loading && <DashboardSkeleton />}
 
       {assemblyPicked && !loadError && !loading && electionTypeGroups.length === 0 && (
         <div className="leap-members-empty">No local body of any election type is configured under this assembly.</div>
