@@ -150,6 +150,37 @@ export const getPositionsWithCandidates = () => get('/S19getProposalPositionsWit
 export const getDashboardPositions = (constituencyId) =>
   get(`/S22getDashboardPositionsByConstituencyId?constituency_id=${constituencyId}`)
 
+// The candidate list behind one Dashboard stat tile (Proposed or Confirmed) — same
+// (assembly, election type) scope S22 already sums over, drilled down to the rows.
+export const getDashboardCandidatesByStatus = (constituencyId, electionTypeId, statusId) =>
+  get(
+    `/S23getDashboardCandidatesByStatus?constituency_id=${constituencyId}` +
+      `&proposal_election_type_id=${electionTypeId}&proposal_status_id=${statusId}`
+  )
+
+// A short-lived (5 minute) presigned link to a candidate's uploaded nomination PDF —
+// leader-reports blocks all public access, so the stored file_path is not itself
+// fetchable and a fresh URL has to be asked for on every view.
+export const getNominationFileUrl = (proposalCandidateId) =>
+  get(`/S25getNominationFileUrl?proposal_candidate_id=${proposalCandidateId}`)
+
+// The Confirmed-candidate nomination upload. Multipart, not JSON like every other write
+// here, so it bypasses `post` and builds its own FormData request — the browser sets the
+// multipart boundary itself as long as Content-Type is left unset.
+export const uploadNominationFile = async (proposalCandidateId, file) => {
+  const path = '/S24uploadNominationFile'
+  const formData = new FormData()
+  formData.append('proposal_candidate_id', proposalCandidateId)
+  formData.append('file', file)
+  const res = await fetch(`${API_BASE}${path}`, { method: 'POST', body: formData })
+  const data = await res.json().catch(() => null)
+  if (!res.ok) {
+    checkUnauthorized(path, res.status)
+    throw new Error(data?.detail || `${path} -> ${res.status}`)
+  }
+  return data
+}
+
 // One candidate card and the whole compare table are the same payload, so they are the
 // same call. Answers {configured: false} with no candidates when the ratings database is
 // not wired up, which is a state the UI has to render rather than an error.

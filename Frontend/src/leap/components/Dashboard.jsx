@@ -1,6 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getAssemblies, getDashboardPositions, useLoadable } from '../api.js'
+import {
+  getAssemblies,
+  getDashboardCandidatesByStatus,
+  getDashboardPositions,
+  getNominationFileUrl,
+  uploadNominationFile,
+  useLoadable,
+} from '../api.js'
 import { Dropdown } from './NewPositionModal.jsx'
+
+// proposal_status's own ids (1 Proposed, 2 Shortlisted, 3 Confirmed) — the two the
+// Dashboard's stat tiles drill into. Shortlisted has no tile here, so it is not listed.
+const PROPOSED_STATUS_ID = 1
+const CONFIRMED_STATUS_ID = 3
 
 const ICON_PROPS = {
   viewBox: '0 0 24 24',
@@ -148,10 +160,17 @@ function ProgressBar({ value, total, tone = 'in-progress', label, color }) {
 // the roles. The other three (locations, required positions, max proposals) are totals
 // with nothing to reach, so they keep the plain count and their `sub` line: inventing a
 // target for them would read as progress toward something that does not exist.
-function StatTile({ icon, label, value, sub, of, accent }) {
+function StatTile({ icon, label, value, sub, of, accent, onClick, active }) {
   const hasTarget = of !== undefined
+  const Tag = onClick ? 'button' : 'div'
   return (
-    <div className="leap-stat-tile">
+    <Tag
+      type={onClick ? 'button' : undefined}
+      className={`leap-stat-tile${onClick ? ' leap-stat-tile-clickable' : ''}${active ? ' leap-stat-tile-active' : ''}`}
+      onClick={onClick}
+      aria-pressed={onClick ? !!active : undefined}
+      aria-label={onClick ? `${label}: view list` : undefined}
+    >
       <span className="leap-stat-icon" style={{ background: `${accent}1a`, color: accent }}>
         {icon}
       </span>
@@ -167,7 +186,7 @@ function StatTile({ icon, label, value, sub, of, accent }) {
           sub && <div className="leap-stat-sub">{sub}</div>
         )}
       </div>
-    </div>
+    </Tag>
   )
 }
 
@@ -400,6 +419,11 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
   const [sort, setSort] = useState({ key: 'name', dir: 'asc' })
+  // { statusId, statusLabel } while the Proposed/Confirmed drill-down is open, else null.
+  const [statusModal, setStatusModal] = useState(null)
+  // Every row here shares one election type, so any row's id names it — same trick
+  // locationStats uses for tehsilId/townId below.
+  const electionTypeId = positions[0]?.proposal_election_type_id
 
   const stats = useMemo(() => {
     const requiredPositions = positions.reduce((n, p) => n + p.max_positions, 0)
@@ -540,118 +564,367 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
         <StatTile icon={<IconPin />} accent="#2563eb" label="TOTAL LOCATIONS" value={stats.totalLocations} sub={`${stats.roles} roles in all`} />
         <StatTile icon={<IconSeats />} accent="#7c3aed" label="REQUIRED POSITIONS" value={stats.requiredPositions} sub="seats to be filled" />
         <StatTile icon={<IconLayers />} accent="#d97706" label="MAX PROPOSALS" value={stats.maxProposals} sub="candidate slots" />
-        <StatTile icon={<IconArrowUp />} accent="#0891b2" label="PROPOSED" value={stats.proposed} of={stats.maxProposals} />
-        <StatTile icon={<IconCheck />} accent="#059669" label="CONFIRMED" value={stats.confirmed} of={stats.maxProposals} />
+        <StatTile
+          icon={<IconArrowUp />}
+          accent="#0891b2"
+          label="PROPOSED"
+          value={stats.proposed}
+          of={stats.maxProposals}
+          active={statusModal?.statusId === PROPOSED_STATUS_ID}
+          onClick={() =>
+            setStatusModal((cur) =>
+              cur?.statusId === PROPOSED_STATUS_ID ? null : { statusId: PROPOSED_STATUS_ID, statusLabel: 'Proposed' }
+            )
+          }
+        />
+        <StatTile
+          icon={<IconCheck />}
+          accent="#059669"
+          label="CONFIRMED"
+          value={stats.confirmed}
+          of={stats.maxProposals}
+          active={statusModal?.statusId === CONFIRMED_STATUS_ID}
+          onClick={() =>
+            setStatusModal((cur) =>
+              cur?.statusId === CONFIRMED_STATUS_ID ? null : { statusId: CONFIRMED_STATUS_ID, statusLabel: 'Confirmed' }
+            )
+          }
+        />
         <StatTile icon={<IconDashedCircle />} accent="#dc2626" label="NOT STARTED" value={stats.notStarted} of={stats.roles} />
       </div>
 
       <div className="leap-section">
-        <div className="leap-section-header">
-          <h3>By Location</h3>
-          <span className="leap-section-sub">
-            {visible.length === locationStats.length
-              ? `${locationStats.length} location${locationStats.length !== 1 ? 's' : ''}`
-              : `${visible.length} of ${locationStats.length} locations`}
-          </span>
-        </div>
+        {statusModal ? (
+          <CandidateStatusSection
+            electionTypeId={electionTypeId}
+            assemblyId={assemblyId}
+            statusId={statusModal.statusId}
+            statusLabel={statusModal.statusLabel}
+            onBack={() => setStatusModal(null)}
+          />
+        ) : (
+          <>
+            <div className="leap-section-header">
+              <h3>By Location</h3>
+              <span className="leap-section-sub">
+                {visible.length === locationStats.length
+                  ? `${locationStats.length} location${locationStats.length !== 1 ? 's' : ''}`
+                  : `${visible.length} of ${locationStats.length} locations`}
+              </span>
+            </div>
 
-        <div className="leap-dash-toolbar">
-          <div className="leap-search-field">
-            <span className="leap-search-icon"><IconSearch /></span>
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search locations…"
-              aria-label="Search locations"
-            />
-          </div>
-          <div className="leap-filter-chips" role="group" aria-label="Filter by nomination status">
-            {STATUS_FILTERS.map((s) => (
-              <button
-                type="button"
-                key={s}
-                className={`leap-filter-chip ${statusFilter === s ? 'active' : ''} ${NOMINATION_CLASS[s] || ''}`}
-                aria-pressed={statusFilter === s}
-                onClick={() => setStatusFilter(s)}
-              >
-                {s} <span className="leap-filter-chip-count">{statusCounts[s]}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+            <div className="leap-dash-toolbar">
+              <div className="leap-search-field">
+                <span className="leap-search-icon"><IconSearch /></span>
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search locations…"
+                  aria-label="Search locations"
+                />
+              </div>
+              <div className="leap-filter-chips" role="group" aria-label="Filter by nomination status">
+                {STATUS_FILTERS.map((s) => (
+                  <button
+                    type="button"
+                    key={s}
+                    className={`leap-filter-chip ${statusFilter === s ? 'active' : ''} ${NOMINATION_CLASS[s] || ''}`}
+                    aria-pressed={statusFilter === s}
+                    onClick={() => setStatusFilter(s)}
+                  >
+                    {s} <span className="leap-filter-chip-count">{statusCounts[s]}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
 
+            <div className="leap-table-card">
+              <table className="leap-table">
+                <thead>
+                  <tr>
+                    <SortHeader label="LOCATION" sortKey="name" sort={sort} onSort={toggleSort} />
+                    <SortHeader label="REQUIRED POSITIONS" sortKey="requiredPositions" sort={sort} onSort={toggleSort} numeric />
+                    <SortHeader label="MAX PROPOSALS" sortKey="maxProposals" sort={sort} onSort={toggleSort} numeric />
+                    <SortHeader label="PROPOSED" sortKey="proposed" sort={sort} onSort={toggleSort} numeric />
+                    <SortHeader label="CONFIRMED" sortKey="confirmed" sort={sort} onSort={toggleSort} numeric />
+                    <SortHeader label="FILLED" sortKey="filledPct" sort={sort} onSort={toggleSort} />
+                    <SortHeader label="NOMINATION" sortKey="status" sort={sort} onSort={toggleSort} />
+                    <th>VIEW</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.length === 0 && (
+                    <tr className="leap-table-empty-row">
+                      <td colSpan={8}>No location here matches that search.</td>
+                    </tr>
+                  )}
+                  {visible.map((l) => (
+                    <tr
+                      key={l.id}
+                      onClick={() => viewLocation(l)}
+                      title={l.proposedCnt > 0 ? 'View candidates' : 'Add candidates'}
+                    >
+                      <td className="leap-table-title">
+                        {l.name}
+                        {l.where && <div className="leap-table-sub">{l.where}</div>}
+                      </td>
+                      <td>
+                        {l.requiredPositions}
+                        {l.roleNames && <div className="leap-table-sub">{l.roleNames}</div>}
+                      </td>
+                      <td>{l.maxProposals}</td>
+                      <td>{l.proposed}</td>
+                      <td>{l.confirmed}</td>
+                      <td className="leap-table-progress">
+                        <ProgressBar
+                          value={l.proposedCnt}
+                          total={l.maxProposals}
+                          tone={NOMINATION_CLASS[l.status]}
+                          label={`${l.name} proposal slots filled`}
+                        />
+                      </td>
+                      <td>
+                        <span className={`leap-nom-badge ${NOMINATION_CLASS[l.status]}`}>
+                          <span className="dot" />
+                          {l.status}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="leap-table-view-btn"
+                          title={l.proposedCnt > 0 ? 'View candidates' : 'Add candidates'}
+                          aria-label={`${l.proposedCnt > 0 ? 'View' : 'Add'} candidates for ${l.name}`}
+                          // The row is clickable too; without this the button's click would
+                          // run the same navigation a second time.
+                          onClick={(e) => { e.stopPropagation(); viewLocation(l) }}
+                        >
+                          <IconEye />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// The candidate list behind one Proposed/Confirmed stat tile — S23, scoped to the same
+// (assembly, election type) the tile itself was summed over. Renders in place of the "By
+// Location" table rather than as an overlay, the same way an election-type card's stats
+// replace the previous one's below it, so the section never has two things open at once.
+// Confirmed carries a nomination column the other status has no use for: the PDF upload
+// is only meaningful once a candidate is confirmed, so Proposed rows do not render it.
+function CandidateStatusSection({ electionTypeId, assemblyId, statusId, statusLabel, onBack }) {
+  const [rows, setRows] = useState(null) // null = loading
+  const [error, setError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
+  const isConfirmed = statusId === CONFIRMED_STATUS_ID
+  // proposal_candidate_id -> true while its own upload is in flight, so one row's spinner
+  // never disables another's button.
+  const [uploading, setUploading] = useState({})
+  // proposal_candidate_id -> the upload's own error text, separate from `error` above
+  // (the list load) since one candidate's failed upload must not blank the whole table.
+  const [uploadErrors, setUploadErrors] = useState({})
+  // The one candidate whose view link is being fetched, or null. Reused as the upload
+  // errors' key too — a failed view is just as much this row's problem as a failed upload.
+  const [viewingId, setViewingId] = useState(null)
+  // { url, name } of the PDF currently open in the in-page viewer, or null.
+  const [pdfViewer, setPdfViewer] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setRows(null)
+    setError('')
+    getDashboardCandidatesByStatus(assemblyId, electionTypeId, statusId)
+      .then((data) => { if (!cancelled) setRows(data) })
+      .catch((err) => {
+        if (cancelled) return
+        console.error(err)
+        setError(err.message)
+        setRows([])
+      })
+    return () => { cancelled = true }
+  }, [assemblyId, electionTypeId, statusId, reloadKey])
+
+  useEffect(() => {
+    if (!pdfViewer) return
+    const onKey = (e) => { if (e.key === 'Escape') setPdfViewer(null) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [pdfViewer])
+
+  // Patches `nomination_file_path` in place on success rather than refetching S23, so the
+  // badge flips to Done without the row order or scroll position jumping.
+  const handleUpload = async (candidateId, file, inputEl) => {
+    if (!file) return
+    setUploadErrors((prev) => ({ ...prev, [candidateId]: '' }))
+    if (file.type !== 'application/pdf') {
+      setUploadErrors((prev) => ({ ...prev, [candidateId]: 'Only PDF files are accepted.' }))
+      if (inputEl) inputEl.value = ''
+      return
+    }
+    setUploading((prev) => ({ ...prev, [candidateId]: true }))
+    try {
+      const result = await uploadNominationFile(candidateId, file)
+      setRows((prev) =>
+        prev.map((r) =>
+          r.proposal_candidate_id === candidateId ? { ...r, nomination_file_path: result.file_path } : r
+        )
+      )
+    } catch (err) {
+      console.error(err)
+      setUploadErrors((prev) => ({ ...prev, [candidateId]: err.message }))
+    } finally {
+      setUploading((prev) => ({ ...prev, [candidateId]: false }))
+      if (inputEl) inputEl.value = ''
+    }
+  }
+
+  // The presigned URL is fetched fresh on every click rather than cached on the row: it
+  // expires in 5 minutes (S25), and stashing a link that may already be dead would just
+  // move the failure from here to whenever the viewer was reopened.
+  const handleView = async (candidate) => {
+    const candidateId = candidate.proposal_candidate_id
+    setUploadErrors((prev) => ({ ...prev, [candidateId]: '' }))
+    setViewingId(candidateId)
+    try {
+      const { url } = await getNominationFileUrl(candidateId)
+      setPdfViewer({ url, name: candidate.member_name })
+    } catch (err) {
+      console.error(err)
+      setUploadErrors((prev) => ({ ...prev, [candidateId]: err.message }))
+    } finally {
+      setViewingId(null)
+    }
+  }
+
+  return (
+    <>
+      <div className="leap-section-header">
+        <div className="leap-dash-status-heading">
+          <button type="button" className="leap-back-link" onClick={onBack}>
+            <span className="leap-back-link-arrow"><IconChevronDown /></span> Back to Locations
+          </button>
+          <h3>{statusLabel} Candidates</h3>
+        </div>
+        {rows && rows.length > 0 && (
+          <span className="leap-section-sub">{rows.length} candidate{rows.length !== 1 ? 's' : ''}</span>
+        )}
+      </div>
+
+      {error && (
+        <div className="leap-form-error">
+          {error}
+          <button type="button" className="leap-inline-retry" onClick={() => setReloadKey((k) => k + 1)}>
+            Try again
+          </button>
+        </div>
+      )}
+
+      {!error && rows === null && (
+        <div className="leap-skel leap-skel-table" aria-label="Loading candidates" />
+      )}
+
+      {!error && rows && rows.length === 0 && (
+        <div className="leap-members-empty">No candidate is {statusLabel.toLowerCase()} here yet.</div>
+      )}
+
+      {!error && rows && rows.length > 0 && (
         <div className="leap-table-card">
           <table className="leap-table">
             <thead>
               <tr>
-                <SortHeader label="LOCATION" sortKey="name" sort={sort} onSort={toggleSort} />
-                <SortHeader label="REQUIRED POSITIONS" sortKey="requiredPositions" sort={sort} onSort={toggleSort} numeric />
-                <SortHeader label="MAX PROPOSALS" sortKey="maxProposals" sort={sort} onSort={toggleSort} numeric />
-                <SortHeader label="PROPOSED" sortKey="proposed" sort={sort} onSort={toggleSort} numeric />
-                <SortHeader label="CONFIRMED" sortKey="confirmed" sort={sort} onSort={toggleSort} numeric />
-                <SortHeader label="FILLED" sortKey="filledPct" sort={sort} onSort={toggleSort} />
-                <SortHeader label="NOMINATION" sortKey="status" sort={sort} onSort={toggleSort} />
-                <th>VIEW</th>
+                <th>CANDIDATE</th>
+                <th>MEMBERSHIP ID</th>
+                <th>MOBILE</th>
+                <th>{isConfirmed ? 'CONFIRMED ROLE' : 'PROPOSED ROLE'}</th>
+                <th>LOCATION</th>
+                {isConfirmed && <th>NOMINATION</th>}
               </tr>
             </thead>
             <tbody>
-              {visible.length === 0 && (
-                <tr className="leap-table-empty-row">
-                  <td colSpan={8}>No location here matches that search.</td>
-                </tr>
-              )}
-              {visible.map((l) => (
-                <tr
-                  key={l.id}
-                  onClick={() => viewLocation(l)}
-                  title={l.proposedCnt > 0 ? 'View candidates' : 'Add candidates'}
-                >
-                  <td className="leap-table-title">
-                    {l.name}
-                    {l.where && <div className="leap-table-sub">{l.where}</div>}
-                  </td>
+              {rows.map((c) => (
+                <tr key={c.proposal_candidate_id}>
+                  <td className="leap-table-title">{c.member_name}</td>
+                  <td>{c.membership_id}</td>
+                  <td>{c.mobile_no}</td>
+                  <td>{c.role_name}</td>
                   <td>
-                    {l.requiredPositions}
-                    {l.roleNames && <div className="leap-table-sub">{l.roleNames}</div>}
+                    {c.local_body_name}
+                    {c.mandal_town_name && <div className="leap-table-sub">{c.mandal_town_name}</div>}
                   </td>
-                  <td>{l.maxProposals}</td>
-                  <td>{l.proposed}</td>
-                  <td>{l.confirmed}</td>
-                  <td className="leap-table-progress">
-                    <ProgressBar
-                      value={l.proposedCnt}
-                      total={l.maxProposals}
-                      tone={NOMINATION_CLASS[l.status]}
-                      label={`${l.name} proposal slots filled`}
-                    />
-                  </td>
-                  <td>
-                    <span className={`leap-nom-badge ${NOMINATION_CLASS[l.status]}`}>
-                      <span className="dot" />
-                      {l.status}
-                    </span>
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className="leap-table-view-btn"
-                      title={l.proposedCnt > 0 ? 'View candidates' : 'Add candidates'}
-                      aria-label={`${l.proposedCnt > 0 ? 'View' : 'Add'} candidates for ${l.name}`}
-                      // The row is clickable too; without this the button's click would
-                      // run the same navigation a second time.
-                      onClick={(e) => { e.stopPropagation(); viewLocation(l) }}
-                    >
-                      <IconEye />
-                    </button>
-                  </td>
+                  {isConfirmed && (
+                    <td>
+                      <div className="leap-nomination-cell">
+                        <span className={`leap-nom-badge ${c.nomination_file_path ? 'completed' : 'in-progress'}`}>
+                          <span className="dot" />
+                          {c.nomination_file_path ? 'Nomination Done' : 'Pending'}
+                        </span>
+                        {c.nomination_file_path && (
+                          <button
+                            type="button"
+                            className="leap-table-view-btn"
+                            title="View the uploaded nomination PDF"
+                            aria-label={`View nomination PDF for ${c.member_name}`}
+                            disabled={viewingId === c.proposal_candidate_id}
+                            onClick={() => handleView(c)}
+                          >
+                            <IconEye />
+                          </button>
+                        )}
+                        {!c.nomination_file_path && (
+                          <label
+                            className={`leap-upload-btn ${uploading[c.proposal_candidate_id] ? 'busy' : ''}`}
+                            title="Upload the nomination PDF"
+                          >
+                            {uploading[c.proposal_candidate_id] ? 'Uploading…' : 'Upload PDF'}
+                            <input
+                              type="file"
+                              accept="application/pdf"
+                              disabled={!!uploading[c.proposal_candidate_id]}
+                              onChange={(e) => handleUpload(c.proposal_candidate_id, e.target.files[0], e.target)}
+                            />
+                          </label>
+                        )}
+                        {uploadErrors[c.proposal_candidate_id] && (
+                          <span className="leap-upload-error">{uploadErrors[c.proposal_candidate_id]}</span>
+                        )}
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </div>
-    </div>
+      )}
+
+      {pdfViewer && (
+        <div className="leap-modal-overlay" onClick={() => setPdfViewer(null)}>
+          <div className="leap-pdf-viewer" onClick={(e) => e.stopPropagation()}>
+            <div className="leap-modal-title-row">
+              <div>
+                <h3>Nomination PDF</h3>
+                <p>{pdfViewer.name}</p>
+              </div>
+              <button type="button" className="leap-modal-close" onClick={() => setPdfViewer(null)}>✕</button>
+            </div>
+            <iframe
+              src={pdfViewer.url}
+              title={`Nomination PDF — ${pdfViewer.name}`}
+              className="leap-pdf-viewer-frame"
+            />
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 

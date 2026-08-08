@@ -568,6 +568,25 @@
   margin-top: 2px;
 }
 
+/* Only the Proposed / Confirmed tiles get this — the rest of the row stays plain divs,
+   so cursor/appearance resets are scoped to the tiles that actually open something. */
+.leap-stat-tile-clickable {
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+
+.leap-stat-tile-clickable:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.leap-stat-tile-active {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
 /* ---------- Pipeline panels ---------- */
 .leap-pipeline-grid {
   display: grid;
@@ -1057,6 +1076,94 @@
 .leap-nom-badge.completed {
   background: #d1fae5;
   color: #047857;
+}
+
+/* ---------- Dashboard stat-tile drill-down (Proposed / Confirmed) ---------- */
+/* Replaces the "By Location" table in place, rather than overlaying it, so the section
+   never shows two things at once — the same rule an election-type card follows. */
+.leap-dash-status-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.leap-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2563eb;
+  cursor: pointer;
+}
+
+.leap-back-link:hover {
+  text-decoration: underline;
+}
+
+.leap-back-link-arrow {
+  display: inline-flex;
+}
+
+.leap-back-link-arrow svg {
+  width: 12px;
+  height: 12px;
+  transform: rotate(90deg);
+}
+
+.leap-nomination-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* A <label> rather than a <button>, so the browser's native file picker opens on click
+   without any JS wiring beyond the hidden <input> it wraps. */
+.leap-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.leap-upload-btn:hover {
+  background: #dbeafe;
+}
+
+.leap-upload-btn.busy {
+  opacity: 0.6;
+  cursor: wait;
+  pointer-events: none;
+}
+
+/* Visually hidden rather than display:none, which some browsers do not reliably let a
+   wrapping <label> trigger a click on. */
+.leap-upload-btn input[type='file'] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.leap-upload-error {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: #b91c1c;
 }
 
 /* ---------- Chips / filters ---------- */
@@ -2128,6 +2235,27 @@
   max-height: 70vh;
   object-fit: contain;
   border-radius: 12px;
+  background: #f1f5f9;
+}
+
+/* The nomination PDF viewer, same overlay as the photo lightbox but sized for a
+   document rather than a portrait image. */
+.leap-pdf-viewer {
+  background: #fff;
+  border-radius: 16px;
+  padding: 20px 24px;
+  width: 100%;
+  max-width: 860px;
+  height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.leap-pdf-viewer-frame {
+  flex: 1;
+  width: 100%;
+  border: 1px solid #eef0f3;
+  border-radius: 10px;
   background: #f1f5f9;
 }
 
