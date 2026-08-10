@@ -32,7 +32,7 @@ export function memberIds(c) {
 }
 
 // S13 returns img_url as '' when the cadre has no photo.
-function initials(name) {
+export function initials(name) {
   return name
     .replace(/^[A-Z]\.\s*/, '')
     .split(' ')
@@ -700,6 +700,15 @@ export default function NewPositionModal({ initial } = {}) {
   const totalSeats = positions.reduce((n, p) => n + p.max_proposals, 0)
   const filledSeats = positions.reduce((n, p) => n + p.proposed_cnt, 0)
   const unfilledSeats = totalSeats - filledSeats
+
+  // Same reason step 4 auto-selects a lone local body: don't ask for the only answer.
+  // Arriving from the Dashboard this goes straight from the location to the cadre
+  // search; a body with two open roles still has to be picked from.
+  useEffect(() => {
+    if (membersAction !== 'add' || positionId) return
+    const open = positions.filter((p) => openSlots(p) > 0)
+    if (open.length === 1) setPositionId(String(open[0].proposal_position_id))
+  }, [membersAction, positions, positionId])
 
   const step1Done = !!electionTypeId
   const step2Done = step1Done && !!assemblyId

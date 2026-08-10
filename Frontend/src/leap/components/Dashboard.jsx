@@ -7,7 +7,7 @@ import {
   uploadNominationFile,
   useLoadable,
 } from '../api.js'
-import { Dropdown } from './NewPositionModal.jsx'
+import { Dropdown, PhotoViewer, initials } from './NewPositionModal.jsx'
 
 // proposal_status's own ids (1 Proposed, 2 Shortlisted, 3 Confirmed) — the two the
 // Dashboard's stat tiles drill into. Shortlisted has no tile here, so it is not listed.
@@ -737,6 +737,8 @@ function CandidateStatusSection({ electionTypeId, assemblyId, statusId, statusLa
   const [viewingId, setViewingId] = useState(null)
   // { url, name } of the PDF currently open in the in-page viewer, or null.
   const [pdfViewer, setPdfViewer] = useState(null)
+  // The candidate row whose photo is open in the lightbox, or null.
+  const [zoomed, setZoomed] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -852,7 +854,25 @@ function CandidateStatusSection({ electionTypeId, assemblyId, statusId, statusLa
             <tbody>
               {rows.map((c) => (
                 <tr key={c.proposal_candidate_id}>
-                  <td className="leap-table-title">{c.member_name}</td>
+                  <td className="leap-table-title">
+                    <div className="leap-table-candidate">
+                      {/* Same photo, fallback and lightbox as the MemberCard, so a
+                          candidate looks the same here as on the other screens. */}
+                      {c.img_url ? (
+                        <button
+                          type="button"
+                          className="leap-member-photo-btn"
+                          title={`Enlarge ${c.member_name}'s photo`}
+                          onClick={() => setZoomed(c)}
+                        >
+                          <img className="leap-mcard-photo" src={c.img_url} alt={c.member_name} />
+                        </button>
+                      ) : (
+                        <span className="leap-mcard-photo initials">{initials(c.member_name)}</span>
+                      )}
+                      {c.member_name}
+                    </div>
+                  </td>
                   <td>{c.membership_id}</td>
                   <td>{c.mobile_no}</td>
                   <td>{c.role_name}</td>
@@ -905,6 +925,8 @@ function CandidateStatusSection({ electionTypeId, assemblyId, statusId, statusLa
           </table>
         </div>
       )}
+
+      {zoomed && <PhotoViewer cadre={zoomed} onClose={() => setZoomed(null)} />}
 
       {pdfViewer && (
         <div className="leap-modal-overlay" onClick={() => setPdfViewer(null)}>

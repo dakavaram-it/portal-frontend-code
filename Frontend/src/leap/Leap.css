@@ -1039,6 +1039,14 @@
   font-weight: 600;
 }
 
+/* Photo beside the name in the Dashboard's candidate drill-down. The photo itself is
+   .leap-mcard-photo, the same 46px circle the member cards use. */
+.leap-table-candidate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .leap-table-sub {
   font-size: 11px;
   color: #9ca3af;
