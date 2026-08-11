@@ -649,7 +649,7 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
                     <SortHeader label="PROPOSED" sortKey="proposed" sort={sort} onSort={toggleSort} numeric />
                     <SortHeader label="CONFIRMED" sortKey="confirmed" sort={sort} onSort={toggleSort} numeric />
                     <SortHeader label="FILLED" sortKey="filledPct" sort={sort} onSort={toggleSort} />
-                    <SortHeader label="NOMINATION" sortKey="status" sort={sort} onSort={toggleSort} />
+                    <SortHeader label="CONFIRMATION STATUS" sortKey="status" sort={sort} onSort={toggleSort} />
                     <th>VIEW</th>
                   </tr>
                 </thead>

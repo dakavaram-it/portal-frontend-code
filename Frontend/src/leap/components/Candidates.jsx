@@ -25,6 +25,11 @@ const DEFAULT_STATUS_ID = 1
 
 const statusOf = (cadre) => cadre.proposal_status_id || DEFAULT_STATUS_ID
 
+// A position can hold several Proposed/Shortlisted candidates at once, but only one of
+// them should ever be the confirmed winner. S20 has no such check — it only moves one
+// row's status — so it is enforced here, before the pick is staged.
+const CONFIRMED_STATUS_ID = STATUS_FILTERS.find((s) => s.label === 'Confirmed').id
+
 // Distinct {value,label} pairs off the unfiltered row list, in first-seen order. The
 // options have to come from every row rather than the filtered ones, or picking a filter
 // would empty the dropdowns it was picked from.
@@ -442,9 +447,22 @@ function PositionCandidates({ position, onBack, onChanged }) {
                 // the pick there, but a saved candidate always has a status).
                 statuses={STATUS_FILTERS}
                 status={pending[c.proposal_candidate_id] || statusOf(c)}
-                onStatus={(statusId) =>
-                  statusId && setPending((prev) => ({ ...prev, [c.proposal_candidate_id]: statusId }))
-                }
+                onStatus={(statusId) => {
+                  if (!statusId) return
+                  if (
+                    statusId === CONFIRMED_STATUS_ID &&
+                    candidates.some(
+                      (other) =>
+                        other.proposal_candidate_id !== c.proposal_candidate_id &&
+                        (pending[other.proposal_candidate_id] || statusOf(other)) === CONFIRMED_STATUS_ID
+                    )
+                  ) {
+                    setError('Only one candidate can be confirmed for this position — change the current one first.')
+                    return
+                  }
+                  setError('')
+                  setPending((prev) => ({ ...prev, [c.proposal_candidate_id]: statusId }))
+                }}
               />
             ))}
           </div>

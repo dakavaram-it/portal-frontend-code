@@ -606,8 +606,29 @@ export default function NewPositionModal({ initial } = {}) {
 
   const electionTypes = useList(getElectionTypes, [])
   const assemblies = useList(getAssemblies, [])
-  const mandals = useList(assemblyId ? () => getMandals(assemblyId) : null, [assemblyId])
-  const towns = useList(assemblyId ? () => getTowns(assemblyId) : null, [assemblyId])
+
+  // A "proposal constituency" is the body the election type contests — a panchayat,
+  // a ward, a municipality. S1's names are already those words, so the step-1 choice
+  // is the label.
+  const electionType =
+    electionTypes.find((t) => String(t.proposal_election_type_id) === electionTypeId)?.election_type || ''
+  const localBodyLabel = electionType || 'Local Body'
+
+  // ZPTC/MPTC data is mandal-based and Municipal Ward/Corporation Ward data is
+  // town-based (see the proposal_consituency rows behind each type) — restricting
+  // step 3 to the relevant picklist instead of merging both avoids a selection that
+  // can never resolve to a local body.
+  const isMandalOnlyType = electionType === 'ZPTC' || electionType === 'MPTC'
+  const isTownOnlyType = electionType === 'Municipal Ward' || electionType === 'Corporation Ward'
+
+  const mandals = useList(
+    assemblyId && !isTownOnlyType ? () => getMandals(assemblyId) : null,
+    [assemblyId, isTownOnlyType]
+  )
+  const towns = useList(
+    assemblyId && !isMandalOnlyType ? () => getTowns(assemblyId) : null,
+    [assemblyId, isMandalOnlyType]
+  )
 
   // Mandals and towns share one picklist but resolve through different endpoints,
   // so the option value carries which it is: 'm:<tehsil_id>' or 't:<town_id>'.
@@ -666,13 +687,6 @@ export default function NewPositionModal({ initial } = {}) {
       .catch((err) => { if (!cancelled) { console.error(err); setMembers({}) } })
     return () => { cancelled = true }
   }, [membersAction, positions])
-
-  // A "proposal constituency" is the body the election type contests — a panchayat,
-  // a ward, a municipality. S1's names are already those words, so the step-1 choice
-  // is the label.
-  const electionType =
-    electionTypes.find((t) => String(t.proposal_election_type_id) === electionTypeId)?.election_type || ''
-  const localBodyLabel = electionType || 'Local Body'
 
   // A mandal usually maps to exactly one of these; don't make the user pick from a
   // list of one.
@@ -804,15 +818,15 @@ export default function NewPositionModal({ initial } = {}) {
           </div>
 
           <div className={`leap-modal-step ${step2Done ? '' : 'locked'}`}>
-            <div className="leap-modal-step-header"><span className="num">3</span><b>Mandal/Town/District</b><p>Narrow down to the exact local area.</p></div>
+            <div className="leap-modal-step-header"><span className="num">3</span><b>{isMandalOnlyType ? 'Mandal' : isTownOnlyType ? 'Town' : 'Mandal/Town/District'}</b><p>Narrow down to the exact local area.</p></div>
             <Dropdown
               value={locationKey}
               onChange={selectLocation}
               disabled={!step2Done}
               placeholder={step2Done ? 'Select…' : 'Select an assembly first'}
               options={[
-                ...mandals.map((m) => ({ value: `m:${m.tehsil_id}`, label: m.tehsil_name })),
-                ...towns.map((t) => ({ value: `t:${t.town_id}`, label: t.town_name })),
+                ...(isTownOnlyType ? [] : mandals.map((m) => ({ value: `m:${m.tehsil_id}`, label: m.tehsil_name }))),
+                ...(isMandalOnlyType ? [] : towns.map((t) => ({ value: `t:${t.town_id}`, label: t.town_name }))),
               ]}
             />
           </div>
