@@ -6,6 +6,7 @@ import PositionDetail from './components/PositionDetail.jsx'
 import NewPositionModal from './components/NewPositionModal.jsx'
 import Candidates from './components/Candidates.jsx'
 import Dashboard from './components/Dashboard.jsx'
+import CadreSearchNotes from './components/CadreSearchNotes.jsx'
 import './Leap.css'
 
 export default function Leap({ user, onLogout }) {
@@ -47,6 +48,7 @@ export default function Leap({ user, onLogout }) {
           />
         )}
         {view.name === 'candidates' && <Candidates initialFilter={view.filter} />}
+        {view.name === 'cadreSearch' && <CadreSearchNotes />}
         {view.name === 'positions' && (
           <AllPositions
             positions={positions}

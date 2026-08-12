@@ -47,11 +47,21 @@ function IconPeople() {
   )
 }
 
+function IconSearch() {
+  return (
+    <svg {...NAV_ICON_PROPS}>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="M20 20l-4.8-4.8" />
+    </svg>
+  )
+}
+
 // The nav's own entries, by the `view.name` each one switches Leap to.
 const NAV = [
   { view: 'dashboard', label: 'Dashboard', icon: <IconGauge /> },
   { view: 'newPosition', label: 'Local Body Elections', icon: <IconBallot /> },
   { view: 'candidates', label: 'Candidates', icon: <IconPeople /> },
+  { view: 'cadreSearch', label: 'Cadre Search & Notes', icon: <IconSearch /> },
 ]
 
 export default function Sidebar({ user, onLogout, view, onNavigate }) {

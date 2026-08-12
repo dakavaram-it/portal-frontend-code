@@ -3578,3 +3578,835 @@
   .leap-modal-step-row { flex-direction: column; }
   .leap-detail-info-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* Cadre Search & Notes — a separate module (mypartydashboard.com PSA service, not
+   /leapapi), so its classes get their own prefix rather than reusing leap-cand-*. */
+.leap-cadresearch-screen {
+  display: flex;
+  flex-direction: column;
+}
+
+.leap-cadresearch-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 22px;
+}
+
+.leap-cadresearch-header h2 i { font-size: 19px; color: #d0ac2a; }
+
+.leap-cadresearch-header p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.leap-cadresearch-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 18px 0;
+  padding: 18px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.leap-cadresearch-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 340px;
+}
+
+.leap-cadresearch-field label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.leap-cadresearch-field label i { font-size: 11px; color: #d0ac2a; }
+
+.leap-cadresearch-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.leap-cadresearch-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #1f2430;
+  cursor: pointer;
+}
+
+.leap-cadresearch-type input {
+  accent-color: #f5c518;
+}
+
+.leap-cadresearch-type i {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.leap-cadresearch-type.selected {
+  font-weight: 700;
+}
+
+.leap-cadresearch-type.selected i {
+  color: #d0ac2a;
+}
+
+.leap-cadresearch-value-row {
+  display: flex;
+  gap: 10px;
+}
+
+.leap-cadresearch-input {
+  flex: 1;
+  max-width: 420px;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #1f2430;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.leap-cadresearch-input:focus {
+  outline: none;
+  border-color: #f5c518;
+}
+
+.leap-cadresearch-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 22px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1f2430;
+  background: #f5c518;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.leap-cadresearch-submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.leap-cadresearch-error {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #b91c1c;
+}
+
+.leap-cadresearch-results {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.leap-cadresearch-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  overflow: hidden;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.leap-cadresearch-card:hover {
+  border-color: #e0c96a;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
+}
+
+.leap-cadresearch-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 22px 16px;
+}
+
+.leap-cadresearch-photo {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  object-fit: cover;
+  border-radius: 50%;
+  background: #eef2ff;
+  border: 1px solid #e5e0ff;
+}
+
+.leap-cadresearch-photo.initials {
+  font-size: 18px;
+  font-weight: 700;
+  color: #4338ca;
+}
+
+.leap-cadresearch-head-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.leap-cadresearch-name-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.leap-cadresearch-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.leap-cadresearch-note-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #92722a;
+  background: #fdf6e3;
+  border: 1px solid #f0dfa8;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.leap-cadresearch-note-btn:hover { background: #faedc4; }
+
+.leap-cadresearch-note-btn i { font-size: 11px; }
+
+.leap-cadresearch-relative {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: #94a3b8;
+}
+
+.leap-cadresearch-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.leap-cadresearch-pills span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.leap-cadresearch-pills i { flex: none; font-size: 10.5px; color: #94a3b8; }
+
+/* PROFILE and LOCATION & BOOTH side by side — the fields inside each half size to their
+   own content (see .leap-cadresearch-grid) rather than an equal-width grid column, so
+   splitting the card no longer strands a short value in an oversized lane. */
+.leap-cadresearch-sections {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid #f1f5f9;
+}
+
+.leap-cadresearch-sections .leap-cadresearch-section:first-child {
+  border-right: 1px solid #f1f5f9;
+}
+
+.leap-cadresearch-section {
+  padding: 14px 22px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.leap-cadresearch-sections .leap-cadresearch-section {
+  border-top: none;
+}
+
+.leap-cadresearch-section-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  color: #b3bac6;
+}
+
+.leap-cadresearch-section-label i { font-size: 11px; color: #d0ac2a; }
+
+/* Flat label/value pairs sized to their own content and left to wrap, not stretched to
+   equal grid columns — that stretching is what left short values surrounded by dead space. */
+.leap-cadresearch-grid {
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 14px;
+  column-gap: 40px;
+}
+
+.leap-cadresearch-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.leap-cadresearch-field span {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #b3bac6;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.leap-cadresearch-field b {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2430;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.leap-cadresearch-years {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.leap-cadresearch-year {
+  padding: 3px 11px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #0f9d6e;
+  background: #eafbf4;
+  border-radius: 999px;
+}
+
+@media (max-width: 760px) {
+  .leap-cadresearch-sections { grid-template-columns: 1fr; }
+  .leap-cadresearch-sections .leap-cadresearch-section:first-child {
+    border-right: none;
+    border-bottom: 1px solid #f1f5f9;
+  }
+}
+
+@media (max-width: 640px) {
+  .leap-cadresearch-value-row { flex-direction: column; align-items: stretch; }
+}
+
+/* ---------- Notes modal ---------- */
+/* Self-contained — no Bootstrap. Open/close is plain React state (mount/unmount, see
+   CadreNotesModal.jsx); the overlay div doubles as the dark backdrop and the flex
+   centering, so there is no separate backdrop element to keep in z-index sync. */
+body.leap-notes-modal-open { overflow: hidden; }
+
+.leap-notes-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1060;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 16px;
+  overflow-y: auto;
+  background: rgba(15, 12, 9, 0.55);
+}
+
+.leap-notes-dialog {
+  width: 100%;
+  max-width: 960px;
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.leap-notes-modal-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  background: #1a130f;
+  color: #f2ede6;
+}
+
+.leap-notes-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.leap-notes-modal-title i { color: #f5c518; }
+
+.leap-notes-close {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #f2ede6;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.leap-notes-close:hover { background: rgba(255, 255, 255, 0.16); }
+
+.leap-notes-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.leap-notes-select,
+.leap-notes-file-input {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #1f2430;
+  background: #fff;
+  border: 1px solid #ced4da;
+  border-radius: 8px;
+}
+
+.leap-notes-select:focus,
+.leap-notes-file-input:focus {
+  outline: none;
+  border-color: #f5c518;
+}
+
+.leap-notes-select.invalid,
+.leap-notes-file-input.invalid {
+  border-color: #ef4444;
+  background: #fef2f2;
+}
+
+.leap-notes-required { color: #ef4444; font-weight: 700; }
+
+.leap-notes-optional {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #adb5bd;
+}
+
+.leap-notes-field-error {
+  margin-top: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #dc2626;
+}
+
+.leap-notes-field-hint {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+  font-size: 11.5px;
+  color: #6c757d;
+}
+
+.leap-notes-divider {
+  height: 1px;
+  margin: 18px 0;
+  background: #eef0f4;
+}
+
+.leap-notes-editor {
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.leap-notes-editor.invalid {
+  border-color: #ef4444;
+}
+
+.leap-notes-editor.invalid .leap-notes-toolbar {
+  background: #fef2f2;
+  border-bottom-color: #fecaca;
+}
+
+.leap-notes-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.leap-notes-toolbar-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #495057;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.leap-notes-toolbar-btn:hover {
+  background: #fff;
+  border-color: #dee2e6;
+}
+
+.leap-notes-toolbar-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: #dee2e6;
+}
+
+.leap-notes-editor-area {
+  min-height: 90px;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #1f2430;
+}
+
+.leap-notes-editor-area:focus { outline: none; }
+
+.leap-notes-editor-area:empty::before {
+  content: 'Write a note…';
+  color: #adb5bd;
+}
+
+.leap-notes-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 28px;
+  margin-bottom: 14px;
+}
+
+.leap-notes-form-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.leap-notes-form-group-wide { flex: 1; min-width: 220px; align-items: stretch; }
+
+.leap-notes-form-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6c757d;
+}
+
+/* Compact segmented toggle for Visibility / Impact — written as its own fully-specified
+   pair of classes rather than Bootstrap's .btn-group, whose `.btn { flex: 1 1 auto }`
+   stretches grouped buttons edge to edge inside a column flex parent (align-items:
+   stretch by default) and gives both options the same oversized, indistinguishable block. */
+.leap-notes-toggle {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.leap-notes-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #495057;
+  background: #fff;
+  border: 1px solid #ced4da;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.leap-notes-toggle-btn:hover { background: #f8f9fa; }
+
+/* Selected state is a light tint + colored border rather than a solid fill — a loud
+   full-color block for two adjacent options read as heavier than the choice merits.
+   Colour also carries meaning: green reads open/favourable, amber reads restricted,
+   red reads unfavourable, on both Visibility and Impact. */
+.leap-notes-toggle-btn.active {
+  font-weight: 700;
+}
+
+.leap-notes-toggle-btn.green.active {
+  color: #14532d;
+  background: #ecfdf5;
+  border-color: #34d399;
+}
+
+.leap-notes-toggle-btn.amber.active {
+  color: #92400e;
+  background: #fffbeb;
+  border-color: #f59e0b;
+}
+
+.leap-notes-toggle-btn.red.active {
+  color: #7f1d1d;
+  background: #fef2f2;
+  border-color: #ef4444;
+}
+
+.leap-notes-error {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+}
+
+.leap-notes-save-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+/* Same rationale as .leap-notes-toggle-btn — explicit sizing rather than Bootstrap's
+   .btn, so nothing upstream can stretch these into a full-width bar. */
+.leap-notes-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 16px;
+  font-size: 12.5px;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.leap-notes-btn:disabled { opacity: 0.6; cursor: default; }
+
+.leap-notes-btn-primary {
+  color: #14532d;
+  background: #86efac;
+  border: 1px solid #4ade80;
+}
+
+.leap-notes-btn-primary:hover:not(:disabled) { background: #6ee89e; }
+
+.leap-notes-btn-ghost {
+  color: #495057;
+  background: #fff;
+  border: 1px solid #ced4da;
+}
+
+.leap-notes-btn-ghost:hover:not(:disabled) { background: #f8f9fa; }
+
+.leap-notes-prev-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 4px 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #495057;
+}
+
+.leap-notes-prev-head i { color: #d0ac2a; margin-right: 6px; }
+
+.leap-notes-refresh {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #6c757d;
+  background: none;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.leap-notes-refresh:hover { background: #f8f9fa; }
+
+.leap-notes-empty {
+  padding: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: #94a3b8;
+  background: #f8f9fa;
+  border: 1px dashed #dee2e6;
+  border-radius: 10px;
+}
+
+.leap-notes-empty-error { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
+
+.leap-notes-item {
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  background: #f8f9fa;
+  border: 1px solid #eef0f4;
+  border-radius: 10px;
+}
+
+.leap-notes-item-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.leap-notes-item-avatar {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #4338ca;
+  background: #eef2ff;
+  border-radius: 50%;
+}
+
+.leap-notes-item-who { flex: 1; min-width: 0; }
+
+.leap-notes-item-name { font-size: 13px; font-weight: 700; color: #1f2430; }
+
+.leap-notes-item-when {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.leap-notes-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  font-size: 10.5px;
+  font-weight: 700;
+  border-radius: 999px;
+}
+
+.leap-notes-badge.public { color: #14532d; background: #d1fae5; }
+.leap-notes-badge.private { color: #92722a; background: #fdf6e3; }
+
+.leap-notes-tag {
+  padding: 2px 9px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #495057;
+  background: #f1f3f5;
+  border-radius: 999px;
+}
+
+.leap-notes-impact-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  font-size: 10.5px;
+  font-weight: 600;
+  border-radius: 999px;
+}
+
+.leap-notes-impact-badge.positive { color: #14532d; background: #dcfce7; }
+.leap-notes-impact-badge.negative { color: #7f1d1d; background: #fee2e2; }
+
+.leap-notes-item-actions {
+  flex: none;
+  display: flex;
+  gap: 4px;
+}
+
+.leap-notes-item-actions button {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #6c757d;
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.leap-notes-item-actions button:hover { background: #f1f3f5; }
+
+.leap-notes-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0 42px;
+}
+
+.leap-notes-item-body {
+  margin: 10px 0 0 42px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #343a40;
+  overflow-wrap: anywhere;
+}
+
+.leap-notes-item-body p { margin: 0 0 8px; }
+.leap-notes-item-body p:last-child { margin-bottom: 0; }
+
+.leap-notes-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.leap-notes-pagination-page {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #495057;
+}
