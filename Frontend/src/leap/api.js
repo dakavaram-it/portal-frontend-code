@@ -20,8 +20,25 @@ const checkUnauthorized = (path, status) => {
   if (status === 401 && !AUTH_PATHS.some((p) => path.startsWith(p))) onUnauthorized()
 }
 
+// S14 returns the session token in its body as well as setting the httpOnly cookie, and
+// this is where that copy lives. sessionStorage rather than localStorage: it dies with
+// the tab, which caps how long a stolen one is worth anything. Unlike the cookie it IS
+// readable by any script on the page — the cookie remains the browser's real transport,
+// and this is the second one, which is what lets the app authenticate from an origin the
+// cookie cannot reach (another host, a mobile client) without changing any caller here.
+const TOKEN_KEY = 'lbe_token'
+
+// Must run wherever the session ends — logout and the 401 handler — or the next caller
+// keeps presenting a dead token.
+export const clearToken = () => sessionStorage.removeItem(TOKEN_KEY)
+
+const authHeader = () => {
+  const token = sessionStorage.getItem(TOKEN_KEY)
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 const get = async (path) => {
-  const res = await fetch(`${API_BASE}${path}`)
+  const res = await fetch(`${API_BASE}${path}`, { headers: authHeader() })
   if (!res.ok) {
     checkUnauthorized(path, res.status)
     throw new Error(`${path} -> ${res.status}`)
@@ -34,7 +51,7 @@ const get = async (path) => {
 const post = async (path, body) => {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
     body: JSON.stringify(body),
   })
   const data = await res.json().catch(() => null)
@@ -82,7 +99,14 @@ export const prefetchSession = () => {
   getAssemblies().catch(() => {})
 }
 
-export const login = (username, password) => post('/S14login', { username, password })
+// The token is stripped off here rather than handed on, so `user` stays the shape every
+// screen already reads and the token never lands in React state where a rendered prop
+// could leak it. S15 does not repeat it — by then the client already has one.
+export const login = async (username, password) => {
+  const { token, ...user } = await post('/S14login', { username, password })
+  if (token) sessionStorage.setItem(TOKEN_KEY, token)
+  return user
+}
 export const me = () => get('/S15me')
 export const logout = () => post('/S16logout', {})
 export const getElectionTypes = cached('S1', () => get('/S1getProposalElectionTypes'))

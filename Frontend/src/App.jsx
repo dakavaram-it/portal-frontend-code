@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import Login from './Login.jsx'
 import Leap from './leap/Leap.jsx'
-import { clearSessionCache, logout, me, prefetchSession, setUnauthorizedHandler } from './leap/api.js'
+import { clearSessionCache, clearToken, logout, me, prefetchSession, setUnauthorizedHandler } from './leap/api.js'
 
 export default function App() {
   const [user, setUser] = useState(null)
@@ -22,7 +22,9 @@ export default function App() {
   useEffect(() => {
     // Any data call that comes back 401 has outlived its session; drop straight back
     // to the login screen instead of leaving cadre data on screen behind a dead one.
-    setUnauthorizedHandler(() => { clearSessionCache(); setUser(null) })
+    // clearToken as well as the picklists: the token that just came back 401 is spent,
+    // and leaving it in sessionStorage would have the login screen's own calls present it.
+    setUnauthorizedHandler(() => { clearSessionCache(); clearToken(); setUser(null) })
     me()
       .then(signIn)
       .catch(() => setUser(null))
@@ -43,6 +45,9 @@ export default function App() {
       // The cached assemblies are the outgoing user's own grants; whoever signs in next
       // on this machine must not be served them.
       clearSessionCache()
+      // After the await, never before: S16 has to present the token to know which
+      // session to drop.
+      clearToken()
       setUser(null)
     }
   }
