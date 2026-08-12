@@ -1,8 +1,11 @@
+import { getToken } from './api.js'
+
 // Cadre Search & Notes talks to a different backend than the rest of leap/ — the
 // mypartydashboard.com PSA web service, not the /leapapi FastAPI app — so it gets its own
-// tiny client rather than joining api.js. Proxied through /psaapi (see vite.config.js) so
-// the call is same-origin from the browser.
-const SEARCH_URL = '/psaapi/WebService/Cadre/search'
+// tiny client rather than joining api.js. Called directly (not proxied): that service
+// answers `Access-Control-Allow-Origin: *`, so there is no same-origin problem to work
+// around the way /leapapi's dead-backend-vs-401 handling has to.
+const SEARCH_URL = 'https://www.mypartydashboard.com/PSA/WebService/Cadre/search'
 
 // `imageUrl` in the search response is a path relative to this S3 bucket
 // (e.g. "232/10000000.jpg"), not a full URL — the caller has to prefix it.
@@ -20,13 +23,10 @@ export const SEARCH_TYPES = [
   { value: 'CadreName', label: 'Name' },
 ]
 
-// The spec calls for an `authToken` header; omitted for now per instruction (no token
-// source has been settled). Add it here once one exists — this is the one place a caller
-// needs to change.
 export const searchCadre = async (searchType, searchValue, constituencyId) => {
   const res = await fetch(SEARCH_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', authToken: getToken() || '' },
     body: JSON.stringify({
       searchType,
       searchValue,

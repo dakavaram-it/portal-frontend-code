@@ -127,26 +127,29 @@ export default function CadreNotesModal({ cadreId, cadreName, onClose }) {
   }, [])
 
   useEffect(() => {
-    let cancelled = false
+    // Aborting the in-flight requests (rather than only ignoring their result via a
+    // `cancelled` flag) is what stops StrictMode's dev-only double-invoke — and a fast
+    // reloadKey bump in production — from letting a stale request run to completion
+    // alongside the current one.
+    const controller = new AbortController()
     setLoading(true)
     setLoadError(null)
-    Promise.all([getCadreNotes(cadreId), getNoteCategories()])
+    Promise.all([getCadreNotes(cadreId, controller.signal), getNoteCategories(controller.signal)])
       .then(([notesRes, categoriesRes]) => {
-        if (cancelled) return
         setNotes(
           [...(notesRes || [])].sort((a, b) => new Date(b.insertedTime) - new Date(a.insertedTime))
         )
         setCategories(categoriesRes || [])
       })
       .catch((err) => {
-        if (cancelled) return
+        if (err.name === 'AbortError') return
         console.error(err)
         setLoadError(err.message)
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (!controller.signal.aborted) setLoading(false)
       })
-    return () => { cancelled = true }
+    return () => controller.abort()
   }, [cadreId, reloadKey])
 
   const resetForm = () => {

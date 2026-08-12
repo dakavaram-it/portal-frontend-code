@@ -32,6 +32,12 @@ const TOKEN_KEY = 'lbe_token'
 // keeps presenting a dead token.
 export const clearToken = () => sessionStorage.removeItem(TOKEN_KEY)
 
+// The same token S14 hands back doubles as the `authToken` the mypartydashboard.com PSA
+// service (cadreSearchApi.js / cadreNotesApi.js) wants — one login, one token, two
+// backends. Exported rather than kept private so those two files can read it without
+// duplicating the sessionStorage key here.
+export const getToken = () => sessionStorage.getItem(TOKEN_KEY)
+
 const authHeader = () => {
   const token = sessionStorage.getItem(TOKEN_KEY)
   return token ? { Authorization: `Bearer ${token}` } : {}
