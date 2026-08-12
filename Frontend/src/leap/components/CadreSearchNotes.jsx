@@ -134,6 +134,7 @@ export default function CadreSearchNotes() {
   const { items: assemblies, loading: assembliesLoading } = useLoadable(getAssemblies, [])
 
   const [constituencyId, setConstituencyId] = useState('')
+  const [constituencyInvalid, setConstituencyInvalid] = useState(false)
   const [searchType, setSearchType] = useState(SEARCH_TYPES[0].value)
   const [value, setValue] = useState('')
   // null = not searched yet, [] = searched and found nothing — same distinction the rest
@@ -142,20 +143,38 @@ export default function CadreSearchNotes() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
+  const nameSearch = searchType === 'CadreName'
+
   const selectType = (type) => {
     setSearchType(type)
     setValue('')
     setResults(null)
     setError(null)
+    setConstituencyInvalid(false)
+  }
+
+  const pickConstituency = (id) => {
+    setConstituencyId(id)
+    if (id) setConstituencyInvalid(false)
   }
 
   const runSearch = async (e) => {
     e.preventDefault()
     const v = value.trim()
+    // A name is a substring match with no other filter, so without a constituency it
+    // routinely returns thousands of rows — the same reason the wizard's own cadre
+    // search (S12) never offers a name search at all. Membership ID / Voter ID / Mobile
+    // No all resolve to at most a handful of rows on their own, so only Name requires it.
+    if (nameSearch && !constituencyId) {
+      setConstituencyInvalid(true)
+      setError('Select a constituency to search by name.')
+      return
+    }
     if (!v) {
       setError('Enter a value to search.')
       return
     }
+    setConstituencyInvalid(false)
     setLoading(true)
     setError(null)
     setResults(null)
@@ -183,15 +202,16 @@ export default function CadreSearchNotes() {
       <form className="leap-cadresearch-panel" onSubmit={runSearch}>
         <div className="leap-cadresearch-field">
           <label htmlFor="cadresearch-constituency">
-            <i className="fa-solid fa-map-location-dot" aria-hidden="true" /> Constituency
+            <i className="fa-solid fa-map-location-dot" aria-hidden="true" /> Constituency{' '}
+            {nameSearch && <span className="leap-cadresearch-required">*</span>}
           </label>
           {assembliesLoading ? (
             <div className="leap-skel leap-skel-input" aria-label="Loading constituencies" />
           ) : (
-            <div id="cadresearch-constituency">
+            <div id="cadresearch-constituency" className={constituencyInvalid ? 'invalid' : ''}>
               <Dropdown
                 value={constituencyId}
-                onChange={setConstituencyId}
+                onChange={pickConstituency}
                 searchable
                 placeholder="ALL"
                 options={[
@@ -200,6 +220,9 @@ export default function CadreSearchNotes() {
                 ]}
               />
             </div>
+          )}
+          {nameSearch && (
+            <div className="leap-cadresearch-field-hint">Required for a name search — it's a substring match otherwise.</div>
           )}
         </div>
 

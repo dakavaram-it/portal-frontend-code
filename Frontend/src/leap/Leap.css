@@ -3633,6 +3633,18 @@
 
 .leap-cadresearch-field label i { font-size: 11px; color: #d0ac2a; }
 
+.leap-cadresearch-required { color: #ef4444; font-weight: 700; }
+
+.leap-cadresearch-field-hint {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+#cadresearch-constituency.invalid .leap-dropdown-btn {
+  border-color: #ef4444;
+  background: #fef2f2;
+}
+
 .leap-cadresearch-types {
   display: flex;
   flex-wrap: wrap;
