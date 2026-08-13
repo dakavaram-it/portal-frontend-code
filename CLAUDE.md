@@ -265,21 +265,27 @@ originally `is_active = NULL, order_no = NULL` — getElectionTypes hid the one 
 it has since been activated. If step 1 ever shows no Panchayat option again, check
 those two columns first.
 
-**Candidate eligibility is the reservation alone — location is not part of it.** A cadre's
-`user_address` no longer has to match the proposal constituency's chain (assembly → mandal
-→ panchayat/town), so cadre from anywhere may be proposed. What is checked is the
-constituency's `constituency_reservation`: `caste_category_id` when set, and `gender = 'F'`
-when set. Both come from `proposal_context()` in the backend repo's `main.py`, the SQL from
-`eligibility_flag()` there. Change eligibility there, not in either endpoint, and not in
-this repo. A cadre with no caste category on record compares NULL and so is ineligible.
+**Candidate eligibility is the assembly, then the reservation.** A cadre's
+`user_address.constituency_id` has to equal the proposal constituency's own assembly — but
+nothing below it does, so any mandal, panchayat or town inside that assembly is fine. On
+top of that comes the constituency's `constituency_reservation`: `caste_category_id` when
+set, and `gender = 'F'` when set. All of it comes from `proposal_context()` in the backend
+repo's `main.py` (which returns `assembly_constituency_id` beside the reservation), the
+reservation SQL from `eligibility_flag()` there. Change eligibility there, not in either
+endpoint, and not in this repo. A cadre with no caste category on record compares NULL and
+so is ineligible.
 
-**`searchCadre` flags eligibility, it does not filter.** `eligibility_flag()` returns a SELECT
-expression (`… AS eligible`, `'Y'`/`'N'`), not a WHERE clause, so searchCadre returns every cadre
-the search matched. That is deliberate: "no cadre has that membership id" and "that cadre
+**`searchCadre` flags both, it filters neither.** The assembly comes back as its own
+`in_assembly` (`'Y'`/`'N'`) column and the reservation as `eligible` — `eligibility_flag()`
+returns a SELECT expression (`… AS eligible`), not a WHERE clause — so searchCadre returns
+every cadre the search matched. `stage()` checks `in_assembly` first, since "Provided ID
+belongs to another assembly (&lt;their assembly&gt;)" is a different fix for the user than a
+caste-category mismatch; only rows with both flags `'Y'` are staged. That is deliberate: "no cadre has that membership id" and "that cadre
 is barred by the reservation" are different states and `runSearch` says different things
 for each — the second names the reservation. Only `eligible === 'Y'` rows can be staged.
-`assignCandidate` re-checks the same rules on write and answers `409` with the reservation type in
-`detail`, which is what the error banner shows.
+`assignCandidate` re-checks both rules on write — the search filter is only what the browser
+was shown — and answers `409` with the reservation type, or "Cadre belongs to a different
+assembly constituency", in `detail`, which is what the error banner shows.
 
 **Scores come from a second, optional database.** `getCadreScores` reads
 `report_ratings` — `cadre_performace_report` (the table's name really is spelt that way)

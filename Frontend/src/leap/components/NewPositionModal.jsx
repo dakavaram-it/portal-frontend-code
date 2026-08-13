@@ -514,6 +514,15 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
       setError('That candidate is already staged below.')
       return
     }
+    // Named before the reservation: a cadre from another assembly cannot be proposed here
+    // whatever their caste category, and "wrong assembly" is a different fix for the user
+    // than "wrong category".
+    if (cadre.in_assembly !== 'Y') {
+      setError(
+        `Provided ID belongs to another assembly${cadre.constituency_name ? ` (${cadre.constituency_name})` : ''}.`
+      )
+      return
+    }
     if (cadre.eligible !== 'Y') {
       setError(`${cadre.member_name} is not eligible — this position is reserved for ${reservation}.`)
       return
