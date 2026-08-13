@@ -19,16 +19,20 @@ import CompareModal, { scoreTier } from './CompareModal.jsx'
 import { cadreImageUrl, searchCadre as searchCadreDirectory } from '../cadreSearchApi.js'
 
 // How a cadre is found. `value` must stay one of the backend's CADRE_SEARCH_FILTERS keys,
-// except CadreName, which is the PSA directory service's key (see cadreSearchApi.js): a
-// name is a substring match and searchCadre takes no location parameter, so an unscoped name
-// search returns four figures of rows. The directory service does take a constituency, so
-// the name half goes through it and the cadre picked out of its results is resolved back
-// through searchCadre by membership id — searchCadre is still what says whether they are eligible.
+// which are also the PSA directory service's keys (see cadreSearchApi.js).
 const SEARCH_TYPES = [
   { value: 'MembershipId', label: 'Membership ID', placeholder: 'Enter an 8-digit Membership ID…' },
   { value: 'MobileNo', label: 'Mobile No', placeholder: 'Enter a 10-digit mobile number…' },
   { value: 'CadreName', label: 'Name', placeholder: 'Enter a cadre name…' },
 ]
+
+// searchCadre takes no location parameter, so anything but an exact membership id comes back
+// state-wide: a name is a substring match returning four figures of rows, and a mobile number
+// matches cadre in any assembly, which then refuse to stage as "belongs to another assembly".
+// The directory service does take a constituency, so both go through it and the cadre picked
+// out of its results is resolved back through searchCadre by membership id — searchCadre is
+// still what says whether they are eligible.
+const DIRECTORY_TYPES = ['CadreName', 'MobileNo']
 
 // membership_id is an 8-digit number and a mobile number a 10-digit one, both matched
 // exactly, so anything else in the box can only ever return nothing. A name is left alone.
@@ -572,8 +576,8 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
       setError(`Enter a ${typeLabel.label} to search.`)
       return
     }
-    if (searchType === 'CadreName' && !constituencyId) {
-      setError('A name can only be searched within an assembly — pick one first.')
+    if (DIRECTORY_TYPES.includes(searchType) && !constituencyId) {
+      setError(`A ${typeLabel.label} can only be searched within an assembly — pick one first.`)
       return
     }
     setBusy(true)
@@ -582,8 +586,8 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
     setMatches(null)
     try {
       const rows =
-        searchType === 'CadreName'
-          ? await searchCadreDirectory('CadreName', value, constituencyId)
+        DIRECTORY_TYPES.includes(searchType)
+          ? await searchCadreDirectory(searchType, value, constituencyId)
           : await searchCadre(proposalConstituencyId, searchType, value)
       if (!rows.length) setError(`No cadre found for that ${typeLabel.label}.`)
       else if (rows.length === 1) await pickMatch(rows[0])
