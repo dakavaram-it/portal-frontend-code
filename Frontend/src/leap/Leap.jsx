@@ -83,7 +83,7 @@ export default function Leap({ user, onLogout }) {
             initialFilter={args.candidates?.filter}
           />
         )}
-        {screen('cadreSearch', <CadreSearchNotes />)}
+        {screen('cadreSearch', <CadreSearchNotes user={user} />)}
         {view.name === 'positions' && (
           <AllPositions
             positions={positions}

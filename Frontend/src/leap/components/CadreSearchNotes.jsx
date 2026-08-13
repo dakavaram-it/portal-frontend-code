@@ -42,7 +42,7 @@ function Field({ label, value }) {
   )
 }
 
-function CadreResultCard({ cadre }) {
+function CadreResultCard({ cadre, canAddNotes }) {
   const [imgFailed, setImgFailed] = useState(false)
   const [notesOpen, setNotesOpen] = useState(false)
   const hasPhoto = !!cadre.imageUrl && !imgFailed
@@ -63,9 +63,11 @@ function CadreResultCard({ cadre }) {
         <div className="leap-cadresearch-head-info">
           <div className="leap-cadresearch-name-row">
             <span className="leap-cadresearch-name">{cadre.cadreName}</span>
-            <button type="button" className="leap-cadresearch-note-btn" onClick={() => setNotesOpen(true)}>
-              <i className="fa-solid fa-plus" aria-hidden="true" /> Add Note
-            </button>
+            {canAddNotes && (
+              <button type="button" className="leap-cadresearch-note-btn" onClick={() => setNotesOpen(true)}>
+                <i className="fa-solid fa-plus" aria-hidden="true" /> Add Note
+              </button>
+            )}
           </div>
           {cadre.relativeName && (
             <div className="leap-cadresearch-relative">Relative: {cadre.relativeName}</div>
@@ -130,8 +132,13 @@ function CadreResultCard({ cadre }) {
 // A separate module from the wizard's own cadre search (searchCadre) — this one hits the
 // mypartydashboard.com PSA service rather than /leapapi, and is reachable state-wide
 // rather than scoped to one proposal constituency. See cadreSearchApi.js.
-export default function CadreSearchNotes() {
+export default function CadreSearchNotes({ user }) {
   const { items: assemblies, loading: assembliesLoading } = useLoadable(getAssemblies, [])
+
+  // Add Note is gated on the login response's own entitlements list — CADRE_PROFILE_NOTES_PUBLIC_ADD
+  // is the one that grants it — with user_id 1 (the reserved super-admin account) let
+  // through regardless of what entitlements were actually issued.
+  const canAddNotes = !!user?.entitlements?.includes('CADRE_PROFILE_NOTES_PUBLIC_ADD') || user?.user_id === 1
 
   const [constituencyId, setConstituencyId] = useState('')
   const [constituencyInvalid, setConstituencyInvalid] = useState(false)
@@ -269,7 +276,7 @@ export default function CadreSearchNotes() {
               <div className="leap-cand-empty-sub">Nobody matched that {typeLabel.toLowerCase()}.</div>
             </div>
           ) : (
-            results.map((c, i) => <CadreResultCard key={c.cadreId ?? i} cadre={c} />)
+            results.map((c, i) => <CadreResultCard key={c.cadreId ?? i} cadre={c} canAddNotes={canAddNotes} />)
           )
         )}
       </div>

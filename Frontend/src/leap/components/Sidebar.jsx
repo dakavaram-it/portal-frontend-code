@@ -61,7 +61,7 @@ const NAV = [
   { view: 'dashboard', label: 'Dashboard', icon: <IconGauge /> },
   { view: 'newPosition', label: 'Local Body Elections', icon: <IconBallot /> },
   { view: 'candidates', label: 'Candidates', icon: <IconPeople /> },
-  { view: 'cadreSearch', label: 'Cadre Search & Notes', icon: <IconSearch /> },
+  { view: 'cadreSearch', label: 'Cadre Search', icon: <IconSearch /> },
 ]
 
 export default function Sidebar({ user, onLogout, view, onNavigate }) {
