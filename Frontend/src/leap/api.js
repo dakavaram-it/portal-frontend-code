@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 
 // A 401 from a data call means the session lapsed underneath us, so the app has to
-// stop showing a logged-in screen. The auth endpoints are exempt: S14 answers 401 for
-// bad credentials and S15/S16 answer 401 when there is simply no session yet — none of
+// stop showing a logged-in screen. The auth endpoints are exempt: `/login` answers 401 for
+// bad credentials and `/me`//`logout` answer 401 when there is simply no session yet — none of
 // those are an expiry, and treating a failed login as one would clear the error banner.
-const AUTH_PATHS = ['/S14login', '/S15me', '/S16logout']
+const AUTH_PATHS = ['/login', '/me', '/logout']
 
 // Not `/api`: on the deployed host that prefix already belongs to the older party
-// dashboard service (its routes live under /api/v1), so /api/S14login never reaches this
+// dashboard service (its routes live under /api/v1), so /api/login never reaches this
 // backend and comes back 404 from that other app. This prefix is unclaimed, so it falls
 // through to whatever fronts the site, into the Vite preview proxy, and on to the
 // gateway, which serves it under that backend's own mount (/portal-frontend-code).
@@ -20,19 +20,18 @@ const checkUnauthorized = (path, status) => {
   if (status === 401 && !AUTH_PATHS.some((p) => path.startsWith(p))) onUnauthorized()
 }
 
-// S14 returns the session token in its body as well as setting the httpOnly cookie, and
-// this is where that copy lives. sessionStorage rather than localStorage: it dies with
-// the tab, which caps how long a stolen one is worth anything. Unlike the cookie it IS
-// readable by any script on the page — the cookie remains the browser's real transport,
-// and this is the second one, which is what lets the app authenticate from an origin the
-// cookie cannot reach (another host, a mobile client) without changing any caller here.
+// `/login` returns a signed JWT in its body and sets no cookie, so this is the session — the
+// backend reads `Authorization: Bearer <token>` and nothing else. sessionStorage rather
+// than localStorage: it dies with the tab, which caps how long a stolen one is worth
+// anything. It IS readable by any script on the page; the token's 8h `exp` is what bounds
+// that, since logging out cannot revoke one server-side.
 const TOKEN_KEY = 'lbe_token'
 
 // Must run wherever the session ends — logout and the 401 handler — or the next caller
 // keeps presenting a dead token.
 export const clearToken = () => sessionStorage.removeItem(TOKEN_KEY)
 
-// The same token S14 hands back doubles as the `authToken` the mypartydashboard.com PSA
+// The same token `/login` hands back doubles as the `authToken` the mypartydashboard.com PSA
 // service (cadreSearchApi.js / cadreNotesApi.js) wants — one login, one token, two
 // backends. Exported rather than kept private so those two files can read it without
 // duplicating the sessionStorage key here.
@@ -68,9 +67,7 @@ const post = async (path, body) => {
   return data
 }
 
-// The session is an httpOnly cookie, so it is never readable here; fetch attaches it
-// on its own (these are same-origin through the Vite proxy). S15 is how the app finds
-// out whether one is still live.
+// `/me` is how the app finds out whether the stored token is still a live session.
 // The two picklists every screen opens with cannot change inside one session — the
 // election types are configuration and the assemblies are this user's grants — but the
 // Dashboard and the wizard each mounted their own useList for them, so switching screens
@@ -107,84 +104,85 @@ export const prefetchSession = () => {
 
 // The token is stripped off here rather than handed on, so `user` stays the shape every
 // screen already reads and the token never lands in React state where a rendered prop
-// could leak it. S15 does not repeat it — by then the client already has one.
+// could leak it. `/me` does not repeat it — by then the client already has one.
 export const login = async (username, password) => {
-  const { token, ...user } = await post('/S14login', { username, password })
+  const { token, ...user } = await post('/login', { username, password })
   if (token) sessionStorage.setItem(TOKEN_KEY, token)
   return user
 }
-export const me = () => get('/S15me')
-export const logout = () => post('/S16logout', {})
-export const getElectionTypes = cached('S1', () => get('/S1getProposalElectionTypes'))
-// S21, not S2: the picklist is the assemblies this user is granted, which the backend
-// resolves from the session's user_id. S2 (every assembly in the state) still exists on
+export const me = () => get('/me')
+export const logout = () => post('/logout', {})
+export const getElectionTypes = cached('getElectionTypes', () => get('/getProposalElectionTypes'))
+// getUserAccessAssemblies, not getAssemblyConstituenciesInAState: the picklist is the
+// assemblies this user is granted, which the backend resolves from the session's user_id.
+// getAssemblyConstituenciesInAState (every assembly in the state) still exists on
 // the backend and is no longer called from here.
-export const getAssemblies = cached('S21', () => get('/S21getUserAccessAssemblies'))
+export const getAssemblies = cached('getAssemblies', () => get('/getUserAccessAssemblies'))
 export const getMandals = (constituencyId) =>
-  get(`/S3getMandalsInAConstituency?constituency_id=${constituencyId}`)
+  get(`/getMandalsInAConstituency?constituency_id=${constituencyId}`)
 export const getTowns = (constituencyId) =>
-  get(`/S4getTownsInAConstituency?constituency_id=${constituencyId}`)
+  get(`/getTownsInAConstituency?constituency_id=${constituencyId}`)
 export const getProposalConstituenciesByTehsil = (constituencyId, tehsilId, electionTypeId) =>
   get(
-    `/S5getProposalConstituenciesByTehsilId?constituency_id=${constituencyId}` +
+    `/getProposalConstituenciesByTehsilId?constituency_id=${constituencyId}` +
       `&tehsil_id=${tehsilId}&proposal_election_type_id=${electionTypeId}`
   )
 export const getProposalConstituenciesByTown = (constituencyId, townId, electionTypeId) =>
   get(
-    `/S6getProposalConstituenciesByTownId?constituency_id=${constituencyId}` +
+    `/getProposalConstituenciesByTownId?constituency_id=${constituencyId}` +
       `&town_id=${townId}&proposal_election_type_id=${electionTypeId}`
   )
 export const getPositionsOverview = (proposalConstituencyId) =>
-  get(`/S7getProposalPositionsOverviewByProposalConstituencyId?proposal_constituency_id=${proposalConstituencyId}`)
+  get(`/getProposalPositionsOverviewByProposalConstituencyId?proposal_constituency_id=${proposalConstituencyId}`)
 export const getReservation = (proposalConstituencyId) =>
-  get(`/S9getProposalConstituencyReservation?proposal_constituency_id=${proposalConstituencyId}`)
+  get(`/getProposalConstituencyReservation?proposal_constituency_id=${proposalConstituencyId}`)
 export const checkPositionAvailability = (proposalPositionId) =>
-  get(`/S10checkProposalPositionAvailability?proposal_position_id=${proposalPositionId}`)
+  get(`/checkProposalPositionAvailability?proposal_position_id=${proposalPositionId}`)
 // proposal_status_id is proposal_status's own id — 1 Proposed, 2 Shortlisted. The backend
 // defaults it to Proposed, so a caller that does not care may leave it out.
 export const assignCandidate = (proposalPositionId, tdpCadreId, proposalStatusId) =>
-  post('/S11assignProposalCandidate', {
+  post('/assignProposalCandidate', {
     proposal_position_id: proposalPositionId,
     tdp_cadre_id: tdpCadreId,
     ...(proposalStatusId ? { proposal_status_id: proposalStatusId } : {}),
   })
 export const searchCadre = (proposalConstituencyId, searchType, searchValue) =>
   get(
-    `/S12cadreSearch?proposal_constituency_id=${proposalConstituencyId}` +
+    `/cadreSearch?proposal_constituency_id=${proposalConstituencyId}` +
       `&search_type=${searchType}&search_value=${encodeURIComponent(searchValue)}`
   )
 // Moves an assigned candidate between Proposed / Shortlisted / Confirmed. The only write
 // that edits a proposal_candidate row in place — it changes the status alone, so the slot
-// it occupies and S7's proposed_cnt do not move.
+// it occupies and getPositionsOverview's proposed_cnt do not move.
 export const updateProposalCandidateStatus = (proposalCandidateId, proposalStatusId) =>
-  post('/S20updateProposalCandidateStatus', {
+  post('/updateProposalCandidateStatus', {
     proposal_candidate_id: proposalCandidateId,
     proposal_status_id: proposalStatusId,
   })
 // Drops a candidate from a position. The backend flips is_active to 'N' rather than
-// deleting, so the row leaves S13 and S7's count and the slot reopens.
+// deleting, so the row leaves getProposalCandidates and getPositionsOverview's count and the slot reopens.
 export const removeProposalCandidate = (proposalCandidateId) =>
-  post('/S18removeProposalCandidate', { proposal_candidate_id: proposalCandidateId })
+  post('/removeProposalCandidate', { proposal_candidate_id: proposalCandidateId })
 export const getProposalCandidates = (proposalPositionId) =>
-  get(`/S13getProposalCandidatesByProposalPositionId?proposal_position_id=${proposalPositionId}`)
+  get(`/getProposalCandidatesByProposalPositionId?proposal_position_id=${proposalPositionId}`)
 
 // Every position holding at least one candidate, state-wide. The Candidates screen does not
-// drill down S1..S6, so it has no proposal_constituency_id to key off — this is the whole
-// list, and it filters client-side (the same rows feed its Role dropdown).
-export const getPositionsWithCandidates = () => get('/S19getProposalPositionsWithCandidates')
+// drill down through the wizard picklists, so it has no proposal_constituency_id to key
+// off — this is the whole list, and it filters client-side (the same rows feed its Role dropdown).
+export const getPositionsWithCandidates = () => get('/getProposalPositionsWithCandidates')
 
 // Every position under one assembly, across every election type and every local body it
-// resolves to — the Dashboard screen's whole picture in one call. Unlike S19 this carries
-// positions nobody was proposed for too (S22 is a LEFT JOIN, not S19's INNER), which is
+// resolves to — the Dashboard screen's whole picture in one call. Unlike getPositionsWithCandidates this carries
+// positions nobody was proposed for too (getDashboardPositions is a LEFT JOIN, not getPositionsWithCandidates's INNER), which is
 // what the Dashboard's "Not Started" counts.
 export const getDashboardPositions = (constituencyId) =>
-  get(`/S22getDashboardPositionsByConstituencyId?constituency_id=${constituencyId}`)
+  get(`/getDashboardPositionsByConstituencyId?constituency_id=${constituencyId}`)
 
 // The candidate list behind one Dashboard stat tile (Proposed or Confirmed) — same
-// (assembly, election type) scope S22 already sums over, drilled down to the rows.
+// (assembly, election type) scope getDashboardPositions already sums over, drilled down to the rows.
 export const getDashboardCandidatesByStatus = (constituencyId, electionTypeId, statusId) =>
   get(
-    `/S23getDashboardCandidatesByStatus?constituency_id=${constituencyId}` +
+    `/getDashboardCandidatesByStatus?constituency_id=${constituencyId}` +
       `&proposal_election_type_id=${electionTypeId}&proposal_status_id=${statusId}`
   )
 
@@ -192,13 +190,13 @@ export const getDashboardCandidatesByStatus = (constituencyId, electionTypeId, s
 // leader-reports blocks all public access, so the stored file_path is not itself
 // fetchable and a fresh URL has to be asked for on every view.
 export const getNominationFileUrl = (proposalCandidateId) =>
-  get(`/S25getNominationFileUrl?proposal_candidate_id=${proposalCandidateId}`)
+  get(`/getNominationFileUrl?proposal_candidate_id=${proposalCandidateId}`)
 
 // The Confirmed-candidate nomination upload. Multipart, not JSON like every other write
 // here, so it bypasses `post` and builds its own FormData request — the browser sets the
 // multipart boundary itself as long as Content-Type is left unset.
 export const uploadNominationFile = async (proposalCandidateId, file) => {
-  const path = '/S24uploadNominationFile'
+  const path = '/uploadNominationFile'
   const formData = new FormData()
   formData.append('proposal_candidate_id', proposalCandidateId)
   formData.append('file', file)
@@ -215,7 +213,7 @@ export const uploadNominationFile = async (proposalCandidateId, file) => {
 // same call. Answers {configured: false} with no candidates when the ratings database is
 // not wired up, which is a state the UI has to render rather than an error.
 export const getCadreScores = (membershipIds) =>
-  get(`/S17getCadreScores?mids=${encodeURIComponent(membershipIds.join(','))}`)
+  get(`/getCadreScores?mids=${encodeURIComponent(membershipIds.join(','))}`)
 
 // Loads a list on mount / when deps change, reporting whether it is still in flight.
 // `loading` is what lets a caller draw a skeleton instead of an empty-state message —

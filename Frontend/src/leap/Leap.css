@@ -3428,7 +3428,7 @@
   color: #94a3b8;
 }
 
-/* A failed S19, not an empty one — solid red so it cannot be mistaken for the
+/* A failed getPositionsWithCandidates, not an empty one — solid red so it cannot be mistaken for the
    dashed "nothing proposed yet" box it replaces. */
 .leap-cand-error {
   background: #fef2f2;

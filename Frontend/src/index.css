@@ -16,7 +16,7 @@ body {
   background-color: #fff;
 }
 
-/* The screen between "app booted" and "S15 answered". Lives here rather than in
+/* The screen between "app booted" and "/me answered". Lives here rather than in
    Leap.css because it has to render before either screen's stylesheet matters. */
 .app-splash {
   display: flex;

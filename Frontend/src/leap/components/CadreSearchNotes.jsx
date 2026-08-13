@@ -127,7 +127,7 @@ function CadreResultCard({ cadre }) {
   )
 }
 
-// A separate module from the wizard's own cadre search (S12) — this one hits the
+// A separate module from the wizard's own cadre search (searchCadre) — this one hits the
 // mypartydashboard.com PSA service rather than /leapapi, and is reachable state-wide
 // rather than scoped to one proposal constituency. See cadreSearchApi.js.
 export default function CadreSearchNotes() {
@@ -163,7 +163,7 @@ export default function CadreSearchNotes() {
     const v = value.trim()
     // A name is a substring match with no other filter, so without a constituency it
     // routinely returns thousands of rows — the same reason the wizard's own cadre
-    // search (S12) never offers a name search at all. Membership ID / Voter ID / Mobile
+    // search (searchCadre) never offers a name search at all. Membership ID / Voter ID / Mobile
     // No all resolve to at most a handful of rows on their own, so only Name requires it.
     if (nameSearch && !constituencyId) {
       setConstituencyInvalid(true)

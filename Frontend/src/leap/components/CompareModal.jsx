@@ -11,7 +11,7 @@ const C_GREEN = '#059669'
 // Only the scored half is tabulated: the profile fields are on the column header and on
 // the member card, and repeating them as rows pushed the first weighted section off the
 // screen. Grouped the way the ratings report weights it. Each row names the
-// report's own column, spaces and all — S17 returns the row unrenamed rather than
+// report's own column, spaces and all — getCadreScores returns the row unrenamed rather than
 // renaming forty columns on the way through. `pts` rows render as pills and are the
 // ones the best-of highlight applies to.
 const PERFORMANCE_SECTIONS = [
@@ -94,7 +94,7 @@ const TIER_COLOR = { none: '#9ca3af', high: '#059669', mid: '#d97706', low: '#dc
 
 /**
  * Side-by-side comparison of cadre, one column each, over the ratings data behind their
- * score. `candidates` are cadre rows in the backend's own shape (S12 or S13); only the
+ * score. `candidates` are cadre rows in the backend's own shape (searchCadre or getProposalCandidates); only the
  * score half is fetched.
  *
  * Columns can be dragged to reorder and dismissed individually. Both are view-only —
@@ -359,7 +359,7 @@ function Row({ cols, label, fn, suffix = '', pts, score, color }) {
   )
 }
 
-// A weighted section header plus its rows, read off the report row S17 returned.
+// A weighted section header plus its rows, read off the report row getCadreScores returned.
 function PerformanceSection({ cols, section, perfOf }) {
   return (
     <>

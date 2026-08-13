@@ -28,7 +28,7 @@ is the only place the API host is configured.
 
 The prefix is `/leapapi`, not `/api`, on purpose: on the deployed host
 (`portalnew.mypartydashboard.com`) `/api` is already routed to the older party dashboard
-service, so `/api/S14login` answers `404` and never reaches this backend.
+service, so `/api/login` answers `404` and never reaches this backend.
 
 When the API is unreachable every picklist renders silently empty — `useList` swallows
 fetch errors. Check the console and network tab first.
@@ -77,7 +77,7 @@ Frontend/
   vite.config.js       dev/preview server on :9001, proxies /leapapi to the API
   src/
     App.jsx            toggles between login and the app
-    Login.jsx          real login; posts to S14, validated against the `user` table
+    Login.jsx          real login; posts to login, validated against the `user` table
     leap/
       Leap.jsx         ad-hoc router; the view never changes from its initial one
       data.js          seed dataset, stage definitions, derived helpers (dead)
@@ -89,24 +89,24 @@ Frontend/
 
 ## Notes
 
-- Login is real: `S14login` validates credentials against the `user` table and opens a
-  server-side session behind an httpOnly cookie, and every endpoint except `S14`/`S15`/
-  `S16` requires it. Sessions live in the backend's process memory, so a backend restart
+- Login is real: `login` validates credentials against the `user` table and opens a
+  server-side session behind an httpOnly cookie, and every endpoint except `login`/`me`/
+  `logout` requires it. Sessions live in the backend's process memory, so a backend restart
   logs everyone out. There is **no authorization** yet — any valid account can read and
   write against any constituency.
 - A cadre search **stages** a candidate, it does not propose one. Several are staged and
   ranked by their performance score, compared side by side in `CompareModal`, and only
-  the **Assign** button writes — one S11 call each, in score order, so a batch can partly
+  the **Assign** button writes — one assignCandidate call each, in score order, so a batch can partly
   succeed when the slots run out. Each staged card is saved as **Proposed** or
   **Shortlisted**; both are rows in the same table and both consume a `max_proposals`
   slot, so the counts do not tell them apart.
-- The ✕ on a member card **removes** that candidate (S18) — `is_active` goes to `'N'`,
+- The ✕ on a member card **removes** that candidate (removeProposalCandidate) — `is_active` goes to `'N'`,
   the slot reopens, and the row survives. Nothing here is deleted. Each staged card is saved as **Proposed** or
   **Shortlisted**; both are rows in the same table and both consume a `max_proposals`
   slot, so the counts do not tell them apart.
-- The ✕ on a member card **removes** that candidate (S18) — `is_active` goes to `'N'`,
+- The ✕ on a member card **removes** that candidate (removeProposalCandidate) — `is_active` goes to `'N'`,
   the slot reopens, and the row survives. Nothing here is deleted.
-- Scores (`S17`) come from a **second, optional** database on the ratings pipeline's own
+- Scores (`getCadreScores`) come from a **second, optional** database on the ratings pipeline's own
   server. With `REPORT_RATINGS_DB_*` unset the API answers `{"configured": false}` and the
   wizard renders without scores — "No score" badges, a note in the compare modal — rather
   than erroring.
@@ -117,7 +117,7 @@ Frontend/
   `PositionDetail`, `AllPositions`, `PositionCard` and `Dashboard` are all unreachable,
   as is most of `data.js`. See `CLAUDE.md` for the details and for the truncated
   `STAGES` pipeline caveat.
-- **Candidates is the only screen that changes a status.** It reads one endpoint (S19,
+- **Candidates is the only screen that changes a status.** It reads one endpoint (getPositionsWithCandidates,
   no query parameters — all four filters run in the browser off the unfiltered rows) and
-  writes S20 on **Save Status**, one call per card whose status actually moved. The
+  writes updateProposalCandidateStatus on **Save Status**, one call per card whose status actually moved. The
   wizard writes a status once, at assign time, and never edits one.

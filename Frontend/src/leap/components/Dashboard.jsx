@@ -190,7 +190,7 @@ function StatTile({ icon, label, value, sub, of, accent, onClick, active }) {
   )
 }
 
-// Shown while S22 is in flight. It mirrors the real layout — six tiles over a table —
+// Shown while getDashboardPositions is in flight. It mirrors the real layout — six tiles over a table —
 // so the screen does not jump when the data lands, and so the wait reads as "this is
 // filling in" rather than "there is nothing here".
 function DashboardSkeleton() {
@@ -207,14 +207,14 @@ function DashboardSkeleton() {
   )
 }
 
-// S22 returns every position under the chosen assembly in one call — across every
+// getDashboardPositions returns every position under the chosen assembly in one call — across every
 // election type and every local body. Election types render as cards, one per type
 // present; clicking a card drops down that type's stat tiles and location table right
 // under it, instead of hiding them behind a <select>.
 export default function Dashboard({ user, onNavigate }) {
   const [assemblyId, setAssemblyId] = useState('')
   const [openTypeId, setOpenTypeId] = useState('')
-  // Bumped by the refresh button. S22's counts move whenever anyone proposes or removes
+  // Bumped by the refresh button. getDashboardPositions's counts move whenever anyone proposes or removes
   // a candidate, and this screen has no other reason to re-read them.
   const [reloadKey, setReloadKey] = useState(0)
 
@@ -222,9 +222,9 @@ export default function Dashboard({ user, onNavigate }) {
 
   // An assembly always selects itself, so the screen opens with numbers on it rather than
   // an empty dropdown and an instruction. Preference is the user's own home constituency
-  // (`user.constituency_id`, from the `user` table — distinct from S21's "assemblies this
+  // (`user.constituency_id`, from the `user` table — distinct from getAssemblies's "assemblies this
   // user is granted" list); when that is not one of their grants, or they have none on
-  // record, the first granted assembly stands in. S21 sorts by name, so that is
+  // record, the first granted assembly stands in. getAssemblies sorts by name, so that is
   // alphabetically first and the same every time.
   //
   // `assemblyId` is read but deliberately not a dep: the effect must not re-run and
@@ -260,7 +260,7 @@ export default function Dashboard({ user, onNavigate }) {
     return () => { cancelled = true }
   }, [assemblyId, reloadKey])
 
-  // One group per election type, in the order S22 already sorted them (by
+  // One group per election type, in the order getDashboardPositions already sorted them (by
   // election_type), each carrying just its own rows.
   const electionTypeGroups = useMemo(() => {
     const seen = new Map()
@@ -367,11 +367,18 @@ export default function Dashboard({ user, onNavigate }) {
         <div className="leap-dash-type-cards">
           {electionTypeGroups.map((group) => {
             const isOpen = group.id === openTypeId
-            const locations = new Set(group.positions.map((p) => p.proposal_constituency_id)).size
-            // The same filled ratio the section below opens with, so the cards can be
-            // compared without opening each one.
-            const slots = group.positions.reduce((n, p) => n + p.max_proposals, 0)
-            const taken = group.positions.reduce((n, p) => n + p.proposed_cnt, 0)
+            // Locations, not proposal slots: a location counts as filled once every role
+            // there has used up its slots — the same rule as the table's Completed status.
+            const byLocation = new Map()
+            for (const p of group.positions) {
+              const rows = byLocation.get(p.proposal_constituency_id) || []
+              rows.push(p)
+              byLocation.set(p.proposal_constituency_id, rows)
+            }
+            const locations = byLocation.size
+            const taken = [...byLocation.values()].filter((rows) =>
+              rows.every((p) => p.max_proposals > 0 && p.proposed_cnt >= p.max_proposals),
+            ).length
             return (
               <button
                 type="button"
@@ -383,13 +390,13 @@ export default function Dashboard({ user, onNavigate }) {
                 <div className="leap-dash-type-card-body">
                   <div className="leap-dash-type-card-label">{group.label}</div>
                   <div className="leap-dash-type-card-sub">
-                    {locations} location{locations !== 1 ? 's' : ''} · {taken} of {slots} slots filled
+                    {taken} of {locations} location{locations !== 1 ? 's' : ''} filled
                   </div>
                   <ProgressBar
                     value={taken}
-                    total={slots}
-                    tone={taken === 0 ? 'not-started' : taken >= slots ? 'completed' : 'in-progress'}
-                    label={`${group.label} proposal slots filled`}
+                    total={locations}
+                    tone={taken === 0 ? 'not-started' : taken >= locations ? 'completed' : 'in-progress'}
+                    label={`${group.label} locations filled`}
                   />
                 </div>
                 <span className="leap-dash-type-card-chevron"><IconChevronDown /></span>
@@ -469,7 +476,7 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
       // Any role at this location having a live candidate is what decides where the view
       // icon goes — not just the "Proposed" status column above, which is one of three.
       const proposedCnt = locRows.reduce((n, p) => n + p.proposed_cnt, 0)
-      // Which roles the required-positions count is made of. Deduped, in S22's own
+      // Which roles the required-positions count is made of. Deduped, in getDashboardPositions's own
       // PR.order_no order — most locations here hold one role, but a local body can have
       // several (President + Vice-President), and the bare number does not say which.
       const roleNames = [...new Set(locRows.map((p) => p.role_name))].join(', ')
@@ -715,7 +722,7 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
   )
 }
 
-// The candidate list behind one Proposed/Confirmed stat tile — S23, scoped to the same
+// The candidate list behind one Proposed/Confirmed stat tile — getDashboardCandidatesByStatus, scoped to the same
 // (assembly, election type) the tile itself was summed over. Renders in place of the "By
 // Location" table rather than as an overlay, the same way an election-type card's stats
 // replace the previous one's below it, so the section never has two things open at once.
@@ -762,7 +769,7 @@ function CandidateStatusSection({ electionTypeId, assemblyId, statusId, statusLa
     return () => document.removeEventListener('keydown', onKey)
   }, [pdfViewer])
 
-  // Patches `nomination_file_path` in place on success rather than refetching S23, so the
+  // Patches `nomination_file_path` in place on success rather than refetching getDashboardCandidatesByStatus, so the
   // badge flips to Done without the row order or scroll position jumping.
   const handleUpload = async (candidateId, file, inputEl) => {
     if (!file) return
@@ -790,7 +797,7 @@ function CandidateStatusSection({ electionTypeId, assemblyId, statusId, statusLa
   }
 
   // The presigned URL is fetched fresh on every click rather than cached on the row: it
-  // expires in 5 minutes (S25), and stashing a link that may already be dead would just
+  // expires in 5 minutes (getNominationFileUrl), and stashing a link that may already be dead would just
   // move the failure from here to whenever the viewer was reopened.
   const handleView = async (candidate) => {
     const candidateId = candidate.proposal_candidate_id

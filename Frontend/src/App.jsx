@@ -16,9 +16,9 @@ export default function App() {
     if (next) prefetchSession()
   }
 
-  // The session cookie is httpOnly, so the only way to know whether one is still live
-  // is to ask S15. Show a splash until it answers, rather than flashing the login
-  // screen at someone who is already signed in.
+  // A stored token may already have expired, and only the backend can say: ask `/me`.
+  // Show a splash until it answers, rather than flashing the login screen at someone
+  // who is already signed in.
   useEffect(() => {
     // Any data call that comes back 401 has outlived its session; drop straight back
     // to the login screen instead of leaving cadre data on screen behind a dead one.
@@ -31,8 +31,9 @@ export default function App() {
       .finally(() => setChecking(false))
   }, [])
 
-  // Clear the session server-side too, so the token cannot be replayed.
-  // A session that already lapsed makes S16 answer 401, and a dead backend makes it
+  // `/logout` is stateless — the token stays valid until it expires, so dropping the local
+  // copy below is what actually ends the session here.
+  // A session that already lapsed makes logout answer 401, and a dead backend makes it
   // throw outright. React does not consume the promise an onClick returns, so without
   // the catch either case escapes as an unhandled rejection. Returning to the login
   // screen is the right outcome regardless of why the call failed.
@@ -45,14 +46,14 @@ export default function App() {
       // The cached assemblies are the outgoing user's own grants; whoever signs in next
       // on this machine must not be served them.
       clearSessionCache()
-      // After the await, never before: S16 has to present the token to know which
-      // session to drop.
+      // After the await, never before: `/logout` is behind the auth guard, so the call needs
+      // the token to get past it.
       clearToken()
       setUser(null)
     }
   }
 
-  // S15 is one round trip, but on a cold backend it is a slow one, and a white page for
+  // `/me` is one round trip, but on a cold backend it is a slow one, and a white page for
   // the length of it reads as a broken app rather than a loading one.
   if (checking) {
     return (

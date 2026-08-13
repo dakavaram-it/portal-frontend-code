@@ -34,7 +34,7 @@ function initials(name) {
     .toUpperCase()
 }
 
-// Both the assigned list (S13) and the search results (S12) return the same
+// Both the assigned list (getProposalCandidates) and the search results (searchCadre) return the same
 // cadre fields, so these two render off one shape.
 function cadreDetail(c) {
   return [c.gender, c.age && `${c.age} yrs`, c.category_name, c.caste_name].filter(Boolean).join(' · ')
@@ -99,7 +99,7 @@ export default function PositionDetail({ position, onBack, onAdvance, onRetreat 
   const [busy, setBusy] = useState(false)
   const [selectedCadreId, setSelectedCadreId] = useState(null)
   const [error, setError] = useState('')
-  // Bumped after a successful assign to re-run S13.
+  // Bumped after a successful assign to re-run getProposalCandidates.
   const [reloadKey, setReloadKey] = useState(0)
 
   const candidates = useList(

@@ -10,12 +10,12 @@ import CompareModal from './CompareModal.jsx'
 import { AddMembersPanel, MemberCard, PhotoViewer, STATUS_META } from './NewPositionModal.jsx'
 
 // The three proposal_status rows, in the order the filter offers them. Their ids are what
-// S19 counts per position (a position can hold candidates of all three at once) and what
+// getPositionsWithCandidates counts per position (a position can hold candidates of all three at once) and what
 // STATUS_META names on the card, so the filter, the pills and the cards agree.
 const STATUS_FILTERS = [
   { id: 1, label: 'Proposed', countKey: 'proposed_status_cnt' },
   { id: 2, label: 'Shortlisted', countKey: 'shortlisted_status_cnt' },
-  // The S19 count key still reads `conformed_` — it is the SQL alias, not a label.
+  // The getPositionsWithCandidates count key still reads `conformed_` — it is the SQL alias, not a label.
   { id: 3, label: 'Confirmed', countKey: 'conformed_status_cnt' },
 ]
 
@@ -26,7 +26,7 @@ const DEFAULT_STATUS_ID = 1
 const statusOf = (cadre) => cadre.proposal_status_id || DEFAULT_STATUS_ID
 
 // A position can hold several Proposed/Shortlisted candidates at once, but only one of
-// them should ever be the confirmed winner. S20 has no such check — it only moves one
+// them should ever be the confirmed winner. updateProposalCandidateStatus has no such check — it only moves one
 // row's status — so it is enforced here, before the pick is staged.
 const CONFIRMED_STATUS_ID = STATUS_FILTERS.find((s) => s.label === 'Confirmed').id
 
@@ -61,7 +61,7 @@ export default function Candidates({ initialFilter } = {}) {
   // The proposal_position_id whose full-screen detail is open, or null for the list.
   const [openId, setOpenId] = useState(null)
   // Bumped after a removal so the list's counts re-read — a position whose last candidate
-  // was dropped leaves S19 entirely.
+  // was dropped leaves getPositionsWithCandidates entirely.
   const [reloadKey, setReloadKey] = useState(0)
 
   const [electionTypeId, setElectionTypeId] = useState(initialFilter?.electionTypeId || '')
@@ -69,7 +69,7 @@ export default function Candidates({ initialFilter } = {}) {
   const [roleId, setRoleId] = useState('')
   const [statusId, setStatusId] = useState('')
 
-  // S19 by hand rather than through useList: that hook reports a failed load as an empty
+  // getPositionsWithCandidates by hand rather than through useList: that hook reports a failed load as an empty
   // list, so an unreachable backend or a 404 would read as "nobody has been proposed yet".
   // This is the only screen with a single endpoint behind everything it shows, so the
   // difference is the whole screen rather than one picklist.
@@ -107,7 +107,7 @@ export default function Candidates({ initialFilter } = {}) {
 
   const open = rows.find((r) => r.proposal_position_id === openId)
 
-  // A removal can drop the open position out of S19 (its last candidate went), so the
+  // A removal can drop the open position out of getPositionsWithCandidates (its last candidate went), so the
   // detail has nothing left to show — fall back to the list rather than a blank screen.
   useEffect(() => {
     if (openId && rows.length > 0 && !rows.some((r) => r.proposal_position_id === openId)) {
@@ -280,9 +280,9 @@ function PositionCard({ row, onOpen }) {
    position's own header, then every candidate mapped to it as the same card the wizard
    renders, with Compare across them. */
 function PositionCandidates({ position, onBack, onChanged }) {
-  // null while S13 is in flight, [] once it says none — the two render differently.
+  // null while getProposalCandidates is in flight, [] once it says none — the two render differently.
   const [candidates, setCandidates] = useState(null)
-  // membership_id -> the S17 row behind each card's score badge and its Member Since /
+  // membership_id -> the getCadreScores row behind each card's score badge and its Member Since /
   // Renewals fields.
   const [scores, setScores] = useState({})
   const [zoomed, setZoomed] = useState(null)
@@ -291,12 +291,12 @@ function PositionCandidates({ position, onBack, onChanged }) {
   const [reloadKey, setReloadKey] = useState(0)
   // proposal_candidate_id -> the status its buttons now show, before Save writes it. Only
   // ids the user actually touched are in here, so an untouched card falls through to what
-  // S13 says and Save has an exact list of what changed.
+  // getProposalCandidates says and Save has an exact list of what changed.
   const [pending, setPending] = useState({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState('')
   // Whether the cadre search panel is open. Only offered while the position has a
-  // proposal slot left — S11 would refuse the write otherwise.
+  // proposal slot left — assignCandidate would refuse the write otherwise.
   const [adding, setAdding] = useState(false)
 
   useEffect(() => {
@@ -324,7 +324,7 @@ function PositionCandidates({ position, onBack, onChanged }) {
     return () => { cancelled = true }
   }, [position.proposal_position_id, reloadKey])
 
-  // Same write the wizard's View Members makes (S18), so it asks first: there is no undo
+  // Same write the wizard's View Members makes (removeProposalCandidate), so it asks first: there is no undo
   // on this screen. The list behind is told to re-read its counts.
   const remove = async (cadre) => {
     if (!window.confirm(`Remove ${cadre.member_name} from this position?`)) return
@@ -338,14 +338,14 @@ function PositionCandidates({ position, onBack, onChanged }) {
     }
   }
 
-  // Only cards whose buttons moved off what S13 returned: pressing a status and pressing
+  // Only cards whose buttons moved off what getProposalCandidates returned: pressing a status and pressing
   // the one already lit both leave nothing to write.
   const changed = (candidates || []).filter(
     (c) => pending[c.proposal_candidate_id] && pending[c.proposal_candidate_id] !== statusOf(c)
   )
 
-  // One S20 per changed card. They are independent rows — no slot is being competed for,
-  // unlike S11 — but they are written one at a time so a failure can name which candidate
+  // One updateProposalCandidateStatus per changed card. They are independent rows — no slot is being competed for,
+  // unlike assignCandidate — but they are written one at a time so a failure can name which candidate
   // it was and leave that card's buttons where the user left them.
   const saveStatuses = async () => {
     setSaving(true)
@@ -364,7 +364,7 @@ function PositionCandidates({ position, onBack, onChanged }) {
     if (failed.length) setError(failed.join(' · '))
     if (done.length) {
       setSaved(`${done.join(', ')}.`)
-      // Re-reads S13 (which clears `pending`) and tells the list to re-read its per-status
+      // Re-reads getProposalCandidates (which clears `pending`) and tells the list to re-read its per-status
       // pill counts, which have just moved.
       setReloadKey((k) => k + 1)
       onChanged()
@@ -411,14 +411,15 @@ function PositionCandidates({ position, onBack, onChanged }) {
         )}
       </div>
 
-      {/* The wizard's step 6, against the position already open here — S19 carries the
+      {/* The wizard's step 6, against the position already open here — getPositionsWithCandidates carries the
           proposal_constituency_id its cadre search needs. A successful assign re-reads
-          S13 for the new cards and tells the list its counts moved. */}
+          getProposalCandidates for the new cards and tells the list its counts moved. */}
       {adding && open > 0 && (
         <AddMembersPanel
           key={position.proposal_position_id}
           position={position}
           proposalConstituencyId={position.proposal_constituency_id}
+          constituencyId={position.assembly_constituency_id}
           reservation={position.reservation_type}
           placeName={position.local_body_name}
           onAssigned={() => { setReloadKey((k) => k + 1); onChanged() }}
