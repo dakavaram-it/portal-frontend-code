@@ -56,6 +56,19 @@ function IconSearch() {
   )
 }
 
+function IconCommittee() {
+  return (
+    <svg {...NAV_ICON_PROPS}>
+      <circle cx="12" cy="6.5" r="2.6" />
+      <circle cx="5.5" cy="17" r="2.3" />
+      <circle cx="18.5" cy="17" r="2.3" />
+      <path d="M12 9.1V13" />
+      <path d="M7.4 15.3 10.4 13" />
+      <path d="M16.6 15.3 13.6 13" />
+    </svg>
+  )
+}
+
 // The nav's own entries, by the `view.name` each one switches Leap to.
 const NAV = [
   { view: 'dashboard', label: 'Dashboard', icon: <IconGauge /> },
@@ -64,10 +77,20 @@ const NAV = [
   { view: 'cadreSearch', label: 'Cadre Search', icon: <IconSearch /> },
 ]
 
+// An account carrying CADRE_COMMITTEE_MANAGEMENT does committee work only — the
+// nomination-workflow screens above don't apply to it, so they're hidden rather than
+// merely unreachable. Order matches how the request named them: Committees Assign, then
+// Cadre Search.
+const COMMITTEE_NAV = [
+  { view: 'committeesAssign', label: 'Committees Assign', icon: <IconCommittee /> },
+  { view: 'cadreSearch', label: 'Cadre Search', icon: <IconSearch /> },
+]
+
 export default function Sidebar({ user, onLogout, view, onNavigate }) {
   // Most `user` rows carry no firstname/lastname, so fall back to the login name.
   const displayName = [user.firstname, user.lastname].filter(Boolean).join(' ') || user.username
   const initials = displayName.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()
+  const nav = user?.entitlements?.includes('CADRE_COMMITTEE_MANAGEMENT') ? COMMITTEE_NAV : NAV
 
   return (
     <aside className="leap-sidebar">
@@ -79,7 +102,7 @@ export default function Sidebar({ user, onLogout, view, onNavigate }) {
       </div>
 
       <nav className="leap-nav">
-        {NAV.map((item) => (
+        {nav.map((item) => (
           <button
             type="button"
             key={item.view}

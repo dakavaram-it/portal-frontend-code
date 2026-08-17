@@ -7,20 +7,31 @@ import NewPositionModal from './components/NewPositionModal.jsx'
 import Candidates from './components/Candidates.jsx'
 import Dashboard from './components/Dashboard.jsx'
 import CadreSearchNotes from './components/CadreSearchNotes.jsx'
+import CommitteesAssign from './components/CommitteesAssign.jsx'
 import './Leap.css'
+
+// CADRE_COMMITTEE_MANAGEMENT restricts an account to Committees Assign and Cadre Search
+// alone — see Sidebar.jsx, which hides the other nav entries for the same check.
+const hasCommitteeEntitlement = (user) => !!user?.entitlements?.includes('CADRE_COMMITTEE_MANAGEMENT')
 
 export default function Leap({ user, onLogout }) {
   const [positions, setPositions] = useState(POSITIONS)
   // The Dashboard, not the wizard: it is the sidebar's first entry and the only screen
   // that answers "where does this constituency stand" without being asked a question
-  // first. Opening on the wizard started every session six empty dropdowns deep.
-  const [view, setView] = useState({ name: 'dashboard' })
+  // first. Opening on the wizard started every session six empty dropdowns deep. A
+  // committee-only account has no Dashboard entry to land on, so it opens on Committees
+  // Assign instead.
+  const [view, setView] = useState(() => ({
+    name: hasCommitteeEntitlement(user) ? 'committeesAssign' : 'dashboard',
+  }))
 
   // Which screens have been opened at least once. They stay mounted from then on (see
   // `screen` below) — these components hold their selections in their own state and
   // nowhere else, so unmounting one on a sidebar click threw away the assembly, the six
   // wizard steps or the candidate filters and re-fetched everything on the way back.
-  const [opened, setOpened] = useState({ dashboard: true })
+  const [opened, setOpened] = useState(() => ({
+    [hasCommitteeEntitlement(user) ? 'committeesAssign' : 'dashboard']: true,
+  }))
   // The last payload each screen was navigated with (the Dashboard's `prefill`/`filter`).
   // Kept per screen rather than read off `view`, because the sidebar navigates with a bare
   // `{ name }` — reading it off `view` would drop the payload and so change the key, which
@@ -84,6 +95,7 @@ export default function Leap({ user, onLogout }) {
           />
         )}
         {screen('cadreSearch', <CadreSearchNotes user={user} />)}
+        {screen('committeesAssign', <CommitteesAssign user={user} />)}
         {view.name === 'positions' && (
           <AllPositions
             positions={positions}

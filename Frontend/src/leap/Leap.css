@@ -7,13 +7,13 @@
 
 /* ---------- Sidebar ---------- */
 .leap-sidebar {
-  width: 260px;
-  flex: 0 0 260px;
+  width: 216px;
+  flex: 0 0 216px;
   background: #1a130f;
   color: #f2ede6;
   display: flex;
   flex-direction: column;
-  padding: 20px 16px;
+  padding: 20px 14px;
   position: sticky;
   top: 0;
   height: 100vh;
@@ -93,7 +93,7 @@
 .leap-nav-icon {
   flex: none;
   display: flex;
-  margin-right: 10px;
+  margin-right: 8px;
   opacity: 0.75;
 }
 
@@ -113,9 +113,10 @@
   background: transparent;
   border: none;
   color: #d8d0c7;
-  padding: 9px 10px;
+  padding: 9px 8px;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 13.5px;
+  white-space: nowrap;
   text-align: left;
   cursor: pointer;
 }
@@ -361,9 +362,37 @@
 .leap-skel-table { height: 260px; }
 .leap-skel-input { display: block; height: 40px; border-radius: 10px; }
 
+/* A spinner rather than a skeleton where the wait is for a single slow call rather than a
+   whole shaped layout (the committee drill-down modals) — nothing to mimic the shape of
+   yet since the table's column count isn't known until the data arrives. */
+.leap-loading-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 56px 20px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.leap-spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid #eef0f3;
+  border-top-color: #c8291e;
+  animation: leap-spin 0.75s linear infinite;
+}
+
+@keyframes leap-spin {
+  to { transform: rotate(360deg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .leap-progress-fill { transition: none; }
   .leap-skel { animation: none; }
+  .leap-spinner, .leap-committee-delete-spinner { animation: none; }
 }
 
 .leap-dash-type-cards {
@@ -586,6 +615,483 @@
   border-color: #2563eb;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
+
+/* ---------- Committees Assign ---------- */
+/* Everything below the tab strip sits inside one bounded card rather than floating
+   loose on the page background — an idle KSS/CUBS/Committees screen is short on content
+   (a tile row and a button row, nothing else until a form is opened), and without a card
+   edge that reads as a mostly-empty page rather than a compact one. */
+.leap-committee-card {
+  background: #fff;
+  border: 1px solid #eef0f3;
+  border-radius: 18px;
+  padding: 28px 30px 32px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.leap-committee-card > .leap-section:last-child {
+  margin-bottom: 0;
+}
+
+/* One line on a wide screen, wrapping only where it must — the earlier stacked-bullet
+   version ran three full-width lines deep before anything else on the page got to
+   render. */
+.leap-committee-note {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: #fff7ed;
+  border: 1px solid #fde8d7;
+  border-left: 4px solid #c8291e;
+  border-radius: 10px;
+  padding: 10px 16px;
+  margin-bottom: 20px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #7c2d12;
+}
+
+.leap-committee-note-icon {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  color: #c8291e;
+}
+
+.leap-committee-note-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.leap-committee-note p {
+  margin: 0;
+}
+
+.leap-committee-note strong {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #c8291e;
+}
+
+.leap-committee-tabs-row {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.leap-committee-tabs {
+  display: inline-flex;
+  background: #f3f4f6;
+  border-radius: 999px;
+  padding: 4px;
+  gap: 4px;
+}
+
+/* The CUBS/Committees pill and the KSS/Booth/Unit/Cluster (or Village-Ward/Mandal-Town/
+   Constituency) radio row beneath it — centered as a pair, and the chips sized down a
+   notch from `.leap-chip-option`'s default (tuned for the wider 4-across election-type
+   grid), which read oversized in this tighter horizontal row. */
+.leap-chip-list.leap-committee-chip-list {
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.leap-chip-list.leap-committee-chip-list .leap-chip-option {
+  font-size: 13px;
+  padding: 11px 18px;
+}
+
+.leap-committee-tab {
+  border: none;
+  background: transparent;
+  padding: 9px 22px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+.leap-committee-tab.active {
+  background: #c8291e;
+  color: #fff;
+}
+
+/* The chip radio row and the section title/tiles beneath it otherwise sit almost flush
+   against each other — this is the gap that gives the section its own visual beat. */
+.leap-committee-section-header {
+  margin-top: 24px;
+}
+
+.leap-stat-row.leap-committee-stat-row {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-top: 14px;
+}
+
+@media (max-width: 1300px) {
+  .leap-stat-row.leap-committee-stat-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 680px) {
+  .leap-stat-row.leap-committee-stat-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 460px) {
+  .leap-stat-row.leap-committee-stat-row { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* The CUBS tiles are a single "Total" tile, not a row of them — full grid width would
+   stretch it absurdly wide, so it gets a fixed, card-sized column instead. */
+.leap-stat-row.leap-committee-stat-row.leap-committee-stat-row-narrow {
+  grid-template-columns: minmax(220px, 320px);
+  margin-bottom: 20px;
+}
+
+.leap-committee-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.leap-committee-actions .leap-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.leap-committee-actions .leap-btn-secondary svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Create / Create & Assign / Assign each get their own colour so the three read as
+   distinct actions rather than one style repeated three times — border+tint normally,
+   filled solid while that button's own panel is open (`is-active`). */
+.leap-btn-secondary.accent-blue {
+  color: #1d4ed8;
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.leap-btn-secondary.accent-amber {
+  color: #b45309;
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.leap-btn-secondary.accent-green {
+  color: #047857;
+  border-color: #6ee7b7;
+  background: #ecfdf5;
+}
+
+.leap-btn-secondary.accent-blue.is-active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.leap-btn-secondary.accent-amber.is-active {
+  background: #d97706;
+  border-color: #d97706;
+  color: #fff;
+}
+
+.leap-btn-secondary.accent-green.is-active {
+  background: #059669;
+  border-color: #059669;
+  color: #fff;
+}
+
+.leap-btn-secondary:disabled {
+  color: #9ca3af;
+  background: #f9fafb;
+  border-color: #e5e7eb;
+  cursor: not-allowed;
+}
+
+.leap-committee-panel {
+  background: #fff;
+  border: 1px solid #eef0f3;
+  border-radius: 14px;
+  padding: 20px 22px;
+  margin-top: 18px;
+}
+
+.leap-committee-panel h4 {
+  margin: 0 0 14px;
+  font-size: 15px;
+}
+
+.leap-committee-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.leap-committee-field label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.leap-committee-field input {
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.leap-committee-field .leap-dropdown {
+  width: 100%;
+}
+
+.leap-committee-staged-card {
+  border: 1px solid #eef0f3;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.leap-committee-staged-photo {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  flex: none;
+  background: #e0e7ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #4338ca;
+  font-size: 13px;
+  overflow: hidden;
+}
+
+.leap-committee-staged-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.leap-committee-staged-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.leap-committee-staged-name {
+  font-weight: 700;
+  font-size: 13.5px;
+}
+
+.leap-committee-staged-meta {
+  font-size: 11.5px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.leap-committee-staged-fields {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.leap-committee-staged-fields > * {
+  flex: 1;
+  min-width: 140px;
+}
+
+.leap-committee-remove-btn {
+  background: none;
+  border: none;
+  color: #dc2626;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.leap-committee-modal {
+  background: #fff;
+  border-radius: 16px;
+  padding: 22px 26px;
+  width: 100%;
+  max-width: 1320px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.leap-dash-toolbar .leap-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.leap-dash-toolbar .leap-btn-secondary svg {
+  width: 15px;
+  height: 15px;
+}
+
+.leap-dt-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.leap-dt-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: #6b7280;
+}
+
+.leap-dt-pagination-controls select {
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  font-size: 12.5px;
+}
+
+.leap-dt-pagination-controls .leap-btn-secondary {
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+.leap-committee-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  color: #dc2626;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s ease;
+}
+
+.leap-committee-delete-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.leap-committee-delete-btn:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+.leap-committee-delete-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.leap-committee-delete-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #fecaca;
+  border-top-color: #dc2626;
+  animation: leap-spin 0.7s linear infinite;
+}
+
+.leap-committee-link-btn {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  font-size: inherit;
+  text-decoration: underline;
+}
+
+.leap-committee-role-section {
+  margin-bottom: 20px;
+}
+
+.leap-committee-role-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: #6b7280;
+  margin-bottom: 12px;
+}
+
+.leap-committee-role-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.leap-committee-role-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.leap-committee-role-dot.total { background: #6b7280; }
+.leap-committee-role-dot.proposed { background: #d97706; }
+.leap-committee-role-dot.finalized { background: #059669; }
+.leap-committee-role-dot.vacancy { background: #dc2626; }
+
+.leap-committee-role-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.leap-committee-role-card {
+  background: #fff;
+  border: 1px solid #eef0f3;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.leap-committee-role-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 8px;
+}
+
+.leap-committee-role-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.leap-committee-role-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+
+.leap-committee-role-badge.total { background: #f3f4f6; color: #4b5563; }
+.leap-committee-role-badge.proposed { background: #fef3c7; color: #92400e; }
+.leap-committee-role-badge.finalized { background: #d1fae5; color: #065f46; }
+.leap-committee-role-badge.vacancy { background: #fee2e2; color: #991b1b; }
 
 /* ---------- Pipeline panels ---------- */
 .leap-pipeline-grid {
@@ -965,6 +1471,79 @@
 
 .leap-table tr:hover td {
   background: #fafafa;
+}
+
+/* Committees Assign's own drill-down tables: no row is clickable (their actions are
+   per-cell buttons), the pagination already caps them at a page's worth of rows so the
+   table-card's own 420px scroll box was just adding a second, redundant scrollbar inside
+   the modal's, and a plain white thead read as part of the body instead of a header. */
+.leap-committee-modal .leap-table-card {
+  max-height: none;
+  overflow-y: visible;
+}
+
+.leap-committee-modal .leap-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* Counts/percentages centered, text (names, booths, sections, ids) stays left — the
+   default alignment reads fine for prose but makes a column of numbers hard to compare
+   at a glance. */
+.leap-committee-modal .leap-table th.leap-th-numeric,
+.leap-committee-modal .leap-table td.leap-td-numeric {
+  text-align: center;
+}
+
+.leap-committee-modal .leap-table th.leap-th-numeric .leap-th-sort {
+  justify-content: center;
+  width: 100%;
+}
+
+/* A visibly darker header than the body, and a full grid of borders rather than just
+   row separators — "just a lighter tint" read as too close to the body rows to tell the
+   two apart at a glance. */
+.leap-committee-modal .leap-table thead th {
+  background: #dbe2ea;
+  color: #1e293b;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border: 1px solid #b9c4d1;
+  border-top: none;
+}
+
+.leap-committee-modal .leap-table thead th:first-child {
+  border-left: none;
+}
+
+.leap-committee-modal .leap-table thead th:last-child {
+  border-right: none;
+}
+
+.leap-committee-modal .leap-table tbody tr {
+  cursor: default;
+}
+
+.leap-committee-modal .leap-table tbody td {
+  border: 1px solid #e5e7eb;
+  border-top: none;
+}
+
+.leap-committee-modal .leap-table tbody td:first-child {
+  border-left: none;
+}
+
+.leap-committee-modal .leap-table tbody td:last-child {
+  border-right: none;
+}
+
+.leap-committee-modal .leap-table tbody tr:nth-child(even) td {
+  background: #f8fafc;
+}
+
+.leap-committee-modal .leap-table tbody tr:hover td {
+  background: #eef2f7;
 }
 
 .leap-step-badge {
