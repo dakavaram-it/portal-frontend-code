@@ -105,10 +105,10 @@ export default function Sidebar({ user, onLogout, view, onNavigate }) {
       </div>
 
       <nav className="leap-nav">
-        {!isCommitteeNav && <div className="leap-nav-group-label">local body elections</div>}
+        {!isCommitteeNav && <div className="leap-nav-group-label">LOCAL BODY ELECTIONS</div>}
         {nav.map((item) => (
           <Fragment key={item.view}>
-            {item.view === 'cadreSearch' && <div className="leap-nav-group-label">cadre</div>}
+            {item.view === 'cadreSearch' && <div className="leap-nav-group-label">CADRE</div>}
             <button
               type="button"
               className={`leap-nav-btn ${view === item.view ? 'active' : ''}`}

@@ -113,6 +113,97 @@ function IconSearch() {
   )
 }
 
+// The election hierarchy as the party runs it: two tiers, each holding the bodies that
+// tier elects, each body holding the posts contested in it. It is written down here
+// rather than derived from getDashboardPositions because the tree is the *plan* — a post nobody has
+// configured a proposal constituency for yet still has to appear, as a static card, or
+// the screen would silently pretend that half the election does not exist.
+//
+// `types` are matched against a row's `election_type`; `roles` (when present) narrow that
+// to one post inside a shared type, since e.g. MPP and Vice-MPP are two roles of one
+// election type. Names are compared normalized, so 'Vice-MPP' and 'Vice MPP' are one.
+// Anything the tree does not claim is still shown — see `otherBody` below.
+const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+
+const ELECTION_TIERS = [
+  {
+    id: 'panchayat-raj',
+    label: 'Panchayat Raj Elections',
+    sub: 'Mandal & District tier',
+    bodies: [
+      {
+        label: 'Mandal Parishad',
+        sub: 'per Mandal',
+        icon: <IconLayers />,
+        accent: '#2563eb',
+        cards: [
+          { label: 'MPTC', types: ['MPTC'] },
+          { label: 'MPP', types: ['MPP'], roles: ['MPP', 'President', 'Chairman', 'Chairperson'] },
+          { label: 'Vice-MPP', types: ['MPP', 'Vice-MPP'], roles: ['Vice-MPP', 'Vice-President', 'Vice-Chairman'] },
+        ],
+      },
+      {
+        label: 'Zilla Parishad',
+        sub: 'per District',
+        icon: <IconPin />,
+        accent: '#7c3aed',
+        cards: [
+          { label: 'ZPTC', types: ['ZPTC'] },
+          { label: 'ZP Chairman', types: ['ZP'], roles: ['Chairman', 'Chairperson', 'President', 'ZP Chairman'] },
+          { label: 'Vice-Chairman', types: ['ZP'], roles: ['Vice-Chairman', 'Vice-President', 'Vice-Chairperson'] },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'local-body',
+    label: 'Local Body Elections',
+    sub: 'Panchayat / Municipality / Corporation',
+    bodies: [
+      {
+        label: 'Gram Panchayat',
+        sub: 'Village',
+        icon: <IconSeats />,
+        accent: '#059669',
+        cards: [
+          { label: 'Ward Member', types: ['Ward', 'Ward Member'] },
+          { label: 'Sarpanch', types: ['Panchayat'], roles: ['Sarpanch', 'President', 'Chairman'] },
+          { label: 'Upa Sarpanch', types: ['Panchayat'], roles: ['Upa Sarpanch', 'Vice-President', 'Vice-Sarpanch'] },
+        ],
+      },
+      {
+        label: 'Municipality',
+        sub: 'Town',
+        icon: <IconLayers />,
+        accent: '#d97706',
+        cards: [
+          { label: 'Ward Councillor', types: ['Municipal Ward', 'Ward Councillor'] },
+          { label: 'Chairperson', types: ['Municipality'], roles: ['Chairperson', 'Chairman', 'President'] },
+          { label: 'Vice-Chairperson', types: ['Municipality'], roles: ['Vice-Chairperson', 'Vice-Chairman', 'Vice-President'] },
+        ],
+      },
+      {
+        label: 'Municipal Corporation',
+        sub: 'City',
+        icon: <IconPin />,
+        accent: '#0891b2',
+        cards: [
+          { label: 'Corporator', types: ['Corporation Ward', 'Corporator'] },
+          { label: 'Mayor', types: ['Corporation'], roles: ['Mayor', 'President', 'Chairperson'] },
+          { label: 'Deputy Mayor', types: ['Corporation'], roles: ['Deputy Mayor', 'Vice-Mayor', 'Vice-President'] },
+        ],
+      },
+    ],
+  },
+]
+
+// A row belongs to a card when its election type is one the card claims and — for the
+// cards that share a type with a sibling — its role is one the card names too.
+const cardMatches = (card, row) => {
+  if (!card.types.some((t) => norm(t) === norm(row.election_type))) return false
+  return !card.roles || card.roles.some((r) => norm(r) === norm(row.role_name))
+}
+
 const NOMINATION_CLASS = {
   'Not Started': 'not-started',
   'In Progress': 'in-progress',
@@ -160,16 +251,16 @@ function ProgressBar({ value, total, tone = 'in-progress', label, color }) {
 // the roles. The other three (locations, required positions, max proposals) are totals
 // with nothing to reach, so they keep the plain count and their `sub` line: inventing a
 // target for them would read as progress toward something that does not exist.
-function StatTile({ icon, label, value, sub, of, accent, onClick, active }) {
+function StatTile({ icon, label, value, sub, of, accent, onClick, active, className, actionLabel = 'view list' }) {
   const hasTarget = of !== undefined
   const Tag = onClick ? 'button' : 'div'
   return (
     <Tag
       type={onClick ? 'button' : undefined}
-      className={`leap-stat-tile${onClick ? ' leap-stat-tile-clickable' : ''}${active ? ' leap-stat-tile-active' : ''}`}
+      className={`leap-stat-tile${onClick ? ' leap-stat-tile-clickable' : ''}${active ? ' leap-stat-tile-active' : ''}${className ? ` ${className}` : ''}`}
       onClick={onClick}
       aria-pressed={onClick ? !!active : undefined}
-      aria-label={onClick ? `${label}: view list` : undefined}
+      aria-label={onClick ? `${label ?? value}: ${actionLabel}` : undefined}
     >
       <span className="leap-stat-icon" style={{ background: `${accent}1a`, color: accent }}>
         {icon}
@@ -196,8 +287,11 @@ function StatTile({ icon, label, value, sub, of, accent, onClick, active }) {
 function DashboardSkeleton() {
   return (
     <div className="leap-skeleton" aria-hidden="true">
-      <div className="leap-dash-type-cards">
-        {[0, 1, 2].map((i) => <div key={i} className="leap-skel leap-skel-card" />)}
+      <div className="leap-dash-tier-cards">
+        {[0, 1].map((i) => <div key={i} className="leap-skel leap-skel-tier" />)}
+      </div>
+      <div className="leap-stat-row">
+        {[0, 1, 2].map((i) => <div key={i} className="leap-skel leap-skel-tile" />)}
       </div>
       <div className="leap-stat-row">
         {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="leap-skel leap-skel-tile" />)}
@@ -213,7 +307,8 @@ function DashboardSkeleton() {
 // under it, instead of hiding them behind a <select>.
 export default function Dashboard({ user, onNavigate }) {
   const [assemblyId, setAssemblyId] = useState('')
-  const [openTypeId, setOpenTypeId] = useState('')
+  const [tierId, setTierId] = useState(ELECTION_TIERS[0].id)
+  const [cardKey, setCardKey] = useState('')
   // Bumped by the refresh button. getDashboardPositions's counts move whenever anyone proposes or removes
   // a candidate, and this screen has no other reason to re-read them.
   const [reloadKey, setReloadKey] = useState(0)
@@ -260,31 +355,57 @@ export default function Dashboard({ user, onNavigate }) {
     return () => { cancelled = true }
   }, [assemblyId, reloadKey])
 
-  // One group per election type, in the order getDashboardPositions already sorted them (by
-  // election_type), each carrying just its own rows.
-  const electionTypeGroups = useMemo(() => {
-    const seen = new Map()
+  // getDashboardPositions's rows poured into the static tree: every post keeps its card whether or not
+  // the database has a proposal constituency for it, and anything the tree does not claim
+  // is appended as its own body group rather than dropped — the tree is a guess about
+  // naming, and a wrong guess must not hide live data.
+  const tiers = useMemo(() => {
+    const built = ELECTION_TIERS.map((tier) => ({
+      ...tier,
+      bodies: tier.bodies.map((body) => ({
+        ...body,
+        cards: body.cards.map((card) => ({ ...card, key: `${tier.id}/${card.label}`, positions: [] })),
+      })),
+    }))
+    const allCards = built.flatMap((t) => t.bodies.flatMap((b) => b.cards))
+    const unmatched = new Map()
     for (const r of rows || []) {
-      const id = String(r.proposal_election_type_id)
-      if (!seen.has(id)) seen.set(id, { id, label: r.election_type, positions: [] })
-      seen.get(id).positions.push(r)
+      const card = allCards.find((c) => cardMatches(c, r))
+      if (card) {
+        card.positions.push(r)
+        continue
+      }
+      const key = `other/${r.proposal_election_type_id}/${r.role_name}`
+      if (!unmatched.has(key)) unmatched.set(key, { key, label: `${r.election_type} — ${r.role_name}`, positions: [] })
+      unmatched.get(key).positions.push(r)
     }
-    return [...seen.values()]
+    if (unmatched.size > 0) {
+      built[built.length - 1].bodies.push({
+        label: 'Other',
+        sub: 'configured in the database, outside the standard tree',
+        icon: <IconSeats />,
+        accent: '#64748b',
+        cards: [...unmatched.values()],
+      })
+    }
+    return built
   }, [rows])
 
-  // The first election type's stats open on their own rather than waiting for a click —
-  // there's always something worth showing as soon as the constituency is picked, and
-  // the cards are still there for switching to any other type. A refresh keeps whichever
-  // type was open, since the groups it rebuilds are the same ones.
-  useEffect(() => {
-    setOpenTypeId((current) =>
-      electionTypeGroups.some((g) => g.id === current)
-        ? current
-        : (electionTypeGroups[0]?.id ?? '')
-    )
-  }, [electionTypeGroups])
+  const tier = tiers.find((t) => t.id === tierId) || tiers[0]
+  const tierCards = tier.bodies.flatMap((b) => b.cards)
 
-  const openGroup = electionTypeGroups.find((g) => g.id === openTypeId) || null
+  // A post's stats open on their own rather than waiting for a click, so the tier lands
+  // with numbers on it. Only a card that actually has rows can be opened — a static card
+  // has nothing to put in the tiles. A refresh keeps whichever post was open.
+  useEffect(() => {
+    setCardKey((current) =>
+      tierCards.some((c) => c.key === current && c.positions.length > 0)
+        ? current
+        : (tierCards.find((c) => c.positions.length > 0)?.key ?? '')
+    )
+  }, [tiers, tierId])
+
+  const openCard = tierCards.find((c) => c.key === cardKey && c.positions.length > 0) || null
 
   const assemblyPicked = !!assemblyId
   // Since the assembly picks itself, "the grants are still arriving" and "this assembly's
@@ -359,58 +480,107 @@ export default function Dashboard({ user, onNavigate }) {
 
       {!loadError && loading && <DashboardSkeleton />}
 
-      {assemblyPicked && !loadError && !loading && electionTypeGroups.length === 0 && (
+      {assemblyPicked && !loadError && !loading && (rows || []).length === 0 && (
         <div className="leap-members-empty">No local body of any election type is configured under this assembly.</div>
       )}
 
-      {electionTypeGroups.length > 0 && (
-        <div className="leap-dash-type-cards">
-          {electionTypeGroups.map((group) => {
-            const isOpen = group.id === openTypeId
-            // Locations, not proposal slots: a location counts as filled once every role
-            // there has used up its slots — the same rule as the table's Completed status.
-            const byLocation = new Map()
-            for (const p of group.positions) {
-              const rows = byLocation.get(p.proposal_constituency_id) || []
-              rows.push(p)
-              byLocation.set(p.proposal_constituency_id, rows)
-            }
-            const locations = byLocation.size
-            const taken = [...byLocation.values()].filter((rows) =>
-              rows.every((p) => p.max_proposals > 0 && p.proposed_cnt >= p.max_proposals),
-            ).length
+      {!loading && (
+        <>
+          <div className="leap-dash-tier-cards" role="tablist" aria-label="Election tier">
+            {tiers.map((t, i) => {
+              const positions = t.bodies.flatMap((b) => b.cards).flatMap((c) => c.positions)
+              const slots = positions.reduce((n, p) => n + p.max_proposals, 0)
+              const filled = positions.reduce((n, p) => n + p.proposed_cnt, 0)
+              const isOpen = t.id === tier.id
+              return (
+                <button
+                  type="button"
+                  role="tab"
+                  key={t.id}
+                  aria-selected={isOpen}
+                  className={`leap-dash-tier-card ${isOpen ? 'open' : ''}`}
+                  onClick={() => setTierId(t.id)}
+                >
+                  <span className="leap-dash-tier-icon">{i === 0 ? <IconLayers /> : <IconPin />}</span>
+                  <span className="leap-dash-tier-text">
+                    <span className="leap-dash-tier-card-label">{t.label}</span>
+                    <span className="leap-dash-tier-card-sub">{t.sub}</span>
+                  </span>
+                  <span className="leap-dash-tier-figure">
+                    {slots > 0 ? (
+                      <>
+                        <b>{filled}</b>
+                        <span className="leap-dash-tier-figure-of">/ {slots}</span>
+                        <span className="leap-dash-tier-figure-label">slots filled</span>
+                      </>
+                    ) : (
+                      <span className="leap-dash-tier-figure-label">nothing configured</span>
+                    )}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          {tier.bodies.map((body) => {
+            const configured = body.cards.filter((c) => c.positions.length > 0).length
             return (
-              <button
-                type="button"
-                key={group.id}
-                className={`leap-dash-type-card ${isOpen ? 'open' : ''}`}
-                aria-expanded={isOpen}
-                onClick={() => setOpenTypeId(isOpen ? '' : group.id)}
-              >
-                <div className="leap-dash-type-card-body">
-                  <div className="leap-dash-type-card-label">{group.label}</div>
-                  <div className="leap-dash-type-card-sub">
-                    {taken} of {locations} location{locations !== 1 ? 's' : ''} filled
-                  </div>
-                  <ProgressBar
-                    value={taken}
-                    total={locations}
-                    tone={taken === 0 ? 'not-started' : taken >= locations ? 'completed' : 'in-progress'}
-                    label={`${group.label} locations filled`}
-                  />
+              <div className="leap-dash-body-group" key={`${tier.id}/${body.label}`}>
+                <div className="leap-dash-body-head">
+                  <h2>{body.label}</h2>
+                  {body.sub && <span className="leap-dash-body-sub">{body.sub}</span>}
+                  <span className="leap-dash-body-rule" />
+                  <span className="leap-dash-body-count">
+                    {configured} of {body.cards.length} configured
+                  </span>
                 </div>
-                <span className="leap-dash-type-card-chevron"><IconChevronDown /></span>
-              </button>
+                {/* The same row the six metric tiles use, so a post card is the same
+                    object as a metric card — same width, same three columns, same
+                    breakpoints — rather than a second card language on one screen. */}
+                <div className="leap-stat-row">
+                  {body.cards.map((card) => {
+                    const isOpen = card.key === cardKey && card.positions.length > 0
+                    // No rows means no proposal constituency is configured for this post
+                    // yet. The card still stands — it is part of the election — but there is
+                    // nothing behind it to open.
+                    const empty = card.positions.length === 0
+                    return (
+                      <StatTile
+                        key={card.key}
+                        // The post's name is the whole card: no `of` (that is what makes
+                        // a tile draw a meter), no count, no sub. The numbers this post
+                        // stands for are the six metric tiles it opens.
+                        className={`leap-dash-post${empty ? ' leap-dash-post-empty' : ''}`}
+                        icon={body.icon}
+                        accent={empty ? '#9ca3af' : body.accent}
+                        value={card.label}
+                        active={isOpen}
+                        actionLabel="show this post's numbers"
+                        // An empty post has nothing behind it to open, so it renders as a
+                        // plain tile rather than a button.
+                        onClick={empty ? undefined : () => setCardKey(isOpen ? '' : card.key)}
+                      />
+                    )
+                  })}
+                </div>
+              </div>
             )
           })}
+        </>
+      )}
+
+      {!loading && !openCard && (rows || []).length > 0 && (
+        <div className="leap-members-empty">
+          No post in this tier is configured under this assembly. Pick the other tier to see
+          what is.
         </div>
       )}
 
-      {openGroup && (
+      {openCard && (
         <ElectionTypeSection
-          key={openGroup.id}
-          label={openGroup.label}
-          positions={openGroup.positions}
+          key={openCard.key}
+          label={openCard.label}
+          positions={openCard.positions}
           assemblyId={assemblyId}
           onNavigate={onNavigate}
         />
@@ -428,9 +598,12 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
   const [sort, setSort] = useState({ key: 'name', dir: 'asc' })
   // { statusId, statusLabel } while the Proposed/Confirmed drill-down is open, else null.
   const [statusModal, setStatusModal] = useState(null)
-  // Every row here shares one election type, so any row's id names it — same trick
-  // locationStats uses for tehsilId/townId below.
-  const electionTypeId = positions[0]?.proposal_election_type_id
+  // A card is one *post*, which can be one role inside an election type (MPP and Vice-MPP
+  // are two cards over one type) or span more than one type. getDashboardCandidatesByStatus is scoped by
+  // election type alone, so the drill-down asks for every type these rows use and then
+  // keeps only the roles this card actually covers.
+  const electionTypeIds = [...new Set(positions.map((p) => p.proposal_election_type_id))]
+  const roleNames = [...new Set(positions.map((p) => p.role_name))]
 
   const stats = useMemo(() => {
     const requiredPositions = positions.reduce((n, p) => n + p.max_positions, 0)
@@ -611,7 +784,8 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
       <div className="leap-section">
         {statusModal ? (
           <CandidateStatusSection
-            electionTypeId={electionTypeId}
+            electionTypeIds={electionTypeIds}
+            roleNames={roleNames}
             assemblyId={assemblyId}
             statusId={statusModal.statusId}
             statusLabel={statusModal.statusLabel}
@@ -754,7 +928,7 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
 // replace the previous one's below it, so the section never has two things open at once.
 // Confirmed carries a nomination column the other status has no use for: the PDF upload
 // is only meaningful once a candidate is confirmed, so Proposed rows do not render it.
-function CandidateStatusSection({ electionTypeId, assemblyId, statusId, statusLabel, onBack }) {
+function CandidateStatusSection({ electionTypeIds, roleNames, assemblyId, statusId, statusLabel, onBack }) {
   const [rows, setRows] = useState(null) // null = loading
   const [error, setError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
@@ -773,12 +947,23 @@ function CandidateStatusSection({ electionTypeId, assemblyId, statusId, statusLa
   // The candidate row whose photo is open in the lightbox, or null.
   const [zoomed, setZoomed] = useState(null)
 
+  // Joined rather than passed as arrays: the parent rebuilds both on every render, so the
+  // arrays themselves are new objects each time and would re-fire this effect forever.
+  const idsKey = electionTypeIds.join(',')
+  const rolesKey = roleNames.join(',')
+
   useEffect(() => {
     let cancelled = false
     setRows(null)
     setError('')
-    getDashboardCandidatesByStatus(assemblyId, electionTypeId, statusId)
-      .then((data) => { if (!cancelled) setRows(data) })
+    const roles = new Set(rolesKey.split(',').map(norm))
+    Promise.all(
+      idsKey.split(',').map((id) => getDashboardCandidatesByStatus(assemblyId, id, statusId))
+    )
+      .then((lists) => {
+        if (cancelled) return
+        setRows(lists.flat().filter((c) => roles.has(norm(c.role_name))))
+      })
       .catch((err) => {
         if (cancelled) return
         console.error(err)
@@ -786,7 +971,7 @@ function CandidateStatusSection({ electionTypeId, assemblyId, statusId, statusLa
         setRows([])
       })
     return () => { cancelled = true }
-  }, [assemblyId, electionTypeId, statusId, reloadKey])
+  }, [assemblyId, idsKey, rolesKey, statusId, reloadKey])
 
   useEffect(() => {
     if (!pdfViewer) return
