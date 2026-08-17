@@ -286,10 +286,9 @@ export const STATUS_META = {
   3: { done: 'Confirmed', cls: 'conform' },
 }
 
-// The two the staged card's buttons write.
+// What the staged card's button writes.
 const PROPOSAL_STATUSES = [
   { id: 1, label: 'Propose Candidate' },
-  { id: 2, label: 'Shortlist Candidate' },
 ]
 
 // What a staged cadre nobody marked is saved as.
@@ -302,8 +301,8 @@ const DEFAULT_STATUS_ID = PROPOSAL_STATUSES[0].id
 // which render '—' rather than being dropped, so the two cards read the same. `span` is
 // the number of the grid's six columns the field takes. Voter ID and Panchayat are the
 // two fields that card has no slot for; they are the only additions.
-// `statuses` is which buttons `onStatus` offers. It defaults to the two this wizard
-// writes; the Candidates screen passes all three, because there it is an existing status
+// `statuses` is which buttons `onStatus` offers. It defaults to the one this wizard
+// writes; the Candidates screen passes its own set, because there it is an existing status
 // being moved rather than a new one being chosen.
 export function MemberCard({ cadre, role, rating, onZoom, onRemove, onDelete, status, onStatus, statuses = PROPOSAL_STATUSES }) {
   // Not every img_url resolves — a path can outlive the photo it points at, and a broken

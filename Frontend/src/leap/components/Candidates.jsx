@@ -9,12 +9,11 @@ import {
 import CompareModal from './CompareModal.jsx'
 import { AddMembersPanel, MemberCard, PhotoViewer, STATUS_META } from './NewPositionModal.jsx'
 
-// The three proposal_status rows, in the order the filter offers them. Their ids are what
-// getPositionsWithCandidates counts per position (a position can hold candidates of all three at once) and what
-// STATUS_META names on the card, so the filter, the pills and the cards agree.
+// The proposal_status rows the filter offers. Their ids are what getPositionsWithCandidates counts per
+// position and what STATUS_META names on the card, so the filter, the pills and the cards agree.
+// Shortlisted is deliberately excluded — the workflow no longer offers it as a status.
 const STATUS_FILTERS = [
   { id: 1, label: 'Proposed', countKey: 'proposed_status_cnt' },
-  { id: 2, label: 'Shortlisted', countKey: 'shortlisted_status_cnt' },
   // The getPositionsWithCandidates count key still reads `conformed_` — it is the SQL alias, not a label.
   { id: 3, label: 'Confirmed', countKey: 'conformed_status_cnt' },
 ]
@@ -25,8 +24,8 @@ const DEFAULT_STATUS_ID = 1
 
 const statusOf = (cadre) => cadre.proposal_status_id || DEFAULT_STATUS_ID
 
-// A position can hold several Proposed/Shortlisted candidates at once, but only one of
-// them should ever be the confirmed winner. updateProposalCandidateStatus has no such check — it only moves one
+// A position can hold several Proposed candidates at once, but only one of them should
+// ever be the confirmed winner. updateProposalCandidateStatus has no such check — it only moves one
 // row's status — so it is enforced here, before the pick is staged.
 const CONFIRMED_STATUS_ID = STATUS_FILTERS.find((s) => s.label === 'Confirmed').id
 
@@ -257,10 +256,6 @@ function PositionCard({ row, onOpen }) {
           <div className="leap-cand-card-metric-val">{row.max_positions}</div>
           <div className="leap-cand-card-metric-lbl">Seats</div>
         </div>
-        <div className="leap-cand-card-metric">
-          <div className="leap-cand-card-metric-val">{row.shortlisted_status_cnt}</div>
-          <div className="leap-cand-card-metric-lbl">Shortlisted</div>
-        </div>
       </div>
 
       <div className="leap-cand-card-pills">
@@ -442,8 +437,8 @@ function PositionCandidates({ position, onBack, onChanged }) {
                 rating={scores[c.membership_id]}
                 onZoom={() => setZoomed(c)}
                 onDelete={() => remove(c)}
-                // All three, because this screen moves a status that already exists rather
-                // than picking a new one. The lit button is what is saved right now until
+                // This screen moves a status that already exists rather than picking a new
+                // one. The lit button is what is saved right now until
                 // another is pressed; pressing the lit one is a no-op (the wizard clears
                 // the pick there, but a saved candidate always has a status).
                 statuses={STATUS_FILTERS}
