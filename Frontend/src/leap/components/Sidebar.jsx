@@ -1,3 +1,5 @@
+import { Fragment } from 'react'
+
 function LogoutIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
@@ -72,8 +74,8 @@ function IconCommittee() {
 // The nav's own entries, by the `view.name` each one switches Leap to.
 const NAV = [
   { view: 'dashboard', label: 'Dashboard', icon: <IconGauge /> },
-  { view: 'newPosition', label: 'Local Body Elections', icon: <IconBallot /> },
-  { view: 'candidates', label: 'Candidates', icon: <IconPeople /> },
+  { view: 'newPosition', label: 'Assign Members', icon: <IconBallot /> },
+  { view: 'candidates', label: 'View Members', icon: <IconPeople /> },
   { view: 'cadreSearch', label: 'Cadre Search', icon: <IconSearch /> },
 ]
 
@@ -90,7 +92,8 @@ export default function Sidebar({ user, onLogout, view, onNavigate }) {
   // Most `user` rows carry no firstname/lastname, so fall back to the login name.
   const displayName = [user.firstname, user.lastname].filter(Boolean).join(' ') || user.username
   const initials = displayName.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()
-  const nav = user?.entitlements?.includes('CADRE_COMMITTEE_MANAGEMENT') ? COMMITTEE_NAV : NAV
+  const isCommitteeNav = user?.entitlements?.includes('CADRE_COMMITTEE_MANAGEMENT')
+  const nav = isCommitteeNav ? COMMITTEE_NAV : NAV
 
   return (
     <aside className="leap-sidebar">
@@ -102,17 +105,20 @@ export default function Sidebar({ user, onLogout, view, onNavigate }) {
       </div>
 
       <nav className="leap-nav">
+        {!isCommitteeNav && <div className="leap-nav-group-label">local body elections</div>}
         {nav.map((item) => (
-          <button
-            type="button"
-            key={item.view}
-            className={`leap-nav-btn ${view === item.view ? 'active' : ''}`}
-            aria-current={view === item.view ? 'page' : undefined}
-            onClick={() => onNavigate(item.view)}
-          >
-            <span className="leap-nav-icon">{item.icon}</span>
-            {item.label}
-          </button>
+          <Fragment key={item.view}>
+            {item.view === 'cadreSearch' && <div className="leap-nav-group-label">cadre</div>}
+            <button
+              type="button"
+              className={`leap-nav-btn ${view === item.view ? 'active' : ''}`}
+              aria-current={view === item.view ? 'page' : undefined}
+              onClick={() => onNavigate(item.view)}
+            >
+              <span className="leap-nav-icon">{item.icon}</span>
+              {item.label}
+            </button>
+          </Fragment>
         ))}
       </nav>
 
