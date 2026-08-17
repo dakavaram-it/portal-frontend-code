@@ -496,6 +496,7 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
         electionTypeId: first.proposal_election_type_id,
         tehsilId: first.tehsil_id,
         townId: first.town_id,
+        reservationType: first.reservation_type,
       }
     })
   }, [positions])
@@ -516,6 +517,8 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
     const dir = sort.dir === 'asc' ? 1 : -1
     return [...rows].sort((a, b) => {
       if (sort.key === 'name') return dir * a.name.localeCompare(b.name)
+      if (sort.key === 'roleNames') return dir * a.roleNames.localeCompare(b.roleNames)
+      if (sort.key === 'reservationType') return dir * (a.reservationType || '').localeCompare(b.reservationType || '')
       if (sort.key === 'status') return dir * (NOMINATION_RANK[a.status] - NOMINATION_RANK[b.status])
       return dir * (a[sort.key] - b[sort.key])
     })
@@ -524,17 +527,10 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
   const toggleSort = (key) =>
     setSort((prev) => ({ key, dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc' }))
 
-  // Candidates already exist somewhere at this location — go look at them. Otherwise
-  // there is nothing to look at yet, so jump the wizard straight to this location's
-  // Add Members search instead of making the click a dead end.
-  const viewLocation = (l) => {
-    if (l.proposedCnt > 0) {
-      onNavigate({
-        name: 'candidates',
-        filter: { electionTypeId: String(l.electionTypeId), assemblyId: String(assemblyId) },
-      })
-      return
-    }
+  // A location still has an open proposal slot while proposed < max_proposals.
+  const hasRoom = (l) => l.maxProposals > 0 && l.proposedCnt < l.maxProposals
+
+  const assignLocation = (l) => {
     const locationKey = l.tehsilId ? `m:${l.tehsilId}` : l.townId ? `t:${l.townId}` : ''
     onNavigate({
       name: 'newPosition',
@@ -547,6 +543,18 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
       },
     })
   }
+
+  const viewLocationCandidates = (l) => {
+    onNavigate({
+      name: 'candidates',
+      filter: { electionTypeId: String(l.electionTypeId), assemblyId: String(assemblyId) },
+    })
+  }
+
+  // The row itself keeps one smart default action — straight to Assign while a slot is
+  // open, otherwise to View — the Assign button and View icon in its own column offer
+  // both explicitly regardless of which one this would have picked.
+  const viewLocation = (l) => (hasRoom(l) ? assignLocation(l) : viewLocationCandidates(l))
 
   if (positions.length === 0) return null
 
@@ -652,33 +660,38 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
                   <tr>
                     <SortHeader label="LOCATION" sortKey="name" sort={sort} onSort={toggleSort} />
                     <SortHeader label="REQUIRED POSITIONS" sortKey="requiredPositions" sort={sort} onSort={toggleSort} numeric />
+                    <SortHeader label="POSITION NAME" sortKey="roleNames" sort={sort} onSort={toggleSort} />
+                    <SortHeader label="RESERVATION" sortKey="reservationType" sort={sort} onSort={toggleSort} />
                     <SortHeader label="MAX PROPOSALS" sortKey="maxProposals" sort={sort} onSort={toggleSort} numeric />
                     <SortHeader label="PROPOSED" sortKey="proposed" sort={sort} onSort={toggleSort} numeric />
                     <SortHeader label="CONFIRMED" sortKey="confirmed" sort={sort} onSort={toggleSort} numeric />
                     <SortHeader label="FILLED" sortKey="filledPct" sort={sort} onSort={toggleSort} />
                     <SortHeader label="CONFIRMATION STATUS" sortKey="status" sort={sort} onSort={toggleSort} />
-                    <th>VIEW</th>
+                    <th>ASSIGN</th>
                   </tr>
                 </thead>
                 <tbody>
                   {visible.length === 0 && (
                     <tr className="leap-table-empty-row">
-                      <td colSpan={8}>No location here matches that search.</td>
+                      <td colSpan={10}>No location here matches that search.</td>
                     </tr>
                   )}
                   {visible.map((l) => (
                     <tr
                       key={l.id}
                       onClick={() => viewLocation(l)}
-                      title={l.proposedCnt > 0 ? 'View candidates' : 'Add candidates'}
+                      title={hasRoom(l) ? 'Add candidates' : 'View candidates'}
                     >
                       <td className="leap-table-title">
                         {l.name}
                         {l.where && <div className="leap-table-sub">{l.where}</div>}
                       </td>
+                      <td>{l.requiredPositions}</td>
+                      <td>{l.roleNames || '—'}</td>
                       <td>
-                        {l.requiredPositions}
-                        {l.roleNames && <div className="leap-table-sub">{l.roleNames}</div>}
+                        <span className={`leap-cand-card-reservation ${l.reservationType ? '' : 'open'}`}>
+                          {l.reservationType || 'Unreserved'}
+                        </span>
                       </td>
                       <td>{l.maxProposals}</td>
                       <td>{l.proposed}</td>
@@ -698,17 +711,30 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
                         </span>
                       </td>
                       <td>
-                        <button
-                          type="button"
-                          className="leap-table-view-btn"
-                          title={l.proposedCnt > 0 ? 'View candidates' : 'Add candidates'}
-                          aria-label={`${l.proposedCnt > 0 ? 'View' : 'Add'} candidates for ${l.name}`}
-                          // The row is clickable too; without this the button's click would
-                          // run the same navigation a second time.
-                          onClick={(e) => { e.stopPropagation(); viewLocation(l) }}
-                        >
-                          <IconEye />
-                        </button>
+                        <div className="leap-table-actions">
+                          <button
+                            type="button"
+                            className="leap-btn-ghost"
+                            disabled={!hasRoom(l)}
+                            title={hasRoom(l) ? 'Assign candidates' : 'No open proposal slots left'}
+                            aria-label={`Assign candidates for ${l.name}`}
+                            // The row is clickable too; without this the button's click would
+                            // run the same navigation a second time.
+                            onClick={(e) => { e.stopPropagation(); assignLocation(l) }}
+                          >
+                            Assign
+                          </button>
+                          <button
+                            type="button"
+                            className="leap-table-view-btn"
+                            disabled={l.proposedCnt === 0}
+                            title={l.proposedCnt > 0 ? 'View candidates' : 'No candidates proposed yet'}
+                            aria-label={`View candidates for ${l.name}`}
+                            onClick={(e) => { e.stopPropagation(); viewLocationCandidates(l) }}
+                          >
+                            <IconEye />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

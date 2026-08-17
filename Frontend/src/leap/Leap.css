@@ -1444,10 +1444,26 @@
   height: 16px;
 }
 
-.leap-table-view-btn:hover {
+.leap-table-view-btn:hover:not(:disabled) {
   background: #eff6ff;
   border-color: #bfdbfe;
   color: #2563eb;
+}
+
+.leap-table-view-btn:disabled,
+.leap-table-actions .leap-btn-ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.leap-table-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.leap-table-actions .leap-btn-ghost {
+  margin-left: 0;
 }
 
 .leap-table th {
