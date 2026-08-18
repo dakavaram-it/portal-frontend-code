@@ -581,21 +581,21 @@ export default function Dashboard({ user, onNavigate }) {
                     // yet. The card still stands — it is part of the election — but there is
                     // nothing behind it to open.
                     const empty = card.positions.length === 0
-                    // The tier card's own pair — live candidates over proposal slots — so
-                    // the posts under a tier add up to the figure on it. Not
-                    // proposed_status_cnt over max_positions: that counts one status of
-                    // three against a smaller denominator, which reads as 2 / 1 for a
-                    // post with two candidates on its single seat.
-                    const slots = card.positions.reduce((n, p) => n + p.max_proposals, 0)
-                    const filled = card.positions.reduce((n, p) => n + p.proposed_cnt, 0)
+                    // How many of this post's own proposal_position rows exist across the
+                    // assembly, and how many of them have at least one live candidate —
+                    // not candidates over proposal slots, which could read as more filled
+                    // than there are positions to hold them (2 candidates on one seat's
+                    // 3 slots would show as "2 / 1 positions", which is not what it means).
+                    const totalPositions = card.positions.length
+                    const filled = card.positions.filter((p) => p.proposed_cnt > 0).length
                     return (
                       <StatTile
                         key={card.key}
                         // `name` because `value` is markup here, and the accessible name
                         // has to be the post's name rather than that element.
                         name={card.label}
-                        // Every post card has the same two lines — its name, then its slot
-                        // line — whether or not it is configured, so the six read as one
+                        // Every post card has the same two lines — its name, then its
+                        // positions line — whether or not it is configured, so the six read as one
                         // row rather than two configured cards beside four floating names.
                         // No `of`: the count is the card, and a meter under it measured a
                         // ratio the row is not asking about.
@@ -610,8 +610,8 @@ export default function Dashboard({ user, onNavigate }) {
                             ) : (
                               <span className="leap-dash-post-figure">
                                 <b>{filled}</b>
-                                <span className="leap-dash-post-figure-of">/ {slots}</span>
-                                <span className="leap-dash-post-figure-label">slots</span>
+                                <span className="leap-dash-post-figure-of">/ {totalPositions}</span>
+                                <span className="leap-dash-post-figure-label">positions</span>
                               </span>
                             )}
                           </>
