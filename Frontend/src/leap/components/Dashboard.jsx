@@ -848,12 +848,6 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
             { label: 'Started', value: statusCounts.All - statusCounts['Not Started'] },
             { label: 'Not Started', value: statusCounts['Not Started'] },
             {
-              label: 'Reservation',
-              value: statusCounts[RESERVED_FILTER],
-              onClick: showReserved,
-              active: statusFilter === RESERVED_FILTER,
-            },
-            {
               label: 'Confirmed',
               value: stats.confirmed,
               active: statusModal?.statusId === CONFIRMED_STATUS_ID,
@@ -861,6 +855,12 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
                 setStatusModal((cur) =>
                   cur?.statusId === CONFIRMED_STATUS_ID ? null : { statusId: CONFIRMED_STATUS_ID, statusLabel: 'Confirmed' }
                 ),
+            },
+            {
+              label: 'Reservation',
+              value: statusCounts[RESERVED_FILTER],
+              onClick: showReserved,
+              active: statusFilter === RESERVED_FILTER,
             },
           ]}
         />
