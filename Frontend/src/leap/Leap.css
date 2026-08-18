@@ -563,8 +563,24 @@
    cards are, except that the whole card is the post's name — so the name sits in the
    value slot at a readable size rather than the 24px a count is set in. */
 .leap-stat-tile.leap-dash-post .leap-stat-value {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
   font-size: 16px;
   font-weight: 700;
+}
+
+/* The figure is the tier card's, so it keeps that card's sizes; only the width it is
+   allowed to take needs saying here, since inside a post tile it is a flex child rather
+   than a grid column. */
+.leap-stat-tile.leap-dash-post .leap-dash-tier-figure {
+  flex: 0 0 auto;
+  max-width: 55%;
+}
+
+.leap-stat-tile.leap-dash-post .leap-dash-tier-figure b {
+  font-size: 16px;
 }
 
 /* A post with no proposal constituency behind it: dashed and greyed, and no hover lift,

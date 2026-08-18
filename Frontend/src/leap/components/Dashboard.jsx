@@ -243,7 +243,7 @@ function ProgressBar({ value, total, tone = 'in-progress', label, color }) {
 // the roles. The other three (locations, required positions, max proposals) are totals
 // with nothing to reach, so they keep the plain count and their `sub` line: inventing a
 // target for them would read as progress toward something that does not exist.
-function StatTile({ icon, label, value, sub, of, accent, onClick, active, className, actionLabel = 'view list' }) {
+function StatTile({ icon, label, value, sub, of, accent, onClick, active, className, actionLabel = 'view list', name }) {
   const hasTarget = of !== undefined
   const Tag = onClick ? 'button' : 'div'
   return (
@@ -252,7 +252,7 @@ function StatTile({ icon, label, value, sub, of, accent, onClick, active, classN
       className={`leap-stat-tile${onClick ? ' leap-stat-tile-clickable' : ''}${active ? ' leap-stat-tile-active' : ''}${className ? ` ${className}` : ''}`}
       onClick={onClick}
       aria-pressed={onClick ? !!active : undefined}
-      aria-label={onClick ? `${label ?? value}: ${actionLabel}` : undefined}
+      aria-label={onClick ? `${name ?? label ?? value}: ${actionLabel}` : undefined}
     >
       <span className="leap-stat-icon" style={{ background: `${accent}1a`, color: accent }}>
         {icon}
@@ -576,16 +576,38 @@ export default function Dashboard({ user, onNavigate }) {
                     // yet. The card still stands — it is part of the election — but there is
                     // nothing behind it to open.
                     const empty = card.positions.length === 0
+                    // The tier card's own pair — live candidates over proposal slots — so
+                    // the posts under a tier add up to the figure on it. Not
+                    // proposed_status_cnt over max_positions: that counts one status of
+                    // three against a smaller denominator, which reads as 2 / 1 for a
+                    // post with two candidates on its single seat.
+                    const slots = card.positions.reduce((n, p) => n + p.max_proposals, 0)
+                    const filled = card.positions.reduce((n, p) => n + p.proposed_cnt, 0)
                     return (
                       <StatTile
                         key={card.key}
-                        // The post's name is the whole card: no `of` (that is what makes
-                        // a tile draw a meter), no count, no sub. The numbers this post
-                        // stands for are the six metric tiles it opens.
+                        // `name` because `value` is markup here, and the accessible name
+                        // has to be the post's name rather than that element.
+                        name={card.label}
+                        // The post's name and its slot figure are the whole card, and the
+                        // figure is the tier card's markup so the two read as one thing at
+                        // two scales. Not `of` — that draws a meter against a value that
+                        // is text here.
                         className={`leap-dash-post${empty ? ' leap-dash-post-empty' : ''}`}
                         icon={body.icon}
                         accent={empty ? '#9ca3af' : body.accent}
-                        value={card.label}
+                        value={
+                          <>
+                            {card.label}
+                            {!empty && (
+                              <span className="leap-dash-tier-figure">
+                                <b>{filled}</b>
+                                <span className="leap-dash-tier-figure-of">/ {slots}</span>
+                                <span className="leap-dash-tier-figure-label">slots filled</span>
+                              </span>
+                            )}
+                          </>
+                        }
                         active={isOpen}
                         actionLabel="show this post's numbers"
                         // An empty post has nothing behind it to open, so it renders as a
