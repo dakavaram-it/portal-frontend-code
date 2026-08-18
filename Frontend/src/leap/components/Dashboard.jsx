@@ -625,8 +625,10 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
     }
   }, [positions])
 
-  // Same three numbers as the tiles above, per location — plus a nomination status read
-  // straight off proposal_consituency.started_time: NULL is Not Started, set is Started.
+  // Same three numbers as the tiles above, per location — plus a proposal status rolled up
+  // from each role's own proposal_position.started_time: a location can hold more than one
+  // role (President + Vice-President), each started independently, so the location itself
+  // reads Started the moment any one of them has been.
   const locationStats = useMemo(() => {
     const byLocation = new Map()
     for (const p of positions) {
@@ -658,7 +660,7 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
         maxProposals,
         proposed,
         confirmed,
-        status: first.started_time ? 'Started' : 'Not Started',
+        status: locRows.some((p) => p.started_time) ? 'Started' : 'Not Started',
         proposedCnt,
         electionTypeId: first.proposal_election_type_id,
         tehsilId: first.tehsil_id,
@@ -834,7 +836,7 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
                     <SortHeader label="MAX PROPOSALS" sortKey="maxProposals" sort={sort} onSort={toggleSort} numeric />
                     <SortHeader label="PROPOSED" sortKey="proposed" sort={sort} onSort={toggleSort} numeric />
                     <SortHeader label="CONFIRMED" sortKey="confirmed" sort={sort} onSort={toggleSort} numeric />
-                    <SortHeader label="CONFIRMATION STATUS" sortKey="status" sort={sort} onSort={toggleSort} />
+                    <SortHeader label="PROPOSAL STATUS" sortKey="status" sort={sort} onSort={toggleSort} />
                     <th>ASSIGN</th>
                   </tr>
                 </thead>
