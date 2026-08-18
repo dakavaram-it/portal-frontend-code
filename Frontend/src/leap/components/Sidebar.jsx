@@ -79,22 +79,17 @@ function IconCommittee() {
   )
 }
 
-// The nav's own entries, by the `view.name` each one switches Leap to.
-const NAV = [
+// The nav's own entries, by the `view.name` each one switches Leap to. Everyone gets the
+// same base list — CADRE_COMMITTEE_MANAGEMENT only ever decides whether the Committees
+// Assign entry itself is inserted, nothing else on this list.
+const BASE_NAV = [
   { view: 'dashboard', label: 'Dashboard', icon: <IconGauge /> },
   { view: 'newPosition', label: 'Assign Members', icon: <IconBallot /> },
   { view: 'candidates', label: 'View Members', icon: <IconPeople /> },
-  { view: 'cadreSearch', label: 'Cadre Search', icon: <IconSearch /> },
 ]
 
-// An account carrying CADRE_COMMITTEE_MANAGEMENT does committee work only — the
-// nomination-workflow screens above don't apply to it, so they're hidden rather than
-// merely unreachable. Order matches how the request named them: Committees Assign, then
-// Cadre Search.
-const COMMITTEE_NAV = [
-  { view: 'committeesAssign', label: 'Committees Assign', icon: <IconCommittee /> },
-  { view: 'cadreSearch', label: 'Cadre Search', icon: <IconSearch /> },
-]
+const COMMITTEES_ASSIGN_ITEM = { view: 'committeesAssign', label: 'Committees Assign', icon: <IconCommittee /> }
+const CADRE_SEARCH_ITEM = { view: 'cadreSearch', label: 'Cadre Search', icon: <IconSearch /> }
 
 export default function Sidebar({ user, onLogout, view, onNavigate, open, onClose }) {
   const closeRef = useRef(null)
@@ -122,8 +117,8 @@ export default function Sidebar({ user, onLogout, view, onNavigate, open, onClos
   // Most `user` rows carry no firstname/lastname, so fall back to the login name.
   const displayName = [user.firstname, user.lastname].filter(Boolean).join(' ') || user.username
   const initials = displayName.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()
-  const isCommitteeNav = user?.entitlements?.includes('CADRE_COMMITTEE_MANAGEMENT')
-  const nav = isCommitteeNav ? COMMITTEE_NAV : NAV
+  const hasCommitteeAccess = !!user?.entitlements?.includes('CADRE_COMMITTEE_MANAGEMENT')
+  const nav = [...BASE_NAV, ...(hasCommitteeAccess ? [COMMITTEES_ASSIGN_ITEM] : []), CADRE_SEARCH_ITEM]
 
   return (
     <aside className="leap-sidebar" data-open={open ? 'true' : 'false'}>
@@ -144,7 +139,7 @@ export default function Sidebar({ user, onLogout, view, onNavigate, open, onClos
       </div>
 
       <nav className="leap-nav">
-        {!isCommitteeNav && <div className="leap-nav-group-label">LOCAL BODY ELECTIONS</div>}
+        <div className="leap-nav-group-label">LOCAL BODY ELECTIONS</div>
         {nav.map((item) => (
           <Fragment key={item.view}>
             {item.view === 'cadreSearch' && <div className="leap-nav-group-label">CADRE</div>}
