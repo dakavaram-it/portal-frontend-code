@@ -680,6 +680,50 @@
   margin-bottom: 0;
 }
 
+/* Bodies stand two to a row: a tier with three of them puts the odd one out — the last —
+   under the pair at full width, since three columns of three post cards each would leave
+   every card too narrow to read its own name. Side by side only above 1280px, and
+   everything that compacts a post tile for the half width lives in the same query, so
+   below it the group is back to a plain full-width block. */
+.leap-dash-body-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: 24px;
+}
+
+@media (min-width: 1281px) {
+  .leap-dash-body-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* The odd body out of three keeps both columns rather than half a row. */
+  .leap-dash-body-group-full {
+    grid-column: 1 / -1;
+  }
+
+  /* Half the width, same three posts across. */
+  .leap-dash-body-grid .leap-stat-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .leap-dash-body-grid .leap-stat-tile.leap-dash-post {
+    gap: 10px;
+    padding: 22px 14px;
+  }
+
+  /* Half the width: the name drops two points so a hyphenated post ("Vice-Chairperson")
+     still sets on one line — broken at its hyphen it would stand a line taller than the
+     cards beside it. A full-width body has the room and keeps the larger size. */
+  .leap-dash-body-grid .leap-stat-tile.leap-dash-post .leap-stat-value {
+    font-size: 13px;
+  }
+
+  .leap-dash-body-group-full .leap-stat-tile.leap-dash-post .leap-stat-value {
+    font-size: 15px;
+  }
+}
+
 /* Label, then a hairline that runs to the count on the right — a section marker rather
    than a heading block, so it separates the tiles without competing with them. */
 .leap-dash-body-head {
@@ -727,23 +771,80 @@
    value slot at a readable size rather than the 24px a count is set in. */
 .leap-stat-tile.leap-dash-post .leap-stat-value {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 16px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  font-size: 15px;
   font-weight: 700;
 }
 
-/* The figure is the tier card's, so it keeps that card's sizes; only the width it is
-   allowed to take needs saying here, since inside a post tile it is a flex child rather
-   than a grid column. */
-.leap-stat-tile.leap-dash-post .leap-dash-tier-figure {
-  flex: 0 0 auto;
-  max-width: 55%;
+/* Both lines of a post card. The name can be two words long ("Vice-Chairperson") and the
+   card is a third of a half-width block, so it wraps rather than truncating. */
+.leap-dash-post-name {
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
-.leap-stat-tile.leap-dash-post .leap-dash-tier-figure b {
-  font-size: 16px;
+/* The figure and the note stand in the same line of every card, so they are set to one
+   height — a 13px count beside an 11px note would otherwise sit a pixel low and tilt the
+   row. Name plus this line come to 36px, the icon's own height, so the two centre on
+   each other rather than one riding high. */
+.leap-dash-post-figure,
+.leap-dash-post-note {
+  min-height: 15px;
+  line-height: 15px;
+}
+
+.leap-dash-post-figure {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+}
+
+.leap-dash-post-figure-of {
+  font-weight: 600;
+  color: #9ca3af;
+}
+
+.leap-dash-post-figure-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+
+/* An unconfigured post keeps the second line rather than leaving its name floating on a
+   card the same height — the row only reads level when all six cards say something on
+   both lines. */
+.leap-dash-post-note {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #b6bcc6;
+}
+
+/* A post card holds a name and a slot figure, not a metric and a meter, so it stands
+   shorter than the six metric tiles it borrows its shape from — three body groups then
+   read as one block rather than three bands of empty card. */
+.leap-stat-tile.leap-dash-post {
+  padding: 22px 16px;
+}
+
+.leap-stat-tile.leap-dash-post .leap-stat-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+.leap-stat-tile.leap-dash-post .leap-stat-icon svg {
+  width: 18px;
+  height: 18px;
 }
 
 /* A post with no proposal constituency behind it: dashed and greyed, and no hover lift,

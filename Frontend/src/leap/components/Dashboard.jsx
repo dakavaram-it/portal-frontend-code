@@ -143,17 +143,6 @@ const ELECTION_TIERS = [
     sub: 'Panchayat / Municipality / Corporation',
     bodies: [
       {
-        label: 'Gram Panchayat',
-        sub: 'Village',
-        icon: <IconSeats />,
-        accent: '#059669',
-        cards: [
-          { label: 'Ward Member', types: ['Ward', 'Ward Member'] },
-          { label: 'Sarpanch', types: ['Panchayat'], roles: ['Sarpanch', 'President', 'Chairman'] },
-          { label: 'Upa Sarpanch', types: ['Panchayat'], roles: ['Upa Sarpanch', 'Vice-President', 'Vice-Sarpanch'] },
-        ],
-      },
-      {
         label: 'Municipality',
         sub: 'Town',
         icon: <IconLayers />,
@@ -176,6 +165,17 @@ const ELECTION_TIERS = [
           { label: 'Corporator', types: ['Corporation Ward', 'Corporator', 'MPTC'], roles: ['Corporator'] },
           { label: 'Mayor', types: ['Corporation'], roles: ['Mayor', 'President', 'Chairperson'] },
           { label: 'Deputy Mayor', types: ['Corporation'], roles: ['Deputy Mayor', 'Vice-Mayor', 'Vice-President'] },
+        ],
+      },
+      {
+        label: 'Gram Panchayat',
+        sub: 'Village',
+        icon: <IconSeats />,
+        accent: '#059669',
+        cards: [
+          { label: 'Ward Member', types: ['Ward', 'Ward Member'] },
+          { label: 'Sarpanch', types: ['Panchayat'], roles: ['Sarpanch', 'President', 'Chairman'] },
+          { label: 'Upa Sarpanch', types: ['Panchayat'], roles: ['Upa Sarpanch', 'Vice-President', 'Vice-Sarpanch'] },
         ],
       },
     ],
@@ -550,10 +550,19 @@ export default function Dashboard({ user, onNavigate }) {
             })}
           </div>
 
-          {tier.bodies.map((body) => {
+          {/* Bodies stand two to a row (Mandal Parishad / Zilla Parishad, Municipality /
+              Municipal Corporation). A tier with three of them has an odd one out, and it
+              is the last — Gram Panchayat sits under the pair and keeps the full width
+              rather than leaving a gap beside it. */}
+          <div className="leap-dash-body-grid">
+          {tier.bodies.map((body, bodyIndex) => {
             const configured = body.cards.filter((c) => c.positions.length > 0).length
+            const full = tier.bodies.length % 2 === 1 && bodyIndex === tier.bodies.length - 1
             return (
-              <div className="leap-dash-body-group" key={`${tier.id}/${body.label}`}>
+              <div
+                className={`leap-dash-body-group${full ? ' leap-dash-body-group-full' : ''}`}
+                key={`${tier.id}/${body.label}`}
+              >
                 <div className="leap-dash-body-head">
                   <h2>{body.label}</h2>
                   {body.sub && <span className="leap-dash-body-sub">{body.sub}</span>}
@@ -585,21 +594,24 @@ export default function Dashboard({ user, onNavigate }) {
                         // `name` because `value` is markup here, and the accessible name
                         // has to be the post's name rather than that element.
                         name={card.label}
-                        // The post's name and its slot figure are the whole card, and the
-                        // figure is the tier card's markup so the two read as one thing at
-                        // two scales. Not `of` — that draws a meter against a value that
-                        // is text here.
+                        // Every post card has the same two lines — its name, then its slot
+                        // line — whether or not it is configured, so the six read as one
+                        // row rather than two configured cards beside four floating names.
+                        // No `of`: the count is the card, and a meter under it measured a
+                        // ratio the row is not asking about.
                         className={`leap-dash-post ${tierTone(tier.id)}${empty ? ' leap-dash-post-empty' : ''}`}
                         icon={body.icon}
                         accent={empty ? '#9ca3af' : body.accent}
                         value={
                           <>
-                            {card.label}
-                            {!empty && (
-                              <span className="leap-dash-tier-figure">
+                            <span className="leap-dash-post-name">{card.label}</span>
+                            {empty ? (
+                              <span className="leap-dash-post-note">Not configured</span>
+                            ) : (
+                              <span className="leap-dash-post-figure">
                                 <b>{filled}</b>
-                                <span className="leap-dash-tier-figure-of">/ {slots}</span>
-                                <span className="leap-dash-tier-figure-label">slots filled</span>
+                                <span className="leap-dash-post-figure-of">/ {slots}</span>
+                                <span className="leap-dash-post-figure-label">slots</span>
                               </span>
                             )}
                           </>
@@ -616,6 +628,7 @@ export default function Dashboard({ user, onNavigate }) {
               </div>
             )
           })}
+          </div>
         </>
       )}
 
