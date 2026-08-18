@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   getAssemblies,
   getDashboardCandidatesByStatus,
@@ -52,28 +52,11 @@ function IconLayers() {
   )
 }
 
-function IconArrowUp() {
-  return (
-    <svg {...ICON_PROPS}>
-      <path d="M12 19V5" />
-      <path d="M5 12l7-7 7 7" />
-    </svg>
-  )
-}
-
 function IconCheck() {
   return (
     <svg {...ICON_PROPS}>
       <circle cx="12" cy="12" r="9" />
       <path d="M7.5 12.5l3 3 6-6.5" />
-    </svg>
-  )
-}
-
-function IconDashedCircle() {
-  return (
-    <svg {...ICON_PROPS}>
-      <circle cx="12" cy="12" r="9" strokeDasharray="3.5 4" />
     </svg>
   )
 }
@@ -137,9 +120,12 @@ const ELECTION_TIERS = [
         icon: <IconLayers />,
         accent: '#2563eb',
         cards: [
-          { label: 'MPTC', types: ['MPTC'] },
-          { label: 'MPP', types: ['MPP'], roles: ['MPP', 'President', 'Chairman', 'Chairperson'] },
-          { label: 'Vice-MPP', types: ['MPP', 'Vice-MPP'], roles: ['Vice-MPP', 'Vice-President', 'Vice-Chairman'] },
+          // The chair rows are filed under the MPTC election type, not under an MPP one —
+          // so MPTC has to name its own role or it claims them as well, and its two
+          // siblings have to claim that type or the rows land nowhere.
+          { label: 'MPTC', types: ['MPTC'], roles: ['MPTC Member', 'MPTC'] },
+          { label: 'MPP', types: ['MPTC', 'MPP'], roles: ['MPP', 'President', 'Chairman', 'Chairperson'] },
+          { label: 'Vice-MPP', types: ['MPTC', 'MPP', 'Vice-MPP'], roles: ['Vice-MPP', 'Vice-President', 'Vice-Chairman'] },
         ],
       },
       {
@@ -188,7 +174,10 @@ const ELECTION_TIERS = [
         icon: <IconPin />,
         accent: '#0891b2',
         cards: [
-          { label: 'Corporator', types: ['Corporation Ward', 'Corporator'] },
+          // MPTC is in the type list for the same reason it is on the MPP cards: a
+          // Corporator row is filed under it. `roles` keeps that from making this card
+          // claim the MPTC members as well.
+          { label: 'Corporator', types: ['Corporation Ward', 'Corporator', 'MPTC'], roles: ['Corporator'] },
           { label: 'Mayor', types: ['Corporation'], roles: ['Mayor', 'President', 'Chairperson'] },
           { label: 'Deputy Mayor', types: ['Corporation'], roles: ['Deputy Mayor', 'Vice-Mayor', 'Vice-President'] },
         ],
@@ -213,7 +202,11 @@ const NOMINATION_CLASS = {
 // groups the work still to do at one end rather than alphabetically scattering it.
 const NOMINATION_RANK = { 'Not Started': 0, Started: 1 }
 
-const STATUS_FILTERS = ['All', 'Not Started', 'Started']
+// Reserved only sits in the same group as the nomination statuses and so is exclusive
+// with them — it is not a status, it is the other question the By Location list gets
+// asked, and the Total Locations tile's Reservation row selects it.
+const RESERVED_FILTER = 'Reserved only'
+const STATUS_FILTERS = ['All', 'Not Started', 'Started', RESERVED_FILTER]
 
 const pct = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : 0)
 
@@ -277,6 +270,46 @@ function StatTile({ icon, label, value, sub, of, accent, onClick, active, classN
         )}
       </div>
     </Tag>
+  )
+}
+
+// A stat tile that carries a breakdown under its headline instead of a meter. Three of
+// these stand in the space six `StatTile`s used, so each is a column of the same row and
+// twice as tall — the detail rows are what fill that height.
+// A row is `{ label, value }`, plus an optional `onClick` (rendered as a button) and
+// `active` for the ones that open a drill-down.
+function StatCard({ icon, label, value, accent, rows }) {
+  return (
+    <div className="leap-stat-tile leap-stat-card">
+      <div className="leap-stat-card-head">
+        <span className="leap-stat-icon" style={{ background: `${accent}1a`, color: accent }}>
+          {icon}
+        </span>
+        <div className="leap-stat-body">
+          <div className="leap-stat-value">{value}</div>
+          <div className="leap-stat-label">{label}</div>
+        </div>
+      </div>
+      <div className="leap-stat-card-rows">
+        {rows.map((r) => {
+          const Tag = r.onClick ? 'button' : 'div'
+          return (
+            <Tag
+              key={r.label}
+              type={r.onClick ? 'button' : undefined}
+              className={`leap-stat-card-row${r.onClick ? ' leap-stat-card-row-clickable' : ''}${r.active ? ' leap-stat-card-row-active' : ''}`}
+              onClick={r.onClick}
+              aria-pressed={r.onClick ? !!r.active : undefined}
+            >
+              <span className="leap-stat-card-row-label">{r.label}</span>
+              <span className="leap-stat-card-row-value" style={r.active ? { color: accent } : undefined}>
+                {r.value}
+              </span>
+            </Tag>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
@@ -597,6 +630,10 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
   const [sort, setSort] = useState({ key: 'name', dir: 'asc' })
   // { statusId, statusLabel } while the Proposed/Confirmed drill-down is open, else null.
   const [statusModal, setStatusModal] = useState(null)
+  // Bumped by the Total Locations tile's Reservation row so the scroll runs from an
+  // effect, i.e. after By Location has actually rendered.
+  const [reservedTick, setReservedTick] = useState(0)
+  const byLocationRef = useRef(null)
   // A card is one *post*, which can be one role inside an election type (MPP and Vice-MPP
   // are two cards over one type) or span more than one type. getDashboardCandidatesByStatus is scoped by
   // election type alone, so the drill-down asks for every type these rows use and then
@@ -623,6 +660,20 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
       filled,
       roles: positions.length,
     }
+  }, [positions])
+
+  // One line per role for the Positions tile — "President 2 / 3". A position counts as
+  // filled once a candidate is *proposed* for it, so this is proposed_status_cnt over
+  // max_positions — the same number the tile's own Proposed row totals.
+  const roleStats = useMemo(() => {
+    const byRole = new Map()
+    for (const p of positions) {
+      const cur = byRole.get(p.role_name) || { role: p.role_name, filled: 0, total: 0 }
+      cur.filled += p.proposed_status_cnt
+      cur.total += p.max_positions
+      byRole.set(p.role_name, cur)
+    }
+    return [...byRole.values()]
   }, [positions])
 
   // Same three numbers as the tiles above, per location — plus a proposal status rolled up
@@ -671,7 +722,13 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
   }, [positions])
 
   const statusCounts = useMemo(() => {
-    const counts = { All: locationStats.length, 'Not Started': 0, Started: 0 }
+    const counts = {
+      All: locationStats.length,
+      'Not Started': 0,
+      Started: 0,
+      // Not a status, so it is counted separately rather than by the loop below.
+      [RESERVED_FILTER]: locationStats.filter((l) => l.reservationType).length,
+    }
     for (const l of locationStats) counts[l.status] += 1
     return counts
   }, [locationStats])
@@ -679,7 +736,9 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase()
     const rows = locationStats.filter((l) => {
-      if (statusFilter !== 'All' && l.status !== statusFilter) return false
+      if (statusFilter === RESERVED_FILTER) {
+        if (!l.reservationType) return false
+      } else if (statusFilter !== 'All' && l.status !== statusFilter) return false
       if (!needle) return true
       return `${l.name} ${l.where || ''}`.toLowerCase().includes(needle)
     })
@@ -692,6 +751,20 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
       return dir * (a[sort.key] - b[sort.key])
     })
   }, [locationStats, search, statusFilter, sort])
+
+  // Runs after By Location is on the screen — the Reservation row can be clicked while
+  // the status drill-down is open, in which case the section does not exist yet at click
+  // time. Bumping the tick rather than watching the filter also re-scrolls when the
+  // filter is already on.
+  useEffect(() => {
+    if (reservedTick > 0) byLocationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [reservedTick])
+
+  const showReserved = () => {
+    setStatusModal(null)
+    setStatusFilter(RESERVED_FILTER)
+    setReservedTick((n) => n + 1)
+  }
 
   const toggleSort = (key) =>
     setSort((prev) => ({ key, dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc' }))
@@ -745,37 +818,66 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
         </div>
       </div>
 
-      <div className="leap-stat-row">
-        <StatTile icon={<IconPin />} accent="#2563eb" label="TOTAL LOCATIONS" value={stats.totalLocations} sub={`${stats.roles} roles in all`} />
-        <StatTile icon={<IconSeats />} accent="#7c3aed" label="REQUIRED POSITIONS" value={stats.requiredPositions} sub="seats to be filled" />
-        <StatTile icon={<IconLayers />} accent="#d97706" label="MAX PROPOSALS" value={stats.maxProposals} sub="candidate slots" />
-        <StatTile
-          icon={<IconArrowUp />}
-          accent="#0891b2"
-          label="PROPOSED"
-          value={stats.proposed}
-          of={stats.maxProposals}
-          active={statusModal?.statusId === PROPOSED_STATUS_ID}
-          onClick={() =>
-            setStatusModal((cur) =>
-              cur?.statusId === PROPOSED_STATUS_ID ? null : { statusId: PROPOSED_STATUS_ID, statusLabel: 'Proposed' }
-            )
-          }
+      {/* Three cards over the width six tiles used. The Proposed and Confirmed drill-downs
+          moved onto the rows of the last two — those tiles are gone, the drill-down is not. */}
+      <div className="leap-stat-row leap-stat-row-trio">
+        <StatCard
+          icon={<IconPin />}
+          accent="#2563eb"
+          label="TOTAL LOCATIONS"
+          value={stats.totalLocations}
+          rows={[
+            { label: 'Started', value: statusCounts.All - statusCounts['Not Started'] },
+            { label: 'Not Started', value: statusCounts['Not Started'] },
+            {
+              label: 'Reservation',
+              value: statusCounts[RESERVED_FILTER],
+              onClick: showReserved,
+              active: statusFilter === RESERVED_FILTER,
+            },
+          ]}
         />
-        <StatTile
+        <StatCard
+          icon={<IconSeats />}
+          accent="#7c3aed"
+          label="POSITIONS"
+          value={stats.requiredPositions}
+          rows={[
+            ...roleStats.map((r) => ({ label: r.role, value: `${r.filled} / ${r.total}` })),
+            { label: 'Max proposals', value: stats.maxProposals },
+            {
+              label: 'Proposed',
+              value: stats.proposed,
+              active: statusModal?.statusId === PROPOSED_STATUS_ID,
+              onClick: () =>
+                setStatusModal((cur) =>
+                  cur?.statusId === PROPOSED_STATUS_ID ? null : { statusId: PROPOSED_STATUS_ID, statusLabel: 'Proposed' }
+                ),
+            },
+          ]}
+        />
+        <StatCard
           icon={<IconCheck />}
           accent="#059669"
-          label="CONFIRMED"
+          label="CONFIRMED POSITIONS"
           value={stats.confirmed}
-          of={stats.maxProposals}
-          active={statusModal?.statusId === CONFIRMED_STATUS_ID}
-          onClick={() =>
-            setStatusModal((cur) =>
-              cur?.statusId === CONFIRMED_STATUS_ID ? null : { statusId: CONFIRMED_STATUS_ID, statusLabel: 'Confirmed' }
-            )
-          }
+          rows={[
+            { label: 'Total Positions Required', value: stats.requiredPositions },
+            {
+              label: 'Confirmed',
+              value: stats.confirmed,
+              active: statusModal?.statusId === CONFIRMED_STATUS_ID,
+              onClick: () =>
+                setStatusModal((cur) =>
+                  cur?.statusId === CONFIRMED_STATUS_ID ? null : { statusId: CONFIRMED_STATUS_ID, statusLabel: 'Confirmed' }
+                ),
+            },
+            // Locations that have got going, out of all of them. It counted Completed
+            // ones until the status model became the two `started_time` states — there is
+            // no completed to count any more.
+            { label: 'Nominations', value: `${statusCounts.Started} / ${statusCounts.All}` },
+          ]}
         />
-        <StatTile icon={<IconDashedCircle />} accent="#dc2626" label="NOT STARTED" value={stats.notStarted} of={stats.roles} />
       </div>
 
       <div className="leap-section">
@@ -790,7 +892,7 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
           />
         ) : (
           <>
-            <div className="leap-section-header">
+            <div className="leap-section-header" ref={byLocationRef}>
               <h3>By Location</h3>
               <span className="leap-section-sub">
                 {visible.length === locationStats.length
@@ -825,7 +927,7 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
               </div>
             </div>
 
-            <div className="leap-table-card">
+            <div className="leap-table-card leap-table-card-tall">
               <table className="leap-table">
                 <thead>
                   <tr>

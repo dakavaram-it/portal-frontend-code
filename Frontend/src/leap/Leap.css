@@ -737,6 +737,99 @@
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
+/* ---------- Stat cards (three across, breakdown inside) ---------- */
+/* Three cards standing in the footprint six tiles used: same three columns, and a
+   min-height of two tile rows plus the gap so what sits below them does not move up.
+   The class is doubled so these win over the plain `.leap-stat-row` breakpoints further
+   down the file whatever their order. */
+.leap-stat-row.leap-stat-row-trio {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .leap-stat-row.leap-stat-row-trio {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.leap-stat-tile.leap-stat-card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  min-height: 186px;
+}
+
+.leap-stat-card-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Top-aligned, not spread: the three cards are grid siblings and so equal height, but a
+   post with four roles has four rows more than one with one, and stretching the shorter
+   card's rows into that leftover height reads as three unrelated lists rather than three
+   comparable cards. The slack sits at the bottom instead. */
+.leap-stat-card-rows {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid #eef0f3;
+}
+
+.leap-stat-card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid #f4f5f7;
+  font-size: 12.5px;
+  /* Reset for the clickable rows, which are buttons. */
+  width: 100%;
+  background: none;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  text-align: left;
+  font-family: inherit;
+}
+
+.leap-stat-card-rows > .leap-stat-card-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.leap-stat-card-row-label {
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leap-stat-card-row-value {
+  flex: none;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+/* Only the Reservation / Proposed / Confirmed rows open something. */
+.leap-stat-card-row-clickable {
+  cursor: pointer;
+}
+
+.leap-stat-card-row-clickable:hover .leap-stat-card-row-label {
+  color: #0f172a;
+}
+
+.leap-stat-card-row-clickable:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.leap-stat-card-row-active .leap-stat-card-row-label {
+  color: #0f172a;
+  font-weight: 600;
+}
+
 /* ---------- Committees Assign ---------- */
 /* Everything below the tab strip sits inside one bounded card rather than floating
    loose on the page background — an idle KSS/CUBS/Committees screen is short on content
@@ -1527,6 +1620,14 @@
   border: 1px solid #eef0f3;
   border-radius: 12px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+/* The Dashboard's By Location list is the last thing on its screen and holds every
+   location in the assembly — 65-plus rows against the shared 420px cap left it scrolling
+   inside half a viewport with the page's own slack under it. It takes the height instead,
+   less the page padding above and below it. */
+.leap-table-card.leap-table-card-tall {
+  max-height: calc(100vh - 150px);
 }
 
 .leap-table {
