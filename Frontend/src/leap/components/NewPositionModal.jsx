@@ -273,6 +273,11 @@ const ELECTION_TYPE_ICONS = {
   Corporation: IconFactory,
 }
 
+// The Dashboard's two tier cards colour blue (Panchayat Raj) and red (Local Body); a
+// selected election type carries the tone of the tier it belongs to, so the two screens
+// agree about which half of the election you are in. Anything unlisted reads as local body.
+const PANCHAYAT_RAJ_TYPES = new Set(['MPTC', 'ZPTC', 'MPP', 'ZP'])
+
 // Score tiers colour the badge the same way the compare table's does.
 const TIER_COLOR = { none: '#9ca3af', high: '#059669', mid: '#d97706', low: '#dc2626' }
 
@@ -967,7 +972,7 @@ export default function NewPositionModal({ initial } = {}) {
                 <button
                   type="button"
                   key={proposal_election_type_id}
-                  className={`leap-chip-option leap-chip-option-lg ${electionTypeId === String(proposal_election_type_id) ? 'selected' : ''}`}
+                  className={`leap-chip-option leap-chip-option-lg ${electionTypeId === String(proposal_election_type_id) ? `selected ${PANCHAYAT_RAJ_TYPES.has(election_type) ? 'tone-blue' : 'tone-red'}` : ''}`}
                   onClick={() => selectElectionType(String(proposal_election_type_id))}
                 >
                   <span className="leap-chip-icon"><Icon /></span>

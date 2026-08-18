@@ -6,6 +6,10 @@
 }
 
 /* ---------- Sidebar ---------- */
+/* Two shapes, one markup. Docked (1025px and up) it is a 72px icon rail that widens
+   over the page on hover, so the nav costs almost no width until it is wanted; below
+   that it leaves the flow entirely and becomes an off-canvas drawer opened from the
+   `.leap-nav-toggle` button, with `.leap-scrim` behind it. */
 .leap-sidebar {
   width: 216px;
   flex: 0 0 216px;
@@ -191,6 +195,138 @@
 .leap-logout-btn:hover {
   background: #2a2018;
   color: #f5c518;
+}
+
+.leap-sidebar-close {
+  display: none;
+  margin-left: auto;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  background: rgba(242, 237, 230, 0.08);
+  border: none;
+  border-radius: 8px;
+  color: #f2ede6;
+  cursor: pointer;
+}
+
+.leap-sidebar-close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.leap-nav-toggle {
+  display: none;
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 21;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: #fff;
+  border: 1px solid #d8dce3;
+  border-radius: 10px;
+  color: #4b5563;
+  cursor: pointer;
+}
+
+.leap-nav-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+
+.leap-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 44;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(2px);
+  border: 0;
+  padding: 0;
+  opacity: 0;
+  animation: leapScrimIn 0.16s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes leapScrimIn {
+  to { opacity: 1; }
+}
+
+@media (min-width: 1025px) {
+  .leap-scrim { display: none; }
+
+  /* Out of the flow, so widening the rail never reflows the screen beside it. */
+  .leap-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 21;
+    width: 72px;
+    flex: none;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: width 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* :focus-visible, not :focus-within — a mouse click leaves the nav button focused,
+     which would pin the rail open after the cursor has gone. */
+  .leap-sidebar:hover,
+  .leap-sidebar:has(:focus-visible) {
+    width: 216px;
+    box-shadow: 0 24px 48px -12px rgba(16, 24, 40, 0.24);
+  }
+
+  .leap-main { margin-left: 72px; }
+
+  .leap-brand-title,
+  .leap-nav-group-label,
+  .leap-sidebar-user,
+  .leap-logout-btn,
+  .leap-nav-btn span:not(.leap-nav-icon) {
+    opacity: 0;
+    transition: opacity 0.16s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .leap-sidebar:hover :is(.leap-brand-title, .leap-nav-group-label, .leap-sidebar-user, .leap-logout-btn, .leap-nav-btn span:not(.leap-nav-icon)),
+  .leap-sidebar:has(:focus-visible) :is(.leap-brand-title, .leap-nav-group-label, .leap-sidebar-user, .leap-logout-btn, .leap-nav-btn span:not(.leap-nav-icon)) {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 1024px) {
+  .leap-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 45;
+    width: 272px;
+    flex: none;
+    box-shadow: 0 24px 48px -12px rgba(16, 24, 40, 0.24);
+    transform: translateX(-100%);
+    transition: transform 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .leap-sidebar[data-open='true'] { transform: none; }
+  .leap-sidebar-close { display: inline-flex; }
+  .leap-nav-toggle { display: inline-flex; }
+  /* Room for the toggle, which floats over the screen's own heading. */
+  .leap-app .leap-main { padding-left: 68px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leap-sidebar,
+  .leap-scrim,
+  .leap-brand-title,
+  .leap-nav-group-label,
+  .leap-sidebar-user,
+  .leap-logout-btn,
+  .leap-nav-btn span:not(.leap-nav-icon) {
+    transition: none;
+    animation: none;
+  }
 }
 
 /* ---------- Main ---------- */
@@ -432,10 +568,19 @@
   box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
 }
 
+/* The open tier carries its own light shade — blue for Panchayat Raj, green for Local
+   Body — so which half of the election is on screen reads without the label. The wizard's
+   selected election type uses the same pair (.tone-blue / .tone-green below). */
 .leap-dash-tier-card.open {
   border-color: #2563eb;
-  background: linear-gradient(180deg, #f7faff 0%, #fff 60%);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  background: linear-gradient(180deg, #eff6ff 0%, #fff 70%);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.leap-dash-tier-card.open.tone-red {
+  border-color: #dc2626;
+  background: linear-gradient(180deg, #fef2f2 0%, #fff 70%);
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
 }
 
 .leap-dash-tier-icon {
@@ -457,6 +602,24 @@
 .leap-dash-tier-card.open .leap-dash-tier-icon {
   background: rgba(37, 99, 235, 0.12);
   color: #2563eb;
+}
+
+.leap-dash-tier-card.open.tone-red .leap-dash-tier-icon {
+  background: rgba(220, 38, 38, 0.12);
+  color: #dc2626;
+}
+
+/* The post tile the user opens under a tier wears the same tone as the tier card. */
+.leap-dash-post.leap-stat-tile-active.tone-blue {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.leap-dash-post.leap-stat-tile-active.tone-red {
+  border-color: #dc2626;
+  background: #fef2f2;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
 }
 
 .leap-dash-tier-text {
@@ -754,16 +917,16 @@
 }
 
 /* ---------- Stat cards (three across, breakdown inside) ---------- */
-/* Three cards standing in the footprint six tiles used: same three columns, and a
+/* Two cards standing in the footprint six tiles used: half the width each, and a
    min-height of two tile rows plus the gap so what sits below them does not move up.
    The class is doubled so these win over the plain `.leap-stat-row` breakpoints further
    down the file whatever their order. */
-.leap-stat-row.leap-stat-row-trio {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.leap-stat-row.leap-stat-row-duo {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 @media (max-width: 900px) {
-  .leap-stat-row.leap-stat-row-trio {
+  .leap-stat-row.leap-stat-row-duo {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -3127,6 +3290,29 @@
   color: #0f9d6e;
 }
 
+/* Selected election types take the tone of the Dashboard tier they belong to. */
+.leap-chip-option.selected.tone-blue {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+
+.leap-chip-option.selected.tone-blue .leap-chip-icon {
+  color: #2563eb;
+}
+
+.leap-chip-option.selected.tone-red {
+  border-color: #dc2626;
+  background: #fef2f2;
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.12);
+  color: #b91c1c;
+}
+
+.leap-chip-option.selected.tone-red .leap-chip-icon {
+  color: #dc2626;
+}
+
 .leap-chip-option.selected::before {
   content: '✓ ';
 }
@@ -4404,9 +4590,7 @@
 }
 
 @media (max-width: 640px) {
-  .leap-app { flex-direction: column; }
-  .leap-sidebar { width: 100%; flex: none; height: auto; position: static; }
-  .leap-main { padding: 20px; }
+  .leap-app .leap-main { padding: 20px 20px 48px 68px; }
   .leap-stat-row { grid-template-columns: repeat(2, 1fr); }
   .leap-modal-step-row { flex-direction: column; }
   .leap-detail-info-grid { grid-template-columns: repeat(2, 1fr); }

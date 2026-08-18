@@ -1,4 +1,12 @@
-import { Fragment } from 'react'
+import { Fragment, useEffect, useRef } from 'react'
+
+function CloseIcon() {
+  return (
+    <svg {...NAV_ICON_PROPS}>
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  )
+}
 
 function LogoutIcon() {
   return (
@@ -88,7 +96,29 @@ const COMMITTEE_NAV = [
   { view: 'cadreSearch', label: 'Cadre Search', icon: <IconSearch /> },
 ]
 
-export default function Sidebar({ user, onLogout, view, onNavigate }) {
+export default function Sidebar({ user, onLogout, view, onNavigate, open, onClose }) {
+  const closeRef = useRef(null)
+
+  // Drawer mode (below 1025px): Escape closes it, the page behind stays put, and focus
+  // moves into the drawer then back to the button that opened it.
+  useEffect(() => {
+    if (!open) return undefined
+
+    const opener = document.activeElement
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    closeRef.current.focus()
+
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = previous
+      if (opener instanceof HTMLElement) opener.focus()
+    }
+  }, [open, onClose])
+
   // Most `user` rows carry no firstname/lastname, so fall back to the login name.
   const displayName = [user.firstname, user.lastname].filter(Boolean).join(' ') || user.username
   const initials = displayName.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()
@@ -96,12 +126,21 @@ export default function Sidebar({ user, onLogout, view, onNavigate }) {
   const nav = isCommitteeNav ? COMMITTEE_NAV : NAV
 
   return (
-    <aside className="leap-sidebar">
+    <aside className="leap-sidebar" data-open={open ? 'true' : 'false'}>
       <div className="leap-sidebar-brand">
         <span className="leap-brand-mark"><img src="/tdp-logo.png" alt="TDP" /></span>
         <div>
           <div className="leap-brand-title">Telugu Desam Party</div>
         </div>
+        <button
+          type="button"
+          className="leap-sidebar-close"
+          ref={closeRef}
+          onClick={onClose}
+          aria-label="Close navigation"
+        >
+          <CloseIcon />
+        </button>
       </div>
 
       <nav className="leap-nav">
@@ -116,7 +155,7 @@ export default function Sidebar({ user, onLogout, view, onNavigate }) {
               onClick={() => onNavigate(item.view)}
             >
               <span className="leap-nav-icon">{item.icon}</span>
-              {item.label}
+              <span>{item.label}</span>
             </button>
           </Fragment>
         ))}

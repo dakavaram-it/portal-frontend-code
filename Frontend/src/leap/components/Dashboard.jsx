@@ -52,15 +52,6 @@ function IconLayers() {
   )
 }
 
-function IconCheck() {
-  return (
-    <svg {...ICON_PROPS}>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M7.5 12.5l3 3 6-6.5" />
-    </svg>
-  )
-}
-
 function IconChevronDown() {
   return (
     <svg {...ICON_PROPS}>
@@ -107,6 +98,11 @@ function IconSearch() {
 // election type. Names are compared normalized, so 'Vice-MPP' and 'Vice MPP' are one.
 // Anything the tree does not claim is still shown — see `otherBody` below.
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+
+// Each tier owns a tone, and everything the user selects inside it wears that tone: the
+// tier card, the post tile they open under it, and (via PANCHAYAT_RAJ_TYPES in
+// NewPositionModal) the wizard's election type chip.
+const tierTone = (id) => (id === 'panchayat-raj' ? 'tone-blue' : 'tone-red')
 
 const ELECTION_TIERS = [
   {
@@ -530,7 +526,7 @@ export default function Dashboard({ user, onNavigate }) {
                   role="tab"
                   key={t.id}
                   aria-selected={isOpen}
-                  className={`leap-dash-tier-card ${isOpen ? 'open' : ''}`}
+                  className={`leap-dash-tier-card ${tierTone(t.id)} ${isOpen ? 'open' : ''}`}
                   onClick={() => setTierId(t.id)}
                 >
                   <span className="leap-dash-tier-icon">{i === 0 ? <IconLayers /> : <IconPin />}</span>
@@ -593,7 +589,7 @@ export default function Dashboard({ user, onNavigate }) {
                         // figure is the tier card's markup so the two read as one thing at
                         // two scales. Not `of` — that draws a meter against a value that
                         // is text here.
-                        className={`leap-dash-post${empty ? ' leap-dash-post-empty' : ''}`}
+                        className={`leap-dash-post ${tierTone(tier.id)}${empty ? ' leap-dash-post-empty' : ''}`}
                         icon={body.icon}
                         accent={empty ? '#9ca3af' : body.accent}
                         value={
@@ -840,9 +836,9 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
         </div>
       </div>
 
-      {/* Three cards over the width six tiles used. The Proposed and Confirmed drill-downs
-          moved onto the rows of the last two — those tiles are gone, the drill-down is not. */}
-      <div className="leap-stat-row leap-stat-row-trio">
+      {/* Two cards over the width six tiles used. The Proposed and Confirmed drill-downs
+          live on their rows — those tiles are gone, the drill-down is not. */}
+      <div className="leap-stat-row leap-stat-row-duo">
         <StatCard
           icon={<IconPin />}
           accent="#2563eb"
@@ -856,6 +852,15 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
               value: statusCounts[RESERVED_FILTER],
               onClick: showReserved,
               active: statusFilter === RESERVED_FILTER,
+            },
+            {
+              label: 'Confirmed',
+              value: stats.confirmed,
+              active: statusModal?.statusId === CONFIRMED_STATUS_ID,
+              onClick: () =>
+                setStatusModal((cur) =>
+                  cur?.statusId === CONFIRMED_STATUS_ID ? null : { statusId: CONFIRMED_STATUS_ID, statusLabel: 'Confirmed' }
+                ),
             },
           ]}
         />
@@ -874,24 +879,6 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
               onClick: () =>
                 setStatusModal((cur) =>
                   cur?.statusId === PROPOSED_STATUS_ID ? null : { statusId: PROPOSED_STATUS_ID, statusLabel: 'Proposed' }
-                ),
-            },
-          ]}
-        />
-        <StatCard
-          icon={<IconCheck />}
-          accent="#059669"
-          label="CONFIRMED POSITIONS"
-          value={stats.confirmed}
-          rows={[
-            { label: 'Total Positions Required', value: stats.requiredPositions },
-            {
-              label: 'Confirmed',
-              value: stats.confirmed,
-              active: statusModal?.statusId === CONFIRMED_STATUS_ID,
-              onClick: () =>
-                setStatusModal((cur) =>
-                  cur?.statusId === CONFIRMED_STATUS_ID ? null : { statusId: CONFIRMED_STATUS_ID, statusLabel: 'Confirmed' }
                 ),
             },
             // Locations that have got going, out of all of them. It counted Completed

@@ -37,6 +37,8 @@ export default function Leap({ user, onLogout }) {
   // `{ name }` — reading it off `view` would drop the payload and so change the key, which
   // is a remount, which is the very state loss this is fixing.
   const [args, setArgs] = useState({})
+  // Below 1025px the sidebar is an off-canvas drawer; this is whether it is showing.
+  const [navOpen, setNavOpen] = useState(false)
 
   const openPosition = (id) => setView({ name: 'detail', id })
 
@@ -47,6 +49,7 @@ export default function Leap({ user, onLogout }) {
     setOpened((prev) => (prev[name] ? prev : { ...prev, [name]: true }))
     if (Object.keys(payload).length) setArgs((prev) => ({ ...prev, [name]: payload }))
     setView({ name, ...payload })
+    setNavOpen(false)
   }
 
   // A plain function, not a component: a component declared inside the render is a new
@@ -75,7 +78,27 @@ export default function Leap({ user, onLogout }) {
         onLogout={onLogout}
         view={view.name}
         onNavigate={(name) => navigate({ name })}
+        open={navOpen}
+        onClose={() => setNavOpen(false)}
       />
+      {navOpen && (
+        <button
+          className="leap-scrim"
+          type="button"
+          aria-label="Close navigation"
+          onClick={() => setNavOpen(false)}
+        />
+      )}
+      <button
+        className="leap-nav-toggle"
+        type="button"
+        aria-label="Open navigation"
+        onClick={() => setNavOpen(true)}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+          <path d="M4 7h16M4 12h16M4 17h16" />
+        </svg>
+      </button>
       <main className="leap-main">
         {screen('dashboard', <Dashboard user={user} onNavigate={navigate} />)}
         {/* The key still remounts the wizard, but only when the Dashboard hands over a
