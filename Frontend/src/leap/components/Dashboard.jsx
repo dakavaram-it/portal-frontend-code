@@ -206,15 +206,14 @@ const cardMatches = (card, row) => {
 
 const NOMINATION_CLASS = {
   'Not Started': 'not-started',
-  'In Progress': 'in-progress',
-  Completed: 'completed',
+  Started: 'in-progress',
 }
 
 // Sort order for the Nomination column: the pipeline's own order, so sorting by it
 // groups the work still to do at one end rather than alphabetically scattering it.
-const NOMINATION_RANK = { 'Not Started': 0, 'In Progress': 1, Completed: 2 }
+const NOMINATION_RANK = { 'Not Started': 0, Started: 1 }
 
-const STATUS_FILTERS = ['All', 'Not Started', 'In Progress', 'Completed']
+const STATUS_FILTERS = ['All', 'Not Started', 'Started']
 
 const pct = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : 0)
 
@@ -626,9 +625,8 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
     }
   }, [positions])
 
-  // Same three numbers as the tiles above, per location — plus a rolled-up nomination
-  // status: Not Started while every role there is still untouched, Completed once every
-  // role has used up its proposal slots, In Progress for anything in between.
+  // Same three numbers as the tiles above, per location — plus a nomination status read
+  // straight off proposal_consituency.started_time: NULL is Not Started, set is Started.
   const locationStats = useMemo(() => {
     const byLocation = new Map()
     for (const p of positions) {
@@ -643,9 +641,6 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
       const maxProposals = locRows.reduce((n, p) => n + p.max_proposals, 0)
       const proposed = locRows.reduce((n, p) => n + p.proposed_status_cnt, 0)
       const confirmed = locRows.reduce((n, p) => n + p.conformed_status_cnt, 0)
-      const everyRoleFull = locRows.every((p) => p.max_proposals > 0 && p.proposed_cnt >= p.max_proposals)
-      const noRoleStarted = locRows.every((p) => p.proposed_cnt === 0)
-      const status = everyRoleFull ? 'Completed' : noRoleStarted ? 'Not Started' : 'In Progress'
       // Any role at this location having a live candidate is what decides where the view
       // icon goes — not just the "Proposed" status column above, which is one of three.
       const proposedCnt = locRows.reduce((n, p) => n + p.proposed_cnt, 0)
@@ -663,9 +658,8 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
         maxProposals,
         proposed,
         confirmed,
-        status,
+        status: first.started_time ? 'Started' : 'Not Started',
         proposedCnt,
-        filledPct: pct(proposedCnt, maxProposals),
         electionTypeId: first.proposal_election_type_id,
         tehsilId: first.tehsil_id,
         townId: first.town_id,
@@ -675,7 +669,7 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
   }, [positions])
 
   const statusCounts = useMemo(() => {
-    const counts = { All: locationStats.length, 'Not Started': 0, 'In Progress': 0, Completed: 0 }
+    const counts = { All: locationStats.length, 'Not Started': 0, Started: 0 }
     for (const l of locationStats) counts[l.status] += 1
     return counts
   }, [locationStats])
@@ -700,7 +694,8 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
   const toggleSort = (key) =>
     setSort((prev) => ({ key, dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc' }))
 
-  // A location still has an open proposal slot while proposed < max_proposals.
+  // A location still has an open proposal slot while proposed < max_proposals — the
+  // Assign button stays enabled up to that cap and disables once it's reached.
   const hasRoom = (l) => l.maxProposals > 0 && l.proposedCnt < l.maxProposals
 
   const assignLocation = (l) => {
@@ -833,13 +828,12 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
                 <thead>
                   <tr>
                     <SortHeader label="LOCATION" sortKey="name" sort={sort} onSort={toggleSort} />
-                    <SortHeader label="REQUIRED POSITIONS" sortKey="requiredPositions" sort={sort} onSort={toggleSort} numeric />
                     <SortHeader label="POSITION NAME" sortKey="roleNames" sort={sort} onSort={toggleSort} />
+                    <SortHeader label="REQUIRED POSITIONS" sortKey="requiredPositions" sort={sort} onSort={toggleSort} numeric />
                     <SortHeader label="RESERVATION" sortKey="reservationType" sort={sort} onSort={toggleSort} />
                     <SortHeader label="MAX PROPOSALS" sortKey="maxProposals" sort={sort} onSort={toggleSort} numeric />
                     <SortHeader label="PROPOSED" sortKey="proposed" sort={sort} onSort={toggleSort} numeric />
                     <SortHeader label="CONFIRMED" sortKey="confirmed" sort={sort} onSort={toggleSort} numeric />
-                    <SortHeader label="FILLED" sortKey="filledPct" sort={sort} onSort={toggleSort} />
                     <SortHeader label="CONFIRMATION STATUS" sortKey="status" sort={sort} onSort={toggleSort} />
                     <th>ASSIGN</th>
                   </tr>
@@ -847,7 +841,7 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
                 <tbody>
                   {visible.length === 0 && (
                     <tr className="leap-table-empty-row">
-                      <td colSpan={10}>No location here matches that search.</td>
+                      <td colSpan={9}>No location here matches that search.</td>
                     </tr>
                   )}
                   {visible.map((l) => (
@@ -860,24 +854,16 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
                         {l.name}
                         {l.where && <div className="leap-table-sub">{l.where}</div>}
                       </td>
-                      <td>{l.requiredPositions}</td>
                       <td>{l.roleNames || '—'}</td>
+                      <td>{l.requiredPositions}</td>
                       <td>
-                        <span className={`leap-cand-card-reservation ${l.reservationType ? '' : 'open'}`}>
+                        <span className={`leap-nom-badge ${NOMINATION_CLASS[l.status]}`}>
                           {l.reservationType || 'Unreserved'}
                         </span>
                       </td>
                       <td>{l.maxProposals}</td>
                       <td>{l.proposed}</td>
                       <td>{l.confirmed}</td>
-                      <td className="leap-table-progress">
-                        <ProgressBar
-                          value={l.proposedCnt}
-                          total={l.maxProposals}
-                          tone={NOMINATION_CLASS[l.status]}
-                          label={`${l.name} proposal slots filled`}
-                        />
-                      </td>
                       <td>
                         <span className={`leap-nom-badge ${NOMINATION_CLASS[l.status]}`}>
                           <span className="dot" />

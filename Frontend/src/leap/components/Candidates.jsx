@@ -4,7 +4,6 @@ import {
   getProposalCandidates,
   getCadreScores,
   removeProposalCandidate,
-  updateProposalCandidateStatus,
 } from '../api.js'
 import CompareModal from './CompareModal.jsx'
 import { AddMembersPanel, MemberCard, PhotoViewer, STATUS_META } from './NewPositionModal.jsx'
@@ -17,17 +16,6 @@ const STATUS_FILTERS = [
   // The getPositionsWithCandidates count key still reads `conformed_` — it is the SQL alias, not a label.
   { id: 3, label: 'Confirmed', countKey: 'conformed_status_cnt' },
 ]
-
-// What a candidate whose row predates proposal_status_id counts as — the same default the
-// backend writes and the card reads back.
-const DEFAULT_STATUS_ID = 1
-
-const statusOf = (cadre) => cadre.proposal_status_id || DEFAULT_STATUS_ID
-
-// A position can hold several Proposed candidates at once, but only one of them should
-// ever be the confirmed winner. updateProposalCandidateStatus has no such check — it only moves one
-// row's status — so it is enforced here, before the pick is staged.
-const CONFIRMED_STATUS_ID = STATUS_FILTERS.find((s) => s.label === 'Confirmed').id
 
 // Distinct {value,label} pairs off the unfiltered row list, in first-seen order. The
 // options have to come from every row rather than the filtered ones, or picking a filter
@@ -284,12 +272,6 @@ function PositionCandidates({ position, onBack, onChanged }) {
   const [comparing, setComparing] = useState(false)
   const [error, setError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
-  // proposal_candidate_id -> the status its buttons now show, before Save writes it. Only
-  // ids the user actually touched are in here, so an untouched card falls through to what
-  // getProposalCandidates says and Save has an exact list of what changed.
-  const [pending, setPending] = useState({})
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState('')
   // Whether the cadre search panel is open. Only offered while the position has a
   // proposal slot left — assignCandidate would refuse the write otherwise.
   const [adding, setAdding] = useState(false)
@@ -297,8 +279,6 @@ function PositionCandidates({ position, onBack, onChanged }) {
   useEffect(() => {
     let cancelled = false
     setCandidates(null)
-    // A reload is the new truth about every status, so nothing may stay pending against it.
-    setPending({})
     getProposalCandidates(position.proposal_position_id)
       .then((rows) => {
         if (cancelled) return
@@ -331,40 +311,6 @@ function PositionCandidates({ position, onBack, onChanged }) {
     } catch (err) {
       setError(err.message)
     }
-  }
-
-  // Only cards whose buttons moved off what getProposalCandidates returned: pressing a status and pressing
-  // the one already lit both leave nothing to write.
-  const changed = (candidates || []).filter(
-    (c) => pending[c.proposal_candidate_id] && pending[c.proposal_candidate_id] !== statusOf(c)
-  )
-
-  // One updateProposalCandidateStatus per changed card. They are independent rows — no slot is being competed for,
-  // unlike assignCandidate — but they are written one at a time so a failure can name which candidate
-  // it was and leave that card's buttons where the user left them.
-  const saveStatuses = async () => {
-    setSaving(true)
-    setError('')
-    setSaved('')
-    const done = []
-    const failed = []
-    for (const c of changed) {
-      try {
-        await updateProposalCandidateStatus(c.proposal_candidate_id, pending[c.proposal_candidate_id])
-        done.push(`${c.member_name} → ${STATUS_META[pending[c.proposal_candidate_id]].done}`)
-      } catch (err) {
-        failed.push(`${c.member_name}: ${err.message}`)
-      }
-    }
-    if (failed.length) setError(failed.join(' · '))
-    if (done.length) {
-      setSaved(`${done.join(', ')}.`)
-      // Re-reads getProposalCandidates (which clears `pending`) and tells the list to re-read its per-status
-      // pill counts, which have just moved.
-      setReloadKey((k) => k + 1)
-      onChanged()
-    }
-    setSaving(false)
   }
 
   const open = position.max_proposals - position.proposed_cnt
@@ -422,63 +368,22 @@ function PositionCandidates({ position, onBack, onChanged }) {
       )}
 
       {error && <div className="leap-form-error">{error}</div>}
-      {saved && <div className="leap-form-success">✓ {saved}</div>}
 
       {candidates === null && <div className="leap-members-empty">Loading candidates…</div>}
       {candidates?.length === 0 && <div className="leap-members-empty">No candidates mapped to this position.</div>}
       {candidates?.length > 0 && (
-        <>
-          <div className="leap-member-grid">
-            {candidates.map((c) => (
-              <MemberCard
-                key={c.proposal_candidate_id}
-                cadre={c}
-                role={position.role_name}
-                rating={scores[c.membership_id]}
-                onZoom={() => setZoomed(c)}
-                onDelete={() => remove(c)}
-                // This screen moves a status that already exists rather than picking a new
-                // one. The lit button is what is saved right now until
-                // another is pressed; pressing the lit one is a no-op (the wizard clears
-                // the pick there, but a saved candidate always has a status).
-                statuses={STATUS_FILTERS}
-                status={pending[c.proposal_candidate_id] || statusOf(c)}
-                onStatus={(statusId) => {
-                  if (!statusId) return
-                  if (
-                    statusId === CONFIRMED_STATUS_ID &&
-                    candidates.some(
-                      (other) =>
-                        other.proposal_candidate_id !== c.proposal_candidate_id &&
-                        (pending[other.proposal_candidate_id] || statusOf(other)) === CONFIRMED_STATUS_ID
-                    )
-                  ) {
-                    setError('Only one candidate can be confirmed for this position — change the current one first.')
-                    return
-                  }
-                  setError('')
-                  setPending((prev) => ({ ...prev, [c.proposal_candidate_id]: statusId }))
-                }}
-              />
-            ))}
-          </div>
-
-          <div className="leap-cand-save-bar">
-            <span className="leap-cand-save-note">
-              {changed.length === 0
-                ? 'Pick a status on a card to change it.'
-                : `${changed.length} status change${changed.length !== 1 ? 's' : ''} not saved yet.`}
-            </span>
-            <button
-              type="button"
-              className="leap-btn-primary"
-              disabled={saving || changed.length === 0}
-              onClick={saveStatuses}
-            >
-              {saving ? 'Saving…' : 'Save Status'}
-            </button>
-          </div>
-        </>
+        <div className="leap-member-grid">
+          {candidates.map((c) => (
+            <MemberCard
+              key={c.proposal_candidate_id}
+              cadre={c}
+              role={position.role_name}
+              rating={scores[c.membership_id]}
+              onZoom={() => setZoomed(c)}
+              onDelete={() => remove(c)}
+            />
+          ))}
+        </div>
       )}
 
       {comparing && (
