@@ -44,6 +44,8 @@ function Select({ value, onChange, placeholder, items }) {
 // `initialFilter` seeds the Election Type / Assembly filters when arriving from the
 // Dashboard's location view icon, so the list opens already narrowed to where that
 // location's candidates would show up rather than the full unfiltered state-wide list.
+// Its `proposalConstituencyId` (that location's own id) additionally skips straight to
+// the position's own profiles when the location holds only one — see the load effect.
 export default function Candidates({ initialFilter } = {}) {
   // The proposal_position_id whose full-screen detail is open, or null for the list.
   const [openId, setOpenId] = useState(null)
@@ -67,7 +69,20 @@ export default function Candidates({ initialFilter } = {}) {
     let cancelled = false
     setLoadError(null)
     getPositionsWithCandidates()
-      .then((data) => { if (!cancelled) setRows(data) })
+      .then((data) => {
+        if (cancelled) return
+        setRows(data)
+        // Arriving from the Dashboard's View icon for one location: if it holds exactly
+        // one position with candidates, skip the list and open its profiles directly —
+        // only on this initial load, so a later reload (e.g. after removing a candidate)
+        // can't yank the screen back into a detail the user has since navigated away from.
+        if (reloadKey === 0 && initialFilter?.proposalConstituencyId) {
+          const matches = data.filter(
+            (r) => String(r.proposal_constituency_id) === initialFilter.proposalConstituencyId
+          )
+          if (matches.length === 1) setOpenId(matches[0].proposal_position_id)
+        }
+      })
       .catch((err) => {
         if (cancelled) return
         console.error(err)

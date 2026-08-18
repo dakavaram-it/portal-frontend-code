@@ -995,6 +995,13 @@
   cursor: pointer;
 }
 
+/* A dotted underline is what marks these three labels as clickable, since the row
+   itself gives no other visual hint beyond the cursor. */
+.leap-stat-card-row-clickable .leap-stat-card-row-label {
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
 .leap-stat-card-row-clickable:hover .leap-stat-card-row-label {
   color: #0f172a;
 }
@@ -1807,6 +1814,12 @@
    less the page padding above and below it. */
 .leap-table-card.leap-table-card-tall {
   max-height: calc(100vh - 150px);
+}
+
+/* By Location's own rows carry no click of their own any more — only the Assign button
+   and View icon in the last column do — so the row itself should not look clickable. */
+.leap-table-card-tall .leap-table tbody tr {
+  cursor: default;
 }
 
 .leap-table {

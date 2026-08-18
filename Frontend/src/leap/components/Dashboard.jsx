@@ -808,14 +808,13 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
   const viewLocationCandidates = (l) => {
     onNavigate({
       name: 'candidates',
-      filter: { electionTypeId: String(l.electionTypeId), assemblyId: String(assemblyId) },
+      filter: {
+        electionTypeId: String(l.electionTypeId),
+        assemblyId: String(assemblyId),
+        proposalConstituencyId: String(l.id),
+      },
     })
   }
-
-  // The row itself keeps one smart default action — straight to Assign while a slot is
-  // open, otherwise to View — the Assign button and View icon in its own column offer
-  // both explicitly regardless of which one this would have picked.
-  const viewLocation = (l) => (hasRoom(l) ? assignLocation(l) : viewLocationCandidates(l))
 
   if (positions.length === 0) return null
 
@@ -857,7 +856,7 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
                 ),
             },
             {
-              label: 'Reservation',
+              label: 'View Reservations',
               value: statusCounts[RESERVED_FILTER],
               onClick: showReserved,
               active: statusFilter === RESERVED_FILTER,
@@ -958,11 +957,7 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
                     </tr>
                   )}
                   {visible.map((l) => (
-                    <tr
-                      key={l.id}
-                      onClick={() => viewLocation(l)}
-                      title={hasRoom(l) ? 'Add candidates' : 'View candidates'}
-                    >
+                    <tr key={l.id}>
                       <td className="leap-table-title">
                         {l.name}
                         {l.where && <div className="leap-table-sub">{l.where}</div>}
@@ -991,9 +986,7 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
                             disabled={!hasRoom(l)}
                             title={hasRoom(l) ? 'Assign candidates' : 'No open proposal slots left'}
                             aria-label={`Assign candidates for ${l.name}`}
-                            // The row is clickable too; without this the button's click would
-                            // run the same navigation a second time.
-                            onClick={(e) => { e.stopPropagation(); assignLocation(l) }}
+                            onClick={() => assignLocation(l)}
                           >
                             Assign
                           </button>
@@ -1003,7 +996,7 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
                             disabled={l.proposedCnt === 0}
                             title={l.proposedCnt > 0 ? 'View candidates' : 'No candidates proposed yet'}
                             aria-label={`View candidates for ${l.name}`}
-                            onClick={(e) => { e.stopPropagation(); viewLocationCandidates(l) }}
+                            onClick={() => viewLocationCandidates(l)}
                           >
                             <IconEye />
                           </button>
@@ -1160,17 +1153,26 @@ function CandidateStatusSection({ electionTypeIds, roleNames, assemblyId, status
           <table className="leap-table">
             <thead>
               <tr>
+                <th>LOCATION</th>
+                <th>{isConfirmed ? 'CONFIRMED ROLE' : 'PROPOSED ROLE'}</th>
                 <th>CANDIDATE</th>
                 <th>MEMBERSHIP ID</th>
                 <th>MOBILE</th>
-                <th>{isConfirmed ? 'CONFIRMED ROLE' : 'PROPOSED ROLE'}</th>
-                <th>LOCATION</th>
+                <th>GENDER</th>
+                <th>CASTE</th>
+                <th>RESERVATION</th>
+                <th>STATUS</th>
                 {isConfirmed && <th>NOMINATION</th>}
               </tr>
             </thead>
             <tbody>
               {rows.map((c) => (
                 <tr key={c.proposal_candidate_id}>
+                  <td>
+                    {c.local_body_name}
+                    {c.mandal_town_name && <div className="leap-table-sub">{c.mandal_town_name}</div>}
+                  </td>
+                  <td>{c.role_name}</td>
                   <td className="leap-table-title">
                     <div className="leap-table-candidate">
                       {/* Same photo, fallback and lightbox as the MemberCard, so a
@@ -1192,11 +1194,10 @@ function CandidateStatusSection({ electionTypeIds, roleNames, assemblyId, status
                   </td>
                   <td>{c.membership_id}</td>
                   <td>{c.mobile_no}</td>
-                  <td>{c.role_name}</td>
-                  <td>
-                    {c.local_body_name}
-                    {c.mandal_town_name && <div className="leap-table-sub">{c.mandal_town_name}</div>}
-                  </td>
+                  <td>{c.gender || '—'}</td>
+                  <td>{[c.category_name, c.caste_name].filter(Boolean).join(' · ') || '—'}</td>
+                  <td>{c.reservation_type || 'Unreserved'}</td>
+                  <td>{isConfirmed && c.nomination_file_path ? 'Nominated' : statusLabel}</td>
                   {isConfirmed && (
                     <td>
                       <div className="leap-nomination-cell">
