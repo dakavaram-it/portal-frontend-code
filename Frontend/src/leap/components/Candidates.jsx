@@ -4,7 +4,7 @@ import {
   getProposalCandidates,
 } from '../api.js'
 import { MemberCard, PhotoViewer, STATUS_META, loadScores } from './NewPositionModal.jsx'
-import DataTable from './committee/DataTable.jsx'
+import DataTable, { exportCsv, searchRows } from './committee/DataTable.jsx'
 
 // The proposal_status rows the filter offers. Their ids are what getPositionsWithCandidates counts per
 // position and what STATUS_META names on the card, so the filter, the pills and the cards agree.
@@ -39,6 +39,22 @@ function options(rows, valueKey, labelKey) {
   return [...seen].map(([value, label]) => ({ value, label }))
 }
 
+function IconSearch() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <circle cx="11" cy="11" r="6.5" /><path d="M20 20l-3.6-3.6" />
+    </svg>
+  )
+}
+
+function IconDownload() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v12" /><path d="M7 10l5 5 5-5" /><path d="M4 19h16" />
+    </svg>
+  )
+}
+
 function Select({ value, onChange, placeholder, items }) {
   return (
     <select className="leap-cand-filter-select" value={value} onChange={(e) => onChange(e.target.value)}>
@@ -65,6 +81,9 @@ export default function Candidates({ initialFilter } = {}) {
   const [assemblyId, setAssemblyId] = useState(initialFilter?.assemblyId || '')
   const [roleId, setRoleId] = useState('')
   const [statusId, setStatusId] = useState('')
+  const [reservation, setReservation] = useState('')
+  // The table's search box lives in the filter bar here, so this screen owns its value.
+  const [search, setSearch] = useState('')
 
   // getPositionsWithCandidates by hand rather than through useList: that hook reports a failed load as an empty
   // list, so an unreachable backend or a 404 would read as "nobody has been proposed yet".
@@ -106,13 +125,14 @@ export default function Candidates({ initialFilter } = {}) {
         if (electionTypeId && String(r.proposal_election_type_id) !== electionTypeId) return false
         if (assemblyId && String(r.assembly_constituency_id) !== assemblyId) return false
         if (roleId && String(r.proposal_role_id) !== roleId) return false
+        if (reservation && (r.reservation_type || 'Unreserved') !== reservation) return false
         if (statusId) {
           const { countKey } = STATUS_FILTERS.find((s) => String(s.id) === statusId)
           if (!r[countKey]) return false
         }
         return true
       }),
-    [rows, electionTypeId, assemblyId, roleId, statusId]
+    [rows, electionTypeId, assemblyId, roleId, statusId, reservation]
   )
 
   // One row per position: where it sits, what it is, how full its proposal slots are, the
@@ -240,17 +260,49 @@ export default function Candidates({ initialFilter } = {}) {
     }
   }, [rows, openId])
 
-  const hasFilter = electionTypeId || assemblyId || roleId || statusId
-  const reset = () => { setElectionTypeId(''); setAssemblyId(''); setRoleId(''); setStatusId('') }
+  const hasFilter = electionTypeId || assemblyId || roleId || statusId || reservation
+  const reset = () => {
+    setElectionTypeId(''); setAssemblyId(''); setRoleId(''); setStatusId(''); setReservation('')
+  }
+  // The screen owns the search box and the CSV button, so it also owns the searched rows
+  // the table renders and the export writes.
+  // Reservation has no id column and a position with none reads 'Unreserved' in the
+  // table, so the options are the labels themselves — off every row, like the others.
+  const reservationOptions = useMemo(
+    () => [...new Set(rows.map((r) => r.reservation_type || 'Unreserved'))]
+      .map((v) => ({ value: v, label: v })),
+    [rows]
+  )
+  const visible = useMemo(() => searchRows(columns, filtered, search), [columns, filtered, search])
 
   return (
     <div className="leap-cand-screen">
       <div className="leap-cand-header">
-        <h2>Candidates</h2>
-        <p>Every position with candidates proposed against it.</p>
+        <div>
+          <h2>Candidates</h2>
+          <p>Every position with candidates proposed against it.</p>
+        </div>
+        <button
+          type="button"
+          className="leap-btn-secondary"
+          onClick={() => exportCsv(columns, visible, 'positions-with-candidates')}
+          disabled={visible.length === 0}
+        >
+          <IconDownload /> Download CSV
+        </button>
       </div>
 
       <div className="leap-cand-filter-bar">
+        <div className="leap-search-field">
+          <span className="leap-search-icon"><IconSearch /></span>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search local body, role, assembly…"
+            aria-label="Search positions"
+          />
+        </div>
         <Select
           value={electionTypeId}
           onChange={setElectionTypeId}
@@ -275,11 +327,17 @@ export default function Candidates({ initialFilter } = {}) {
           placeholder="All Statuses"
           items={STATUS_FILTERS.map((s) => ({ value: String(s.id), label: s.label }))}
         />
+        <Select
+          value={reservation}
+          onChange={setReservation}
+          placeholder="All Reservations"
+          items={reservationOptions}
+        />
         {hasFilter && (
           <button type="button" className="leap-cand-filter-reset" onClick={reset}>× Reset</button>
         )}
         <span className="leap-cand-filter-count">
-          {filtered.length} position{filtered.length !== 1 ? 's' : ''}
+          {visible.length} position{visible.length !== 1 ? 's' : ''}
         </span>
       </div>
 
@@ -300,7 +358,7 @@ export default function Candidates({ initialFilter } = {}) {
             Retry
           </button>
         </div>
-      ) : filtered.length === 0 ? (
+      ) : visible.length === 0 ? (
         <div className="leap-cand-empty">
           <div className="leap-cand-empty-title">No positions found</div>
           <div className="leap-cand-empty-sub">
@@ -312,10 +370,9 @@ export default function Candidates({ initialFilter } = {}) {
       ) : (
         <DataTable
           columns={columns}
-          rows={filtered}
+          rows={visible}
           rowKey={(r) => r.proposal_position_id}
-          searchPlaceholder="Search local body, role, assembly…"
-          filename="positions-with-candidates"
+          hideToolbar
           tall
         />
       )}

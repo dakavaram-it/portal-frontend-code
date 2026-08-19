@@ -18,6 +18,34 @@ const escapeCsv = (v) => {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
+const textOf = (col, row) => (col.value ? col.value(row) : row[col.key])
+
+// The search and the export, exported so a screen that renders its own search box and
+// CSV button (the Candidates screen) filters and exports what the table would.
+export function searchRows(columns, rows, search) {
+  const needle = search.trim().toLowerCase()
+  if (!needle) return rows
+  const searchable = columns.filter((c) => c.searchable !== false)
+  return rows.filter((r) => searchable.some((c) => String(textOf(c, r) ?? '').toLowerCase().includes(needle)))
+}
+
+export function exportCsv(columns, rows, filename) {
+  const exportCols = columns.filter((c) => c.exportable !== false)
+  const header = exportCols.map((c) => escapeCsv(c.label)).join(',')
+  const lines = rows.map((r) =>
+    exportCols.map((c) => escapeCsv(c.csvValue ? c.csvValue(r) : textOf(c, r))).join(',')
+  )
+  const blob = new Blob([[header, ...lines].join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${filename}.csv`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 // A search + sort + paginate + CSV-export table, shared by every drill-down that just
 // wants a plain list rendered well — one implementation instead of three near-identical
 // ones (booth-wise fill, sections, members).
@@ -26,7 +54,9 @@ const escapeCsv = (v) => {
 //   value?(row), sortValue?(row), csvValue?(row), render?(row) }
 // `value` is the plain display fallback; `render` overrides display only (used for the
 // per-row delete buttons); export always uses `csvValue` -> `value` -> `row[key]`.
-export default function DataTable({ columns, rows, rowKey, searchPlaceholder = 'Search…', filename = 'export', tall = false }) {
+// `hideToolbar` is for a caller that renders the search box and the CSV button itself
+// (the Candidates screen puts them around its filter bar) and hands rows already searched.
+export default function DataTable({ columns, rows, rowKey, searchPlaceholder = 'Search…', filename = 'export', tall = false, hideToolbar = false }) {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState({ key: null, dir: 'asc' })
   const [page, setPage] = useState(1)
@@ -34,15 +64,7 @@ export default function DataTable({ columns, rows, rowKey, searchPlaceholder = '
 
   useEffect(() => { setPage(1) }, [search, pageSize, rows])
 
-  const textOf = (col, row) => (col.value ? col.value(row) : row[col.key])
-
-  const filtered = useMemo(() => {
-    const needle = search.trim().toLowerCase()
-    if (!needle) return rows
-    const searchable = columns.filter((c) => c.searchable !== false)
-    return rows.filter((r) => searchable.some((c) => String(textOf(c, r) ?? '').toLowerCase().includes(needle)))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, search, columns])
+  const filtered = useMemo(() => searchRows(columns, rows, search), [rows, search, columns])
 
   const sorted = useMemo(() => {
     if (!sort.key) return filtered
@@ -86,20 +108,27 @@ export default function DataTable({ columns, rows, rowKey, searchPlaceholder = '
 
   return (
     <div>
-      <div className="leap-dash-toolbar">
-        <div className="leap-search-field">
-          <span className="leap-search-icon"><IconSearch /></span>
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={searchPlaceholder}
-          />
+      {!hideToolbar && (
+        <div className="leap-dash-toolbar">
+          <div className="leap-search-field">
+            <span className="leap-search-icon"><IconSearch /></span>
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={searchPlaceholder}
+            />
+          </div>
+          <button
+            type="button"
+            className="leap-btn-secondary"
+            onClick={() => exportCsv(columns, sorted, filename)}
+            disabled={sorted.length === 0}
+          >
+            <IconDownload /> Download CSV
+          </button>
         </div>
-        <button type="button" className="leap-btn-secondary" onClick={downloadCsv} disabled={sorted.length === 0}>
-          <IconDownload /> Download CSV
-        </button>
-      </div>
+      )}
 
       <div className={`leap-table-card${tall ? ' leap-table-card-tall' : ''}`}>
         <table className="leap-table">

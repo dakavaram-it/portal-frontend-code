@@ -4025,6 +4025,28 @@
   flex-direction: column;
 }
 
+/* The screen's own Download CSV button sits beside the heading, above the filter bar.
+   .leap-btn-secondary only lays its icon out inside a toolbar, so this repeats that. */
+.leap-cand-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.leap-cand-header .leap-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.leap-cand-header .leap-btn-secondary svg {
+  width: 15px;
+  height: 15px;
+}
+
 .leap-cand-header h2 {
   margin: 0;
   font-size: 22px;
@@ -4046,6 +4068,16 @@
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
+}
+
+.leap-cand-filter-bar .leap-search-field {
+  flex: 0 1 240px;
+}
+
+.leap-cand-filter-bar .leap-search-field input {
+  padding: 8px 10px 8px 32px;
+  background: #f8fafc;
+  border-radius: 8px;
 }
 
 .leap-cand-filter-select {
