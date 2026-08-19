@@ -8,7 +8,7 @@ import {
   useLoadable,
 } from '../api.js'
 import { Dropdown, PhotoViewer, initials } from './NewPositionModal.jsx'
-import { PositionCandidatesModal } from './Candidates.jsx'
+import { PositionCandidatesModal, reservationClass } from './Candidates.jsx'
 
 // proposal_status's own ids (1 Proposed, 2 Shortlisted, 3 Confirmed) — the two the
 // Dashboard's stat tiles drill into. Shortlisted has no tile here, so it is not listed.
@@ -529,8 +529,12 @@ export default function Dashboard({ user, onNavigate }) {
           <div className="leap-dash-tier-columns">
           {tiers.map((t, i) => {
             const tierPositions = t.bodies.flatMap((b) => b.cards).flatMap((c) => c.positions)
-            const slots = tierPositions.reduce((n, p) => n + p.max_proposals, 0)
-            const filledSlots = tierPositions.reduce((n, p) => n + p.proposed_cnt, 0)
+            // The tier headline is the proposal slots and how many carry a candidate —
+            // `proposed_cnt`, every live candidate whatever their status, not the
+            // per-status `proposed_status_cnt` the PROPOSED tile counts. Confirming a
+            // candidate must not make this figure go down: they still hold the slot.
+            const maxProposals = tierPositions.reduce((n, p) => n + p.max_proposals, 0)
+            const proposedCandidates = tierPositions.reduce((n, p) => n + p.proposed_cnt, 0)
             return (
               <section className="leap-dash-tier-block" key={t.id} aria-label={t.label}>
                 {/* The tier card is now the heading of the block under it rather than a tab
@@ -542,11 +546,11 @@ export default function Dashboard({ user, onNavigate }) {
                     <span className="leap-dash-tier-card-sub">{t.sub}</span>
                   </span>
                   <span className="leap-dash-tier-figure">
-                    {slots > 0 ? (
+                    {maxProposals > 0 ? (
                       <>
-                        <b>{filledSlots}</b>
-                        <span className="leap-dash-tier-figure-of">/ {slots}</span>
-                        <span className="leap-dash-tier-figure-label">slots filled</span>
+                        <b>{proposedCandidates}</b>
+                        <span className="leap-dash-tier-figure-of">/ {maxProposals}</span>
+                        <span className="leap-dash-tier-figure-label">candidates proposed</span>
                       </>
                     ) : (
                       <span className="leap-dash-tier-figure-label">nothing configured</span>
@@ -579,13 +583,13 @@ export default function Dashboard({ user, onNavigate }) {
                             // yet. The card still stands — it is part of the election — but there is
                             // nothing behind it to open.
                             const empty = card.positions.length === 0
-                            // How many of this post's own proposal_position rows exist across the
-                            // assembly, and how many of them have at least one live candidate —
-                            // not candidates over proposal slots, which could read as more filled
-                            // than there are positions to hold them (2 candidates on one seat's
-                            // 3 slots would show as "2 / 1 positions", which is not what it means).
-                            const totalPositions = card.positions.length
-                            const filled = card.positions.filter((p) => p.proposed_cnt > 0).length
+                            // Seats, not positions: a proposal_position row can hold more than one
+                            // seat (max_positions), and what the card reports is how much of the
+                            // post is actually settled — confirmed candidates over the seats there
+                            // are to fill. Proposed and shortlisted rows are still in play, so they
+                            // do not count here; the tier bar above still measures proposal slots.
+                            const totalSeats = card.positions.reduce((n, p) => n + p.max_positions, 0)
+                            const confirmed = card.positions.reduce((n, p) => n + p.conformed_status_cnt, 0)
                             return (
                               <StatTile
                                 key={card.key}
@@ -593,7 +597,7 @@ export default function Dashboard({ user, onNavigate }) {
                                 // has to be the post's name rather than that element.
                                 name={card.label}
                                 // Every post card has the same two lines — its name, then its
-                                // positions line — whether or not it is configured, so the six read as one
+                                // seats line — whether or not it is configured, so the six read as one
                                 // row rather than two configured cards beside four floating names.
                                 // No `of`: the count is the card, and a meter under it measured a
                                 // ratio the row is not asking about.
@@ -607,9 +611,9 @@ export default function Dashboard({ user, onNavigate }) {
                                       <span className="leap-dash-post-note">Not configured</span>
                                     ) : (
                                       <span className="leap-dash-post-figure">
-                                        <b>{filled}</b>
-                                        <span className="leap-dash-post-figure-of">/ {totalPositions}</span>
-                                        <span className="leap-dash-post-figure-label">positions</span>
+                                        <b>{confirmed}</b>
+                                        <span className="leap-dash-post-figure-of">/ {totalSeats}</span>
+                                        <span className="leap-dash-post-figure-label">seats confirmed</span>
                                       </span>
                                     )}
                                   </>
@@ -754,7 +758,8 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate, onDataC
         electionTypeId: first.proposal_election_type_id,
         tehsilId: first.tehsil_id,
         townId: first.town_id,
-        reservationType: first.reservation_type,
+        reservations: [...new Set(locRows.map((p) => p.reservation_type).filter(Boolean))],
+        reservationType: [...new Set(locRows.map((p) => p.reservation_type).filter(Boolean))].join(' · '),
       }
     })
   }, [positions])
@@ -1000,9 +1005,18 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate, onDataC
                       <td>{l.roleNames || '—'}</td>
                       <td>{l.requiredPositions}</td>
                       <td>
-                        <span className={`leap-nom-badge ${NOMINATION_CLASS[l.status]}`}>
-                          {l.reservationType || 'Unreserved'}
-                        </span>
+                        {/* Tinted by category, the same chip the Candidates screen uses:
+                            the reservation is the rule that decides who may be proposed
+                            here, so it has to be readable at a glance. One chip per role,
+                            since a location's roles reserve separately. Nothing reserved
+                            keeps the plain grey chip. */}
+                        {l.reservations.length > 0 ? (
+                          l.reservations.map((r) => (
+                            <span key={r} className={`leap-res-chip ${reservationClass(r)}`}>{r}</span>
+                          ))
+                        ) : (
+                          <span className="leap-res-chip">UN-RESERVED</span>
+                        )}
                       </td>
                       <td>{l.maxProposals}</td>
                       <td>{l.proposed}</td>

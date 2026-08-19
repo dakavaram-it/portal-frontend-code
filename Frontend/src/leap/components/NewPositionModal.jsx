@@ -7,7 +7,6 @@ import {
   getProposalConstituenciesByTehsil,
   getProposalConstituenciesByTown,
   getPositionsOverview,
-  getReservation,
   getProposalCandidates,
   getCadreScores,
   searchCadre,
@@ -25,13 +24,15 @@ const SEARCH_TYPES = [
   { value: 'CadreName', label: 'Name', placeholder: 'Enter a cadre name…' },
 ]
 
-// searchCadre takes no location parameter, so anything but an exact membership id comes back
-// state-wide: a name is a substring match returning four figures of rows, and a mobile number
-// matches cadre in any assembly, which then refuse to stage as "belongs to another assembly".
-// The directory service does take a constituency, so both go through it and the cadre picked
-// out of its results is resolved back through searchCadre by membership id — searchCadre is
-// still what says whether they are eligible.
-const DIRECTORY_TYPES = ['CadreName', 'MobileNo']
+// A mobile number is matched exactly but state-wide by searchCadre, so it returns cadre in any
+// assembly, which then refuse to stage as "belongs to another assembly". The directory
+// service does take a constituency, so it goes through it and the cadre picked out of its
+// results is resolved back through searchCadre by cadre id — searchCadre is still what says
+// whether they are eligible.
+// A name no longer does: searchCadre's own name search is now scoped to the position's
+// assemblies and the current enrollment year, so it answers with rows that already carry
+// the eligibility flags and needs no second lookup.
+const DIRECTORY_TYPES = ['MobileNo']
 
 // membership_id is an 8-digit number and a mobile number a 10-digit one, both matched
 // exactly, so anything else in the box can only ever return nothing. A name is left alone.
@@ -440,6 +441,28 @@ export function MemberCard({ cadre, role, rating, onZoom, onRemove, onDelete, st
   )
 }
 
+// Fill a membership_id -> getCadreScores row map, one call per id rather than one call for
+// all of them. getCadreScores is lookup-first: a cadre already in the ratings report answers in
+// milliseconds, but one who is not makes the request run two stored procedures (measured
+// at ~1.6s for a single membership id) before it answers at all. Batched, that cost is
+// paid by every badge on the screen — one cadre nobody has rated yet held up the score,
+// Member Since and Renewals of every member beside them. Per id each card fills the
+// moment its own answer lands, and the already-rated ones do not wait at all.
+// A failure is logged, never surfaced: the ratings database is optional and the card
+// reads "No score" without it.
+export function loadScores(membershipIds, setScores) {
+  for (const mid of [...new Set(membershipIds.filter(Boolean))]) {
+    getCadreScores([mid])
+      .then((data) =>
+        setScores((prev) => ({
+          ...prev,
+          ...Object.fromEntries(data.candidates.map((c) => [String(c.membership_id), c])),
+        }))
+      )
+      .catch((err) => console.error(err))
+  }
+}
+
 // The photo lightbox, shared by every screen that renders a MemberCard.
 export function PhotoViewer({ cadre, onClose }) {
   return (
@@ -463,7 +486,11 @@ export function PhotoViewer({ cadre, onClose }) {
    Members" are the same thing, so they are the same component — mount it keyed by
    proposal_position_id, since a staged list belongs to the position it was staged for.
    `num` is the wizard's step number; the Candidates screen has no step to number. */
-export function AddMembersPanel({ proposalConstituencyId, constituencyId, position, reservation, placeName, num, onAssigned }) {
+export function AddMembersPanel({ constituencyId, position, placeName, num, onAssigned }) {
+  // The role's own reservation, off getPositionsOverview / getPositionsWithCandidates —
+  // it is a proposal_position column, and two roles under one local body routinely
+  // reserve differently.
+  const reservation = position.reservation_type || ''
   const [searchType, setSearchType] = useState(SEARCH_TYPES[0].value)
   const [searchValue, setSearchValue] = useState('')
   // null until a search answers with more than one cadre — a mobile number or a name can
@@ -499,16 +526,7 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
   // The score decides the order the staged cards are shown in, so it is fetched as each
   // cadre is staged. Its absence is not an
   // error — the ratings database is optional, and the cards read "No score" without it.
-  const loadScore = (membershipId) => {
-    getCadreScores([membershipId])
-      .then((data) =>
-        setScores((prev) => ({
-          ...prev,
-          ...Object.fromEntries(data.candidates.map((c) => [String(c.membership_id), c])),
-        }))
-      )
-      .catch((err) => console.error(err))
-  }
+  const loadScore = (membershipId) => loadScores([membershipId], setScores)
 
   const typeLabel = SEARCH_TYPES.find((t) => t.value === searchType)
 
@@ -563,8 +581,8 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
       // cadre in the state with no LIMIT, which is what made picking a name result take
       // seconds. Membership id stays as the fallback for a row with no cadre id.
       const rows = row.cadreId
-        ? await searchCadre(proposalConstituencyId, 'CadreId', row.cadreId)
-        : await searchCadre(proposalConstituencyId, 'MembershipId', row.membershipId)
+        ? await searchCadre(position.proposal_position_id, 'CadreId', row.cadreId)
+        : await searchCadre(position.proposal_position_id, 'MembershipId', row.membershipId)
       const cadre = rows[0]
       if (!cadre) setError(`${row.cadreName} could not be looked up — try searching by Membership ID.`)
       else stage(cadre)
@@ -604,7 +622,7 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
       const rows =
         DIRECTORY_TYPES.includes(searchType)
           ? await searchCadreDirectory(searchType, value, constituencyId)
-          : await searchCadre(proposalConstituencyId, searchType, value)
+          : await searchCadre(position.proposal_position_id, searchType, value)
       if (!rows.length) setError(`No cadre found for that ${typeLabel.label}.`)
       else if (rows.length === 1) await pickMatch(rows[0])
       else setMatches(rows)
@@ -832,11 +850,6 @@ export default function NewPositionModal({ initial } = {}) {
     proposalConstituencyId ? () => getPositionsOverview(proposalConstituencyId) : null,
     [proposalConstituencyId, positionsKey]
   )
-  const reservationRows = useList(
-    proposalConstituencyId ? () => getReservation(proposalConstituencyId) : null,
-    [proposalConstituencyId]
-  )
-  const reservation = reservationRows[0]?.reservation_type || ''
 
   // "View Members" wants the cadre themselves, and getProposalCandidates is per position — one
   // call per role, only once the user asks for the view.
@@ -856,18 +869,10 @@ export default function NewPositionModal({ initial } = {}) {
       .then((lists) => {
         if (cancelled) return
         setMembers(Object.fromEntries(positions.map((p, i) => [p.proposal_position_id, lists[i]])))
-        const mids = lists.flat().map((c) => c.membership_id).filter(Boolean)
-        if (mids.length === 0) return
         // The scores decorate a list that already renders, so a ratings database that is
         // unset or slow leaves the badge and those two fields blank rather than failing
-        // the whole view.
-        getCadreScores(mids)
-          .then((data) => {
-            if (!cancelled) {
-              setMemberScores(Object.fromEntries(data.candidates.map((c) => [String(c.membership_id), c])))
-            }
-          })
-          .catch((err) => console.error(err))
+        // the whole view. One call per member, not one for all of them — see loadScores.
+        loadScores(lists.flat().map((c) => c.membership_id), setMemberScores)
       })
       .catch((err) => { if (!cancelled) { console.error(err); setMembers({}) } })
     return () => { cancelled = true }
@@ -1063,9 +1068,6 @@ export default function NewPositionModal({ initial } = {}) {
               <span className="filled"><b>{filledSeats}</b>Filled</span>
               <span className={unfilledSeats > 0 ? 'unfilled' : ''}><b>{unfilledSeats}</b>Unfilled</span>
             </span>
-            <span className={`leap-reservation-badge ${reservation ? '' : 'open'}`}>
-              {reservation || 'Unreserved'}
-            </span>
           </div>
           <div className="leap-chip-list">
             <button
@@ -1143,11 +1145,12 @@ export default function NewPositionModal({ initial } = {}) {
                     >
                       <span className="leap-position-card-head">
                         <span className="leap-position-card-name">{row.role_name}</span>
-                        {/* The proposal constituency's reservation, repeated on every role
-                            card: it is the rule that decides who may be proposed, and the
-                            bar above scrolls out of view by the time a role is picked. */}
-                        <span className={`leap-reservation-badge ${reservation ? '' : 'open'}`}>
-                          {reservation || 'Unreserved'}
+                        {/* This role's own reservation — the rule that decides who may be
+                            proposed for it. Per card because it is a proposal_position
+                            column: a President BC-GENERAL sits beside a Vice-President
+                            ST-WOMEN under one local body. */}
+                        <span className={`leap-reservation-badge ${row.reservation_type ? '' : 'open'}`}>
+                          {row.reservation_type || 'Unreserved'}
                         </span>
                       </span>
                       <span className="leap-position-card-badges">
@@ -1170,9 +1173,7 @@ export default function NewPositionModal({ initial } = {}) {
               key={position.proposal_position_id}
               num={6}
               position={position}
-              proposalConstituencyId={proposalConstituencyId}
               constituencyId={assemblyId}
-              reservation={reservation}
               placeName={proposalConstituencyName}
               onAssigned={() => setPositionsKey((k) => k + 1)}
             />

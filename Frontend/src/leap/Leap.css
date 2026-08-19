@@ -5325,6 +5325,11 @@ body.leap-notes-modal-open { overflow: hidden; }
 .leap-res-chip.cat-OC { color: #1e40af; background: #eff6ff; border-color: #bfdbfe; }
 .leap-res-chip.cat-SC { color: #6b21a8; background: #faf5ff; border-color: #e9d5ff; }
 .leap-res-chip.cat-ST { color: #9d174d; background: #fdf2f8; border-color: #fbcfe8; }
+.leap-res-chip.cat-GENERAL { color: #3730a3; background: #eef2ff; border-color: #c7d2fe; }
+
+/* A location's roles reserve separately, so the By Location cell can hold more than
+   one chip. */
+.leap-res-chip + .leap-res-chip { margin-left: 5px; }
 
 .leap-slot-cell {
   min-width: 104px;

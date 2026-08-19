@@ -2,10 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   getPositionsWithCandidates,
   getProposalCandidates,
-  getCadreScores,
   removeProposalCandidate,
 } from '../api.js'
-import { MemberCard, PhotoViewer, STATUS_META } from './NewPositionModal.jsx'
+import { MemberCard, PhotoViewer, STATUS_META, loadScores } from './NewPositionModal.jsx'
 import DataTable from './committee/DataTable.jsx'
 
 // The proposal_status rows the filter offers. Their ids are what getPositionsWithCandidates counts per
@@ -18,11 +17,14 @@ const STATUS_FILTERS = [
 ]
 
 // A reservation reads 'BC-GENERAL', 'SC-WOMEN', … — the category in front is what the
-// chip is tinted by, the same four colours the member card's caste field uses.
-function reservationClass(reservation) {
+// chip is tinted by, the same colours the member card's caste field uses.
+// Split on the hyphen *or* the space: an unreserved-category seat is spelt 'GENERAL' /
+// 'GENERAL WOMEN' with no hyphen, and it is still a reservation to show. Exported because
+// the Dashboard's By Location table tints the same values.
+export function reservationClass(reservation) {
   if (!reservation) return 'open'
-  const category = reservation.split('-')[0].trim().toUpperCase()
-  return ['BC', 'OC', 'SC', 'ST'].includes(category) ? `cat-${category}` : ''
+  const category = reservation.split(/[-\s]/)[0].trim().toUpperCase()
+  return ['BC', 'OC', 'SC', 'ST', 'GENERAL'].includes(category) ? `cat-${category}` : ''
 }
 
 // Distinct {value,label} pairs off the unfiltered row list, in first-seen order. The
@@ -362,17 +364,10 @@ export function PositionCandidatesModal({ positions, title, subtitle, reservatio
       .then((lists) => {
         if (cancelled) return
         setCandidates(Object.fromEntries(ids.map((id, i) => [id, lists[i]])))
-        const mids = lists.flat().map((c) => c.membership_id).filter(Boolean)
-        if (mids.length === 0) return
         // Decoration on a list that already rendered: an unset or slow ratings database
-        // leaves the badge and those two fields blank rather than failing the view.
-        getCadreScores(mids)
-          .then((data) => {
-            if (!cancelled) {
-              setScores(Object.fromEntries(data.candidates.map((c) => [String(c.membership_id), c])))
-            }
-          })
-          .catch((err) => console.error(err))
+        // leaves the badge and those two fields blank rather than failing the view. One
+        // call per member, not one for all of them — see loadScores.
+        loadScores(lists.flat().map((c) => c.membership_id), setScores)
       })
       .catch((err) => { if (!cancelled) { console.error(err); setError(err.message) } })
     return () => { cancelled = true }

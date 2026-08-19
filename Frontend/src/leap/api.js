@@ -134,8 +134,6 @@ export const getProposalConstituenciesByTown = (constituencyId, townId, election
   )
 export const getPositionsOverview = (proposalConstituencyId) =>
   get(`/getProposalPositionsOverviewByProposalConstituencyId?proposal_constituency_id=${proposalConstituencyId}`)
-export const getReservation = (proposalConstituencyId) =>
-  get(`/getProposalConstituencyReservation?proposal_constituency_id=${proposalConstituencyId}`)
 export const checkPositionAvailability = (proposalPositionId) =>
   get(`/checkProposalPositionAvailability?proposal_position_id=${proposalPositionId}`)
 // proposal_status_id is proposal_status's own id — 1 Proposed, 2 Shortlisted. The backend
@@ -146,9 +144,9 @@ export const assignCandidate = (proposalPositionId, tdpCadreId, proposalStatusId
     tdp_cadre_id: tdpCadreId,
     ...(proposalStatusId ? { proposal_status_id: proposalStatusId } : {}),
   })
-export const searchCadre = (proposalConstituencyId, searchType, searchValue) =>
+export const searchCadre = (proposalPositionId, searchType, searchValue) =>
   get(
-    `/cadreSearch?proposal_constituency_id=${proposalConstituencyId}` +
+    `/cadreSearch?proposal_position_id=${proposalPositionId}` +
       `&search_type=${searchType}&search_value=${encodeURIComponent(searchValue)}`
   )
 // Moves an assigned candidate between Proposed / Shortlisted / Confirmed. The only write
