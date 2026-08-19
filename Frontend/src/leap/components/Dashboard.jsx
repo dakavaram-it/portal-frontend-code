@@ -316,11 +316,16 @@ function StatCard({ icon, label, value, accent, rows }) {
 function DashboardSkeleton() {
   return (
     <div className="leap-skeleton" aria-hidden="true">
-      <div className="leap-dash-tier-cards">
-        {[0, 1].map((i) => <div key={i} className="leap-skel leap-skel-tier" />)}
-      </div>
-      <div className="leap-stat-row">
-        {[0, 1, 2].map((i) => <div key={i} className="leap-skel leap-skel-tile" />)}
+      {/* Both tiers side by side, the way they land — a tier bar over a row of post tiles. */}
+      <div className="leap-dash-tier-columns">
+        {[0, 1].map((i) => (
+          <div className="leap-dash-tier-block" key={i}>
+            <div className="leap-skel leap-skel-tier" />
+            <div className="leap-stat-row">
+              {[0, 1, 2].map((j) => <div key={j} className="leap-skel leap-skel-tile" />)}
+            </div>
+          </div>
+        ))}
       </div>
       <div className="leap-stat-row">
         {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="leap-skel leap-skel-tile" />)}
@@ -336,7 +341,6 @@ function DashboardSkeleton() {
 // under it, instead of hiding them behind a <select>.
 export default function Dashboard({ user, onNavigate }) {
   const [assemblyId, setAssemblyId] = useState('')
-  const [tierId, setTierId] = useState(ELECTION_TIERS[0].id)
   const [cardKey, setCardKey] = useState('')
   // Bumped by the refresh button. getDashboardPositions's counts move whenever anyone proposes or removes
   // a candidate, and this screen has no other reason to re-read them.
@@ -420,21 +424,22 @@ export default function Dashboard({ user, onNavigate }) {
     return built
   }, [rows])
 
-  const tier = tiers.find((t) => t.id === tierId) || tiers[0]
-  const tierCards = tier.bodies.flatMap((b) => b.cards)
+  // Both tiers stand on the screen at once, so a post is picked out of all of them
+  // rather than out of whichever tab was open.
+  const allCards = tiers.flatMap((t) => t.bodies.flatMap((b) => b.cards))
 
-  // A post's stats open on their own rather than waiting for a click, so the tier lands
+  // A post's stats open on their own rather than waiting for a click, so the screen lands
   // with numbers on it. Only a card that actually has rows can be opened — a static card
   // has nothing to put in the tiles. A refresh keeps whichever post was open.
   useEffect(() => {
     setCardKey((current) =>
-      tierCards.some((c) => c.key === current && c.positions.length > 0)
+      allCards.some((c) => c.key === current && c.positions.length > 0)
         ? current
-        : (tierCards.find((c) => c.positions.length > 0)?.key ?? '')
+        : (allCards.find((c) => c.positions.length > 0)?.key ?? '')
     )
-  }, [tiers, tierId])
+  }, [tiers])
 
-  const openCard = tierCards.find((c) => c.key === cardKey && c.positions.length > 0) || null
+  const openCard = allCards.find((c) => c.key === cardKey && c.positions.length > 0) || null
 
   const assemblyPicked = !!assemblyId
   // Since the assembly picks itself, "the grants are still arriving" and "this assembly's
@@ -515,21 +520,19 @@ export default function Dashboard({ user, onNavigate }) {
 
       {!loading && (
         <>
-          <div className="leap-dash-tier-cards" role="tablist" aria-label="Election tier">
-            {tiers.map((t, i) => {
-              const positions = t.bodies.flatMap((b) => b.cards).flatMap((c) => c.positions)
-              const slots = positions.reduce((n, p) => n + p.max_proposals, 0)
-              const filled = positions.reduce((n, p) => n + p.proposed_cnt, 0)
-              const isOpen = t.id === tier.id
-              return (
-                <button
-                  type="button"
-                  role="tab"
-                  key={t.id}
-                  aria-selected={isOpen}
-                  className={`leap-dash-tier-card ${tierTone(t.id)} ${isOpen ? 'open' : ''}`}
-                  onClick={() => setTierId(t.id)}
-                >
+          {/* Both tiers stand on the one screen, side by side — the election is one plan,
+              and a tab that hid half of it made "what is left to do" a question you had to
+              ask twice. Below 1281px the two columns stack. */}
+          <div className="leap-dash-tier-columns">
+          {tiers.map((t, i) => {
+            const tierPositions = t.bodies.flatMap((b) => b.cards).flatMap((c) => c.positions)
+            const slots = tierPositions.reduce((n, p) => n + p.max_proposals, 0)
+            const filledSlots = tierPositions.reduce((n, p) => n + p.proposed_cnt, 0)
+            return (
+              <section className="leap-dash-tier-block" key={t.id} aria-label={t.label}>
+                {/* The tier card is now the heading of the block under it rather than a tab
+                    that swapped it, so it keeps its tone and loses its click. */}
+                <div className={`leap-dash-tier-card leap-dash-tier-head ${tierTone(t.id)} open`}>
                   <span className="leap-dash-tier-icon">{i === 0 ? <IconLayers /> : <IconPin />}</span>
                   <span className="leap-dash-tier-text">
                     <span className="leap-dash-tier-card-label">{t.label}</span>
@@ -538,7 +541,7 @@ export default function Dashboard({ user, onNavigate }) {
                   <span className="leap-dash-tier-figure">
                     {slots > 0 ? (
                       <>
-                        <b>{filled}</b>
+                        <b>{filledSlots}</b>
                         <span className="leap-dash-tier-figure-of">/ {slots}</span>
                         <span className="leap-dash-tier-figure-label">slots filled</span>
                       </>
@@ -546,87 +549,82 @@ export default function Dashboard({ user, onNavigate }) {
                       <span className="leap-dash-tier-figure-label">nothing configured</span>
                     )}
                   </span>
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Bodies stand two to a row (Mandal Parishad / Zilla Parishad, Municipality /
-              Municipal Corporation). A tier with three of them has an odd one out, and it
-              is the last — Gram Panchayat sits under the pair and keeps the full width
-              rather than leaving a gap beside it. */}
-          <div className="leap-dash-body-grid">
-          {tier.bodies.map((body, bodyIndex) => {
-            const configured = body.cards.filter((c) => c.positions.length > 0).length
-            const full = tier.bodies.length % 2 === 1 && bodyIndex === tier.bodies.length - 1
-            return (
-              <div
-                className={`leap-dash-body-group${full ? ' leap-dash-body-group-full' : ''}`}
-                key={`${tier.id}/${body.label}`}
-              >
-                <div className="leap-dash-body-head">
-                  <h2>{body.label}</h2>
-                  {body.sub && <span className="leap-dash-body-sub">{body.sub}</span>}
-                  <span className="leap-dash-body-rule" />
-                  <span className="leap-dash-body-count">
-                    {configured} of {body.cards.length} configured
-                  </span>
                 </div>
-                {/* The same row the six metric tiles use, so a post card is the same
-                    object as a metric card — same width, same three columns, same
-                    breakpoints — rather than a second card language on one screen. */}
-                <div className="leap-stat-row">
-                  {body.cards.map((card) => {
-                    const isOpen = card.key === cardKey && card.positions.length > 0
-                    // No rows means no proposal constituency is configured for this post
-                    // yet. The card still stands — it is part of the election — but there is
-                    // nothing behind it to open.
-                    const empty = card.positions.length === 0
-                    // How many of this post's own proposal_position rows exist across the
-                    // assembly, and how many of them have at least one live candidate —
-                    // not candidates over proposal slots, which could read as more filled
-                    // than there are positions to hold them (2 candidates on one seat's
-                    // 3 slots would show as "2 / 1 positions", which is not what it means).
-                    const totalPositions = card.positions.length
-                    const filled = card.positions.filter((p) => p.proposed_cnt > 0).length
+
+                {/* One tier is one column, so its bodies stack inside it — Mandal Parishad
+                    over Zilla Parishad, and the three local-body ones under each other. */}
+                <div className="leap-dash-body-grid">
+                  {t.bodies.map((body) => {
+                    const configured = body.cards.filter((c) => c.positions.length > 0).length
                     return (
-                      <StatTile
-                        key={card.key}
-                        // `name` because `value` is markup here, and the accessible name
-                        // has to be the post's name rather than that element.
-                        name={card.label}
-                        // Every post card has the same two lines — its name, then its
-                        // positions line — whether or not it is configured, so the six read as one
-                        // row rather than two configured cards beside four floating names.
-                        // No `of`: the count is the card, and a meter under it measured a
-                        // ratio the row is not asking about.
-                        className={`leap-dash-post ${tierTone(tier.id)}${empty ? ' leap-dash-post-empty' : ''}`}
-                        icon={body.icon}
-                        accent={empty ? '#9ca3af' : body.accent}
-                        value={
-                          <>
-                            <span className="leap-dash-post-name">{card.label}</span>
-                            {empty ? (
-                              <span className="leap-dash-post-note">Not configured</span>
-                            ) : (
-                              <span className="leap-dash-post-figure">
-                                <b>{filled}</b>
-                                <span className="leap-dash-post-figure-of">/ {totalPositions}</span>
-                                <span className="leap-dash-post-figure-label">positions</span>
-                              </span>
-                            )}
-                          </>
-                        }
-                        active={isOpen}
-                        actionLabel="show this post's numbers"
-                        // An empty post has nothing behind it to open, so it renders as a
-                        // plain tile rather than a button.
-                        onClick={empty ? undefined : () => setCardKey(isOpen ? '' : card.key)}
-                      />
+                      <div className="leap-dash-body-group" key={`${t.id}/${body.label}`}>
+                        <div className="leap-dash-body-head">
+                          <h2>{body.label}</h2>
+                          {body.sub && <span className="leap-dash-body-sub">{body.sub}</span>}
+                          <span className="leap-dash-body-rule" />
+                          <span className="leap-dash-body-count">
+                            {configured} of {body.cards.length} configured
+                          </span>
+                        </div>
+                        {/* The same row the six metric tiles use, so a post card is the same
+                            object as a metric card — same width, same three columns, same
+                            breakpoints — rather than a second card language on one screen. */}
+                        <div className="leap-stat-row">
+                          {body.cards.map((card) => {
+                            const isOpen = card.key === cardKey && card.positions.length > 0
+                            // No rows means no proposal constituency is configured for this post
+                            // yet. The card still stands — it is part of the election — but there is
+                            // nothing behind it to open.
+                            const empty = card.positions.length === 0
+                            // How many of this post's own proposal_position rows exist across the
+                            // assembly, and how many of them have at least one live candidate —
+                            // not candidates over proposal slots, which could read as more filled
+                            // than there are positions to hold them (2 candidates on one seat's
+                            // 3 slots would show as "2 / 1 positions", which is not what it means).
+                            const totalPositions = card.positions.length
+                            const filled = card.positions.filter((p) => p.proposed_cnt > 0).length
+                            return (
+                              <StatTile
+                                key={card.key}
+                                // `name` because `value` is markup here, and the accessible name
+                                // has to be the post's name rather than that element.
+                                name={card.label}
+                                // Every post card has the same two lines — its name, then its
+                                // positions line — whether or not it is configured, so the six read as one
+                                // row rather than two configured cards beside four floating names.
+                                // No `of`: the count is the card, and a meter under it measured a
+                                // ratio the row is not asking about.
+                                className={`leap-dash-post ${tierTone(t.id)}${empty ? ' leap-dash-post-empty' : ''}`}
+                                icon={body.icon}
+                                accent={empty ? '#9ca3af' : body.accent}
+                                value={
+                                  <>
+                                    <span className="leap-dash-post-name">{card.label}</span>
+                                    {empty ? (
+                                      <span className="leap-dash-post-note">Not configured</span>
+                                    ) : (
+                                      <span className="leap-dash-post-figure">
+                                        <b>{filled}</b>
+                                        <span className="leap-dash-post-figure-of">/ {totalPositions}</span>
+                                        <span className="leap-dash-post-figure-label">positions</span>
+                                      </span>
+                                    )}
+                                  </>
+                                }
+                                active={isOpen}
+                                actionLabel="show this post's numbers"
+                                // An empty post has nothing behind it to open, so it renders as a
+                                // plain tile rather than a button.
+                                onClick={empty ? undefined : () => setCardKey(isOpen ? '' : card.key)}
+                              />
+                            )
+                          })}
+                        </div>
+                      </div>
                     )
                   })}
                 </div>
-              </div>
+              </section>
             )
           })}
           </div>
@@ -635,8 +633,7 @@ export default function Dashboard({ user, onNavigate }) {
 
       {!loading && !openCard && (rows || []).length > 0 && (
         <div className="leap-members-empty">
-          No post in this tier is configured under this assembly. Pick the other tier to see
-          what is.
+          No post is configured under this assembly yet.
         </div>
       )}
 
