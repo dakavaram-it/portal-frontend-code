@@ -132,8 +132,11 @@ const ELECTION_TIERS = [
         accent: '#7c3aed',
         cards: [
           { label: 'ZPTC', types: ['ZPTC'] },
-          { label: 'ZP Chairman', types: ['ZP'], roles: ['Chairman', 'Chairperson', 'President', 'ZP Chairman'] },
-          { label: 'Vice-Chairman', types: ['ZP'], roles: ['Vice-Chairman', 'Vice-President', 'Vice-Chairperson'] },
+          // 'Zilla Parishath' is the proposal_election_type row's own spelling — the
+          // shorthand alone matched nothing, so both chair cards read "Not configured"
+          // however much data the district held.
+          { label: 'ZP Chairman', types: ['Zilla Parishath', 'ZP'], roles: ['Chairman', 'Chairperson', 'President', 'ZP Chairman'] },
+          { label: 'Vice-Chairman', types: ['Zilla Parishath', 'ZP'], roles: ['Vice-Chairman', 'Vice-President', 'Vice-Chairperson'] },
         ],
       },
     ],
@@ -812,6 +815,12 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate, onDataC
   // Assign button stays enabled up to that cap and disables once it's reached.
   const hasRoom = (l) => l.maxProposals > 0 && l.proposedCnt < l.maxProposals
 
+  // The wizard reaches a local body through a mandal or a town, so a district-level body
+  // (Zilla Parishath) has nothing to prefill step 3 with and Assign would hand it an
+  // empty picklist. It is listed and countable here either way — only the button that
+  // would dead-end is withheld.
+  const canAssign = (l) => hasRoom(l) && (!!l.tehsilId || !!l.townId)
+
   const assignLocation = (l) => {
     const locationKey = l.tehsilId ? `m:${l.tehsilId}` : l.townId ? `t:${l.townId}` : ''
     onNavigate({
@@ -1009,8 +1018,14 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate, onDataC
                           <button
                             type="button"
                             className="leap-btn-ghost"
-                            disabled={!hasRoom(l)}
-                            title={hasRoom(l) ? 'Assign candidates' : 'No open proposal slots left'}
+                            disabled={!canAssign(l)}
+                            title={
+                              !hasRoom(l)
+                                ? 'No open proposal slots left'
+                                : !canAssign(l)
+                                  ? 'District-level body — not reachable from the mandal/town wizard yet'
+                                  : 'Assign candidates'
+                            }
                             aria-label={`Assign candidates for ${l.name}`}
                             onClick={() => assignLocation(l)}
                           >

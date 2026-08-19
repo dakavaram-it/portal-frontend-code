@@ -793,12 +793,18 @@ export default function NewPositionModal({ initial } = {}) {
     electionTypes.find((t) => String(t.proposal_election_type_id) === electionTypeId)?.election_type || ''
   const localBodyLabel = electionType || 'Local Body'
 
-  // ZPTC/MPTC data is mandal-based and Municipal Ward/Corporation Ward data is
-  // town-based (see the proposal_consituency rows behind each type) — restricting
-  // step 3 to the relevant picklist instead of merging both avoids a selection that
-  // can never resolve to a local body.
-  const isMandalOnlyType = electionType === 'ZPTC' || electionType === 'MPTC'
-  const isTownOnlyType = electionType === 'Municipal Ward' || electionType === 'Corporation Ward'
+  // ZPTC/MPTC/MPP data is mandal-based and the municipal types are town-based (see the
+  // proposal_consituency rows behind each type) — restricting step 3 to the relevant
+  // picklist instead of merging both avoids a selection that can never resolve to a
+  // local body. Every name here is a proposal_election_type.election_type value: a type
+  // missing from both sets falls back to the merged picklist, which is why Municipality
+  // and Corporation used to offer mandals and then report themselves "not configured".
+  const MANDAL_ONLY_TYPES = new Set(['ZPTC', 'MPTC', 'MPP'])
+  const TOWN_ONLY_TYPES = new Set([
+    'Municipality', 'Corporation', 'Municipal Ward', 'Corporation Ward', 'GMC Ward',
+  ])
+  const isMandalOnlyType = MANDAL_ONLY_TYPES.has(electionType)
+  const isTownOnlyType = TOWN_ONLY_TYPES.has(electionType)
 
   const mandals = useList(
     assemblyId && !isTownOnlyType ? () => getMandals(assemblyId) : null,
