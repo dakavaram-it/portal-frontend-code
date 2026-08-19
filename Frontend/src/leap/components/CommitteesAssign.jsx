@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { getAssemblies, useLoadable } from '../api.js'
-import { Dropdown } from './NewPositionModal.jsx'
 import KssPanel from './committee/KssPanel.jsx'
 import CubsPanel from './committee/CubsPanel.jsx'
 import MainCommitteePanel from './committee/MainCommitteePanel.jsx'
@@ -14,7 +13,34 @@ const CUBS_TYPES = [
   { id: 'cluster', label: 'Cluster Wise Committee', committeeLevelId: 17 },
 ]
 
-export default function CommitteesAssign({ user }) {
+const COMMITTEE_NOTES = [
+  'పార్టీలో ఏ పదవివైనా అతను/ఆమె KSS అయి ఉండాలి.',
+  'ప్రతి 60 మంది ఓటర్లకు ఒక KSS విభాగాన్ని సృష్టించాలి.',
+  'ప్రతి KSS విభాగానికి - ఒక పురుషుడు మరియు ఒక స్త్రీ సభ్యురాలిని కేటాయించాలి.',
+]
+
+// Sits in the committee header where the constituency picker used to — every note, all
+// at once, no motion.
+function NotesPanel({ notes }) {
+  return (
+    <div className="leap-notes-panel">
+      <span className="leap-notes-panel-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 8v5" />
+          <path d="M12 16.5h.01" />
+        </svg>
+      </span>
+      <ul className="leap-notes-panel-list">
+        {notes.map((note, i) => (
+          <li key={i}>{note}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+export default function CommitteesAssign({ user, navKey = 0 }) {
   const [assemblyId, setAssemblyId] = useState('')
   const [tab, setTab] = useState('cubs')
   const [typeId, setTypeId] = useState(CUBS_TYPES[0].id)
@@ -47,25 +73,7 @@ export default function CommitteesAssign({ user }) {
         </div>
 
         <div className="leap-header-actions">
-          <div className="leap-dash-filter">
-            <label className="leap-dash-filter-label" htmlFor="committee-assembly">Constituency</label>
-            {assembliesLoading ? (
-              <div className="leap-skel leap-skel-input" aria-label="Loading assemblies" />
-            ) : (
-              <div id="committee-assembly">
-                <Dropdown
-                  value={assemblyId}
-                  onChange={setAssemblyId}
-                  searchable
-                  placeholder="Select…"
-                  options={assemblies.map((a) => ({
-                    value: String(a.constituency_id),
-                    label: a.constituency_name,
-                  }))}
-                />
-              </div>
-            )}
-          </div>
+          <NotesPanel notes={COMMITTEE_NOTES} />
         </div>
       </div>
 
@@ -78,22 +86,6 @@ export default function CommitteesAssign({ user }) {
 
       {assemblyId && (
         <>
-          <div className="leap-committee-note">
-            <span className="leap-committee-note-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="9" />
-                <path d="M12 8v5" />
-                <path d="M12 16.5h.01" />
-              </svg>
-            </span>
-            <p>
-              <strong>Note: </strong>
-              1. పార్టీలో ఏ పదవివైనా అతను/ఆమె KSS అయి ఉండాలి.
-              {' '}2. ప్రతి 60 మంది ఓటర్లకు ఒక KSS విభాగాన్ని సృష్టించాలి.
-              {' '}3. ప్రతి KSS విభాగానికి - ఒక పురుషుడు మరియు ఒక స్త్రీ సభ్యురాలిని కేటాయించాలి.
-            </p>
-          </div>
-
           <div className="leap-committee-tabs-row">
             <div className="leap-committee-tabs" role="tablist" aria-label="Committee mode">
               {[{ id: 'cubs', label: 'CUBS' }, { id: 'committees', label: 'Committees' }].map((t) => (
@@ -113,7 +105,7 @@ export default function CommitteesAssign({ user }) {
 
           {tab === 'committees' ? (
             <div className="leap-committee-card">
-              <MainCommitteePanel key={assemblyId} constituencyId={assemblyId} user={user} />
+              <MainCommitteePanel key={`${assemblyId}_${navKey}`} constituencyId={assemblyId} user={user} />
             </div>
           ) : (
             <div className="leap-committee-card">
@@ -134,13 +126,14 @@ export default function CommitteesAssign({ user }) {
 
               <div className="leap-section">
                 {typeId === 'kss' ? (
-                  <KssPanel key={assemblyId} constituencyId={assemblyId} user={user} locationName={assemblyName} />
+                  <KssPanel key={`${assemblyId}_${navKey}`} constituencyId={assemblyId} user={user} locationName={assemblyName} />
                 ) : (
                   <CubsPanel
-                    key={`${assemblyId}_${activeType.committeeLevelId}`}
+                    key={`${assemblyId}_${activeType.committeeLevelId}_${navKey}`}
                     constituencyId={assemblyId}
                     committeeLevelId={activeType.committeeLevelId}
                     locationName={assemblyName}
+                    user={user}
                   />
                 )}
               </div>

@@ -563,7 +563,7 @@
 @media (prefers-reduced-motion: reduce) {
   .leap-progress-fill { transition: none; }
   .leap-skel { animation: none; }
-  .leap-spinner, .leap-committee-delete-spinner { animation: none; }
+  .leap-spinner, .leap-committee-delete-spinner, .leap-btn-spinner { animation: none; }
 }
 
 /* The picker above the metrics is three levels deep — tier, body, post — so each level
@@ -1189,46 +1189,46 @@
   margin-bottom: 0;
 }
 
-/* One line on a wide screen, wrapping only where it must — the earlier stacked-bullet
-   version ran three full-width lines deep before anything else on the page got to
-   render. */
-.leap-committee-note {
+/* Sits in the committee header where the constituency picker used to — every note, all
+   at once, no motion. Wider than the picker it replaced since it's prose, not a field. */
+.leap-notes-panel {
   display: flex;
   gap: 10px;
-  align-items: center;
-  background: #fff7ed;
+  align-items: flex-start;
+  background: linear-gradient(135deg, #fff7ed, #fef2f2);
   border: 1px solid #fde8d7;
   border-left: 4px solid #c8291e;
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 10px 16px;
-  margin-bottom: 20px;
+  min-width: 480px;
+  max-width: 640px;
+}
+
+.leap-notes-panel-icon {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  margin-top: 2px;
+  color: #c8291e;
+}
+
+.leap-notes-panel-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.leap-notes-panel-list {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0 0 0 16px;
   font-size: 12.5px;
   line-height: 1.5;
   color: #7c2d12;
 }
 
-.leap-committee-note-icon {
-  flex: none;
-  width: 17px;
-  height: 17px;
-  color: #c8291e;
-}
-
-.leap-committee-note-icon svg {
-  width: 100%;
-  height: 100%;
-}
-
-.leap-committee-note p {
-  margin: 0;
-}
-
-.leap-committee-note strong {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #c8291e;
+.leap-notes-panel-list li + li {
+  margin-top: 2px;
 }
 
 .leap-committee-tabs-row {
@@ -1240,6 +1240,7 @@
 .leap-committee-tabs {
   display: inline-flex;
   background: #f3f4f6;
+  border: 1px solid #e5e7eb;
   border-radius: 999px;
   padding: 4px;
   gap: 4px;
@@ -1260,19 +1261,29 @@
 }
 
 .leap-committee-tab {
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
-  padding: 9px 22px;
+  padding: 9px 32px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: #6b7280;
   cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.leap-committee-tab:hover:not(.active) {
+  border-color: #d1d5db;
+  color: #374151;
 }
 
 .leap-committee-tab.active {
   background: #c8291e;
+  border-color: #c8291e;
   color: #fff;
+  box-shadow: 0 2px 6px rgba(200, 41, 30, 0.35);
 }
 
 /* The chip radio row and the section title/tiles beneath it otherwise sit almost flush
@@ -1298,11 +1309,30 @@
   .leap-stat-row.leap-committee-stat-row { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* The CUBS tiles are a single "Total" tile, not a row of them — full grid width would
-   stretch it absurdly wide, so it gets a fixed, card-sized column instead. */
-.leap-stat-row.leap-committee-stat-row.leap-committee-stat-row-narrow {
-  grid-template-columns: minmax(220px, 320px);
-  margin-bottom: 20px;
+/* CUBS' Total/Convener/Co-Convener trio — three tiles, not the five-wide KSS row, so it
+   gets its own column count rather than leaving two tracks empty in the shared one. */
+.leap-stat-row.leap-committee-stat-row.leap-committee-stat-row-triple {
+  grid-template-columns: repeat(3, minmax(200px, 1fr));
+  margin-bottom: 0;
+}
+
+@media (max-width: 760px) {
+  .leap-stat-row.leap-committee-stat-row.leap-committee-stat-row-triple { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 480px) {
+  .leap-stat-row.leap-committee-stat-row.leap-committee-stat-row-triple { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* A distinct card behind the overview tiles — previously they sat directly on the page
+   background with a separate table below; now the table's gone (see CubsPanel.jsx) and
+   the tiles alone need something to visually set the "overview" section apart. */
+.leap-committee-overview-card {
+  background: linear-gradient(135deg, #f8fafc, #eef2ff);
+  border: 1px solid #e0e7ff;
+  border-radius: 16px;
+  padding: 18px;
+  margin-top: 14px;
 }
 
 .leap-committee-actions {
@@ -1310,6 +1340,41 @@
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 20px;
+}
+
+.leap-committee-actions-center {
+  justify-content: center;
+}
+
+.leap-committee-mode-hint {
+  margin: 14px 0 4px;
+  text-align: center;
+  font-size: 12.5px;
+  color: #9ca3af;
+}
+
+.leap-committee-mode-hint strong {
+  color: #6b7280;
+}
+
+/* Shown in place of the delete icon once a committee is confirmed — green, matching the
+   legacy screen's own styling for this exact message, since it's good news (the roster is
+   settled) rather than a warning. */
+.leap-committee-locked-note {
+  margin: 4px 0 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #059669;
+}
+
+/* Everything View/Add can show — previously butted straight up against the actions row
+   above it (which supplied its own top margin, but that row is hidden when a caller like
+   CubsPanel places its own buttons elsewhere, leaving nothing above this at all). Spacing
+   only, deliberately no card of its own — the member table and the Add form each already
+   draw their own single box (.leap-table-card / .leap-committee-panel), and wrapping a
+   second box around that just doubled the border/padding into a box-inside-a-box. */
+.leap-committee-snapshot-content {
+  margin-top: 18px;
 }
 
 .leap-committee-actions .leap-btn-secondary {
@@ -1344,6 +1409,12 @@
   background: #ecfdf5;
 }
 
+.leap-btn-secondary.accent-purple {
+  color: #6d28d9;
+  border-color: #c4b5fd;
+  background: #f5f3ff;
+}
+
 .leap-btn-secondary.accent-blue.is-active {
   background: #2563eb;
   border-color: #2563eb;
@@ -1359,6 +1430,12 @@
 .leap-btn-secondary.accent-green.is-active {
   background: #059669;
   border-color: #059669;
+  color: #fff;
+}
+
+.leap-btn-secondary.accent-purple.is-active {
+  background: #6d28d9;
+  border-color: #6d28d9;
   color: #fff;
 }
 
@@ -1382,11 +1459,56 @@
   font-size: 15px;
 }
 
+.leap-committee-designation-field {
+  max-width: 340px;
+  margin-bottom: 14px;
+}
+
+.leap-committee-assign-btn {
+  margin-top: 10px;
+}
+
+/* The location picker that gates the whole View/Add flow below it — the same tint as the
+   Overview card above it (rather than a different colour of its own), so the two read as
+   one consistent surface rather than a clashing pair. */
+.leap-committee-members-card {
+  background: linear-gradient(135deg, #f8fafc, #eef2ff);
+  border-color: #e0e7ff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+/* Select Booth/Unit/Cluster and the View/Add pair on one line — the field carries a
+   label above it and the buttons don't, so aligning to their bottom edge (not center)
+   is what actually lines the dropdown box up with the buttons rather than with their
+   label row. */
+.leap-committee-members-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 14px 20px;
+}
+
+.leap-committee-members-row .leap-committee-field {
+  flex: 0 1 280px;
+  min-width: 200px;
+}
+
+.leap-committee-members-row .leap-committee-actions {
+  margin-top: 0;
+}
+
 .leap-committee-form-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 14px;
   margin-bottom: 14px;
+}
+
+/* Assign Members' own two-field row (Booth/Unassigned KSS) — no `1fr` in the track size,
+   so the fields sit at their own width side by side instead of stretching to fill (and
+   visually gap apart over) the full row width the way the four-field Create rows want. */
+.leap-committee-form-row-compact {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 280px));
 }
 
 .leap-committee-field label {
@@ -1409,6 +1531,114 @@
 }
 
 .leap-committee-field .leap-dropdown {
+  width: 100%;
+}
+
+.leap-committee-subhead {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6b7280;
+  margin: 10px 0 6px;
+}
+
+/* For a subhead that opens its container (Overview, Search Member) rather than following
+   other content — the same label style, just without the top margin meant to separate it
+   from something above it that isn't there. */
+.leap-committee-subhead-flush {
+  margin-top: 0;
+}
+
+/* The staged-member well for Create KSS & Assign Members — dashed on purpose, to read as
+   a working area you're still building up rather than a finished card like the ones in
+   View/Add Members elsewhere in this module. Column layout (grid, not a stacked block):
+   at most two members ever land here, so two cards side by side reads as a set rather
+   than a long scroll of near-empty space under one. */
+.leap-committee-staged-box {
+  border: 1.5px dashed #d8dce3;
+  border-radius: 14px;
+  background: #fafbfc;
+  padding: 12px;
+  margin: 0 0 14px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .leap-committee-staged-box {
+    grid-template-columns: 1fr;
+  }
+}
+
+.leap-committee-staged-box .leap-committee-staged-card {
+  background: #fff;
+  margin-bottom: 0;
+}
+
+/* Small and left-aligned rather than a full-width bar — it sits inside the staged-member
+   well, spanning the grid row below whatever cards are there, but sized to its own label. */
+.leap-committee-staged-box .leap-committee-submit-btn {
+  grid-column: 1 / -1;
+  justify-self: start;
+  width: auto;
+  margin-top: 2px;
+}
+
+/* A clearly separate, solid-bordered block (as opposed to the dashed staged-member well
+   above) so the search step reads as its own section rather than blending into it. Light
+   yellow, tinting it as the "working" step rather than the neutral white of the finished
+   staged-member well. */
+.leap-committee-search-box {
+  border: 1px solid #fde68a;
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin: 0 0 16px;
+  background: #fffbea;
+}
+
+.leap-committee-search-box .leap-committee-subhead {
+  margin-bottom: 10px;
+}
+
+.leap-committee-search-box .leap-committee-staged-card {
+  background: #fff;
+  margin-top: 12px;
+}
+
+.leap-committee-search-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  margin-bottom: 4px;
+}
+
+/* Narrower than a full-width bar — sized to sit under the search-type radio row above it
+   rather than stretching edge to edge of the panel. */
+.leap-committee-search-row input {
+  width: 100%;
+  max-width: 260px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.leap-committee-search-row button {
+  flex: none;
+}
+
+.leap-committee-search-box .leap-field-hint {
+  margin-top: 10px;
+}
+
+.leap-committee-submit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
 }
 
@@ -1443,6 +1673,18 @@
   object-fit: cover;
 }
 
+/* The 32px in-table avatar (MemberTable's Photo column) — small enough that the default
+   44px .leap-committee-staged-photo reads oversized against the row's own text. Doubles
+   as the bare-`<img>` variant too (no .leap-committee-staged-photo circle/background to
+   inherit from there), which is why border-radius is repeated here rather than assumed. */
+.leap-committee-member-photo {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  font-size: 11px;
+}
+
 .leap-committee-staged-body {
   flex: 1;
   min-width: 0;
@@ -1450,7 +1692,9 @@
 
 .leap-committee-staged-name {
   font-weight: 700;
-  font-size: 13.5px;
+  font-size: 14px;
+  margin-top: 4px;
+  margin-bottom: 2px;
 }
 
 .leap-committee-staged-meta {
@@ -1466,18 +1710,30 @@
   flex-wrap: wrap;
 }
 
+/* Capped rather than flex:1 — on a full-width card (Assign Members' single-result
+   preview) stretching to fill the row left the caste dropdown and mobile input
+   uncomfortably wide; a fixed-ish width reads as a form field instead of a bar. */
 .leap-committee-staged-fields > * {
-  flex: 1;
+  flex: 0 1 200px;
   min-width: 140px;
+  max-width: 240px;
 }
 
-.leap-committee-remove-btn {
-  background: none;
-  border: none;
-  color: #dc2626;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
+/* The mobile-number field is a plain input, unlike the caste field's own styled
+   Dropdown — it had no border/padding rule of its own and was rendering as a bare
+   browser-default box next to it. */
+.leap-committee-staged-fields input {
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.leap-committee-staged-fields input:focus {
+  outline: none;
+  border-color: #c8291e;
+  box-shadow: 0 0 0 3px rgba(200, 41, 30, 0.12);
 }
 
 .leap-committee-modal {
@@ -1580,74 +1836,6 @@
   text-decoration: underline;
 }
 
-.leap-committee-role-section {
-  margin-bottom: 20px;
-}
-
-.leap-committee-role-legend {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  font-size: 11.5px;
-  color: #6b7280;
-  margin-bottom: 12px;
-}
-
-.leap-committee-role-legend span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.leap-committee-role-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.leap-committee-role-dot.total { background: #6b7280; }
-.leap-committee-role-dot.proposed { background: #d97706; }
-.leap-committee-role-dot.finalized { background: #059669; }
-.leap-committee-role-dot.vacancy { background: #dc2626; }
-
-.leap-committee-role-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
-}
-
-.leap-committee-role-card {
-  background: #fff;
-  border: 1px solid #eef0f3;
-  border-radius: 12px;
-  padding: 12px 14px;
-}
-
-.leap-committee-role-name {
-  font-size: 12.5px;
-  font-weight: 700;
-  color: #1f2937;
-  margin-bottom: 8px;
-}
-
-.leap-committee-role-badges {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.leap-committee-role-badge {
-  font-size: 11.5px;
-  font-weight: 700;
-  padding: 3px 9px;
-  border-radius: 999px;
-}
-
-.leap-committee-role-badge.total { background: #f3f4f6; color: #4b5563; }
-.leap-committee-role-badge.proposed { background: #fef3c7; color: #92400e; }
-.leap-committee-role-badge.finalized { background: #d1fae5; color: #065f46; }
-.leap-committee-role-badge.vacancy { background: #fee2e2; color: #991b1b; }
 
 /* ---------- Pipeline panels ---------- */
 .leap-pipeline-grid {
@@ -1993,6 +2181,30 @@
 
 .leap-table-card .leap-table tr:last-child td {
   border-bottom: none;
+}
+
+/* Committee Members' own table — a plain white thead/tbody read as one undifferentiated
+   block, especially now that it sits inside a card of its own rather than under a page
+   heading. */
+.leap-committee-member-table .leap-table thead th {
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.leap-committee-member-table .leap-table tbody tr:nth-child(even) td {
+  background: #fafbfc;
+}
+
+.leap-committee-member-table .leap-table tbody tr:hover td {
+  background: #f1f5f9;
+}
+
+.leap-committee-member-table .leap-table td {
+  border-bottom: 1px solid #eef0f3;
 }
 
 .leap-table-view-btn {
@@ -2617,6 +2829,25 @@
   cursor: not-allowed;
 }
 
+.leap-btn-spinner {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  margin-right: 7px;
+  vertical-align: -2px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  animation: leap-spin 0.7s linear infinite;
+}
+
+/* On a light button (leap-btn-secondary) the white-on-transparent spinner above is
+   invisible — this swaps it to a dark ring for use there. */
+.leap-btn-spinner-dark {
+  border-color: rgba(107, 114, 128, 0.25);
+  border-top-color: #374151;
+}
+
 .leap-btn-secondary {
   background: #fff;
   border: 1px solid #e5e7eb;
@@ -2857,6 +3088,309 @@
   font-size: 16px;
   color: #9ca3af;
   cursor: pointer;
+}
+
+/* The Membership ID/Voter ID/Mobile No/Name choice ahead of a committee search — same
+   four fields as the main Cadre Search screen's own radio row, restyled with this
+   module's own red accent rather than that screen's yellow one. */
+.leap-committee-search-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  margin-bottom: 14px;
+}
+
+.leap-committee-search-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: #374151;
+  cursor: pointer;
+}
+
+.leap-committee-search-type input {
+  accent-color: #c8291e;
+}
+
+.leap-committee-search-type.selected {
+  font-weight: 700;
+  color: #111827;
+}
+
+.leap-committee-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.leap-committee-result-card {
+  border: 1px solid #eef0f3;
+  border-radius: 12px;
+  padding: 16px 18px;
+  background: #fff;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+/* Booth Wise Committee's own Add search (KssDesignationSearch) — mirrors the legacy
+   screen's own layout: a centered title over the radio row, one combined search row,
+   then a card per matched member. Its own bordered, tinted box (like Search Member in
+   KssPanel) so it reads as a distinct step rather than floating loose in the Add panel. */
+.leap-kss-search {
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-top: 14px;
+  background: #fafbfc;
+}
+
+.leap-kss-search-title {
+  text-align: center;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 12px;
+}
+
+.leap-kss-search .leap-committee-search-types {
+  justify-content: center;
+}
+
+/* Centered as a unit — the input capped to a sensible reading width rather than
+   .leap-cadre-search-row's flex:1, which stretched it the full width of the panel and
+   left Search stranded far off to the right of it. */
+.leap-kss-search-bar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+
+.leap-kss-search-input {
+  width: 100%;
+  max-width: 420px;
+  padding: 11px 16px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  font-size: 13.5px;
+  color: #1f2430;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.leap-kss-search-input:focus {
+  outline: none;
+  border-color: #6d28d9;
+  box-shadow: 0 0 0 3px rgba(109, 40, 217, 0.12);
+}
+
+.leap-kss-search-input::placeholder {
+  color: #b3bac6;
+}
+
+.leap-kss-search-btn {
+  flex: none;
+}
+
+.leap-kss-search-hint {
+  margin: 14px 0 10px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: #6b7280;
+}
+
+/* Same card as .leap-committee-result-card (border/radius/padding/background/layout) —
+   applied together in KssDesignationSearch's markup rather than duplicated here; this is
+   only the delta this variant adds on top of it. */
+.leap-kss-result-card {
+  border-left: 3px solid #ddd6fe;
+  gap: 16px;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.leap-kss-result-card:hover {
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.leap-kss-result-card.is-added {
+  border-left-color: #a7e3cd;
+}
+
+.leap-kss-result-photo {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #e0e7ff;
+  color: #4338ca;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 15px;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #eef0f3;
+}
+
+.leap-kss-result-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.leap-kss-result-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.leap-kss-result-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.leap-kss-result-name {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #1f2430;
+}
+
+.leap-kss-result-relative {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.leap-kss-select-btn {
+  flex: none;
+  white-space: nowrap;
+  padding: 7px 14px;
+  font-size: 12px;
+}
+
+.leap-kss-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #059669;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.leap-kss-badge svg {
+  width: 13px;
+  height: 13px;
+}
+
+.leap-kss-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.leap-kss-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #374151;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.leap-kss-chip-row.muted .leap-kss-chip {
+  background: transparent;
+  border: 1px solid #eef0f3;
+  color: #9ca3af;
+}
+
+.leap-kss-chip-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+
+.leap-kss-chip-row:not(.muted) .leap-kss-chip-label {
+  color: #6b7280;
+}
+
+/* Every field the search response actually returned, label above value — sized to its
+   own content and left to wrap rather than stretched to equal columns, the same
+   flat-grid approach the main Cadre Search screen uses for its own full-detail view. */
+.leap-committee-result-grid {
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 16px;
+  column-gap: 28px;
+  margin: 16px 0 4px;
+}
+
+.leap-committee-result-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.leap-committee-result-field span {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+.leap-committee-result-field b {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1f2430;
+  line-height: 1.3;
+}
+
+.leap-committee-select-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #374151;
+  cursor: pointer;
+}
+
+.leap-committee-select-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: #0f9d6e;
+  cursor: pointer;
+}
+
+.leap-committee-added-note {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f9d6e;
 }
 
 .leap-cadre-search-row {

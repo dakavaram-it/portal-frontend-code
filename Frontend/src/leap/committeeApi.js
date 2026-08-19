@@ -1,23 +1,31 @@
-import { getToken } from './api.js'
-
 // Committees Assign talks to two more mypartydashboard.com services beyond Cadre Search &
 // Notes' PSA/Cadre resource (cadreSearchApi.js / cadreNotesApi.js): PSA's own Committee
 // resource, which is what the KSS/CUBS screen in the legacy build
 // (committessBlockSection.js) calls directly via fetch — every function below with a
 // `Committee/...` path is copied from that file's own `getPSAAPICall` calls, so the path
 // and payload shape are taken verbatim from working code, not guessed. The
-// PartyAnalyst/WebService/CommitteeWebService resource is the second: the legacy
-// booth/unit/cluster picklists (cadreCommittee.js) called those as Struts `.action`
-// endpoints, and committee_webservices(2).txt documents their migrated replacements as
-// living under that different service — same mypartydashboard.com host, different app
-// context, so it gets its own base URL.
+// WebService/CommitteeWebService resource is the second: the legacy booth/unit/cluster
+// picklists (cadreCommittee.js) called those as Struts `.action` endpoints, and
+// committee_webservices(2).txt documents their migrated replacements as living under that
+// different service — same mypartydashboard.com host, different app context, so it gets
+// its own base URL.
 const PSA_BASE = 'https://www.mypartydashboard.com/PSA/WebService'
-const PARTY_ANALYST_BASE = 'https://www.mypartydashboard.com/PartyAnalyst/WebService/CommitteeWebService'
+// Proxied (see vite.config.js) rather than called directly: this service's OPTIONS
+// preflight sends no CORS headers, so a direct cross-origin call is blocked by the
+// browser before it ever reaches the server.
+const PARTY_ANALYST_BASE = '/partyAnalystApi/WebService/CommitteeWebService'
+
+// Committee Management (both PSA_BASE and WebService/CommitteeWebService) has no
+// per-user token issuance wired up yet, so this is a placeholder shared token — a real
+// JWT, hardcoded for now. Swap this for a dynamic, per-session token once the backend can
+// issue one; when this one expires, replace the string with a fresh JWT.
+const COMMITTEE_STATIC_TOKEN =
+  'eyJhbGciOiJIUzUxMiJ9.eyJleHAiOjE3ODcyMTg4MjksInN1YiI6Ijc5MjUxIiwiaWF0IjoxNzg3MTMyNDI5fQ.tDukJZ4X_qVMnhRvzbKp0tuY_1-2LR7mYGzLdTtbyxuoXC0S-oT74epydV4bGl7S1AOu1Cw0Ib1AwldqQmFCqQ'
 
 const post = async (base, path, body) => {
   const res = await fetch(`${base}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', authToken: getToken() || '' },
+    headers: { 'Content-Type': 'application/json', authToken: COMMITTEE_STATIC_TOKEN },
     body: JSON.stringify(body),
   })
   const data = await res.json().catch(() => null)
@@ -80,6 +88,31 @@ export const getUnassignedKssSectionsByBooth = (boothId) =>
 export const addKSSMember = ({ boothId, committeeRoleId, kssCadres }) =>
   committee('/Section/addKSSMember', { boothId, committeeRoleId, kssCadres })
 
+// The Booth Wise Committee "Add a committee member" search — a different search than
+// useMembershipSearch's general PSA Cadre/search: this one is scoped to one booth
+// (`locationId`, the same id the CUBS booth picklist's own `locationId` already is) and
+// knows which cadre are already on the committee there (`isAssigned`). `locationScopeId`
+// is always `9` in the one live call this was taken from — unconfirmed whether Unit/
+// Cluster committees use a different value, so this is only wired up for Booth so far.
+export const KSS_SEARCH_LOCATION_SCOPE_BOOTH = 9
+
+// "All" (every field left blank) hits its own endpoint rather than the multi-field one
+// below with all its fields empty — taken verbatim from the legacy screen's own call.
+export const getKssMemberSearchDetails = (locationScopeId, locationId) =>
+  committee('/getKssMemberSearchDetails', {
+    locationScopeId, locationId, membershipId: '', voterCardNo: '', mobileNo: '', memberName: '',
+  })
+
+// Membership ID / Voter ID / Mobile No / Name — exactly one of these four is filled per
+// call, the rest sent empty; `committeeLevelId` is sent `null` in the one live call this
+// was taken from, so that's kept literal rather than guessed at.
+export const getCadreKssMemberSearchDetails = ({
+  locationScopeId, locationId, membershipId = '', voterCardNo = '', mobileNo = '', memberName = '',
+}) =>
+  committee('/getCadreKssMemberSearchDetails', {
+    locationScopeId, locationId, membershipId, voterCardNo, mobileNo, memberName, committeeLevelId: null,
+  })
+
 // ---------- CUBS (Booth / Unit / Cluster convenor tracking) ----------
 // committeeLevelId: 15 Booth, 16 Unit, 17 Cluster — same ids the KSS/Booth/Unit/Cluster
 // radio group in the legacy screen used.
@@ -101,17 +134,18 @@ export const getKssBooths = async (constituencyId) => {
 
 // The CUBS Booth/Unit/Cluster radio's own location lists (committee_webservices(2).txt
 // items 18/19/20) — `locationId`/`locationName`, and take `enrollmentId: 4` the way every
-// call in the legacy JS does without explaining why.
-const cubsLocations = async (path, constituencyId) => {
+// call in the legacy JS does without explaining why. `locationName` on its own is just the
+// bare number (`"1"`, `"2"`, …), so the label is prefixed with which of the three this is.
+const cubsLocations = async (path, prefix, constituencyId) => {
   const rows = await partyAnalyst(path, { constituencyId, enrollmentId: 4 })
-  return (rows || []).map((r) => ({ value: String(r.locationId), label: r.locationName }))
+  return (rows || []).map((r) => ({ value: String(r.locationId), label: `${prefix}-${r.locationName}` }))
 }
 export const getCubsBooths = (constituencyId) =>
-  cubsLocations('getTdpCommitteeBoothsByConstituencyId', constituencyId)
+  cubsLocations('getTdpCommitteeBoothsByConstituencyId', 'Booth', constituencyId)
 export const getCubsUnits = (constituencyId) =>
-  cubsLocations('getTdpCommitteeUnitsByConstituencyId', constituencyId)
+  cubsLocations('getTdpCommitteeUnitsByConstituencyId', 'Unit', constituencyId)
 export const getCubsClusters = (constituencyId) =>
-  cubsLocations('getTdpCommitteeClustersByConstituencyId', constituencyId)
+  cubsLocations('getTdpCommitteeClustersByConstituencyId', 'Cluster', constituencyId)
 
 // ---------- Main / Affiliated Committee (Village-Ward / Mandal-Town / Constituency) ----------
 // The second, older paradigm (cadreCommittee.txt's own inline script, which is what
@@ -170,13 +204,19 @@ export const getMainCommitteeSnapshot = (locationType, locationValue, committeeT
 export const getAllCommitteeMembersInALocation = (locationType, locationValue) =>
   partyAnalyst('getAllCommitteeMembersInfoInALoc', { locationType, locValue: locationValue })
 
-// Drops a member from their committee designation.
-export const deleteMainCommitteeMember = (tdpCommitteeMemberId) =>
+// Drops a member from their committee designation. Field names taken from the backend's
+// own controller (`cadreCommitteeService.deleteCadreRole(input.getCommitteeMemberId(),
+// input.getEnrollmentIdsList(), input.getStartDate(), input.getEndDate(),
+// input.getUserId())`) rather than guessed — the previous `tdpcommitteeMemberId`/
+// `committeeEnrollmentId`/`fromDate`/`toDate` names, a scalar where a list was wanted, and
+// a missing `userId` were all wrong, which is why this 500'd.
+export const deleteMainCommitteeMember = (committeeMemberId, userId) =>
   partyAnalyst('getCommitteeDetailsByStatusPopUp', {
-    tdpcommitteeMemberId: tdpCommitteeMemberId,
-    committeeEnrollmentId: ['4'],
-    fromDate: '01/01/2018',
-    toDate: new Date().toLocaleDateString('en-US'),
+    committeeMemberId,
+    enrollmentIdsList: [4],
+    startDate: '01/01/2018',
+    endDate: new Date().toLocaleDateString('en-US'),
+    userId,
     task: 'deleterole',
   })
 
