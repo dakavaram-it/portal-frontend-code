@@ -28,7 +28,16 @@ const post = async (base, path, body) => {
     headers: { 'Content-Type': 'application/json', authToken: COMMITTEE_STATIC_TOKEN },
     body: JSON.stringify(body),
   })
-  const data = await res.json().catch(() => null)
+  // Read as text first, not res.json() — some of these endpoints (checkIsVacancyForDesignationNew
+  // confirmed) answer with a plain-text message rather than JSON, and res.json() throwing
+  // on that was getting swallowed to null by the old `.catch(() => null)`, which every
+  // caller reads as "no message" rather than the real answer. Falling back to the raw
+  // text keeps that message instead of discarding it.
+  const text = await res.text()
+  let data = null
+  if (text) {
+    try { data = JSON.parse(text) } catch { data = text }
+  }
   if (!res.ok) throw new Error(`${path} -> ${res.status}`)
   return data
 }
