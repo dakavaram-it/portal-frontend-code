@@ -7,16 +7,13 @@ import {
   getProposalConstituenciesByTehsil,
   getProposalConstituenciesByTown,
   getPositionsOverview,
-  getReservation,
   getProposalCandidates,
   getCadreScores,
   searchCadre,
   assignCandidate,
-  removeProposalCandidate,
   useList,
 } from '../api.js'
-import CompareModal, { scoreTier } from './CompareModal.jsx'
-import { cadreImageUrl, searchCadre as searchCadreDirectory } from '../cadreSearchApi.js'
+import { MIN_NAME_LENGTH, cadreImageUrl, searchCadre as searchCadreDirectory } from '../cadreSearchApi.js'
 
 // How a cadre is found. `value` must stay one of the backend's CADRE_SEARCH_FILTERS keys,
 // which are also the PSA directory service's keys (see cadreSearchApi.js).
@@ -26,13 +23,15 @@ const SEARCH_TYPES = [
   { value: 'CadreName', label: 'Name', placeholder: 'Enter a cadre name…' },
 ]
 
-// searchCadre takes no location parameter, so anything but an exact membership id comes back
-// state-wide: a name is a substring match returning four figures of rows, and a mobile number
-// matches cadre in any assembly, which then refuse to stage as "belongs to another assembly".
-// The directory service does take a constituency, so both go through it and the cadre picked
-// out of its results is resolved back through searchCadre by membership id — searchCadre is
-// still what says whether they are eligible.
-const DIRECTORY_TYPES = ['CadreName', 'MobileNo']
+// A mobile number is matched exactly but state-wide by searchCadre, so it returns cadre in any
+// assembly, which then refuse to stage as "belongs to another assembly". The directory
+// service does take a constituency, so it goes through it and the cadre picked out of its
+// results is resolved back through searchCadre by cadre id — searchCadre is still what says
+// whether they are eligible.
+// A name no longer does: searchCadre's own name search is now scoped to the position's
+// assemblies and the current enrollment year, so it answers with rows that already carry
+// the eligibility flags and needs no second lookup.
+const DIRECTORY_TYPES = ['MobileNo']
 
 // membership_id is an 8-digit number and a mobile number a 10-digit one, both matched
 // exactly, so anything else in the box can only ever return nothing. A name is left alone.
@@ -278,7 +277,15 @@ const ELECTION_TYPE_ICONS = {
 // agree about which half of the election you are in. Anything unlisted reads as local body.
 const PANCHAYAT_RAJ_TYPES = new Set(['MPTC', 'ZPTC', 'MPP', 'ZP'])
 
-// Score tiers colour the badge the same way the compare table's does.
+// A cadre with no ratings row scores null rather than 0, so 'none' is its own tier —
+// unrated must not read as the worst candidate on the list.
+function scoreTier(score) {
+  if (score === null || score === undefined) return 'none'
+  if (score >= 70) return 'high'
+  if (score >= 40) return 'mid'
+  return 'low'
+}
+
 const TIER_COLOR = { none: '#9ca3af', high: '#059669', mid: '#d97706', low: '#dc2626' }
 
 // proposal_status, by id. `done` is the verb a card reads back — the same word for a
@@ -309,7 +316,7 @@ const DEFAULT_STATUS_ID = PROPOSAL_STATUSES[0].id
 // `statuses` is which buttons `onStatus` offers. It defaults to the one this wizard
 // writes; the Candidates screen passes its own set, because there it is an existing status
 // being moved rather than a new one being chosen.
-export function MemberCard({ cadre, role, rating, onZoom, onRemove, onDelete, status, onStatus, statuses = PROPOSAL_STATUSES }) {
+export function MemberCard({ cadre, role, rating, onZoom, onRemove, status, onStatus, statuses = PROPOSAL_STATUSES }) {
   // Not every img_url resolves — a path can outlive the photo it points at, and a broken
   // image reads worse than no photo, so a failed load falls back to initials.
   const [photoFailed, setPhotoFailed] = useState(false)
@@ -317,8 +324,6 @@ export function MemberCard({ cadre, role, rating, onZoom, onRemove, onDelete, st
   // before the column have neither id nor name and are proposals.
   const picked = STATUS_META[status]
   const saved = STATUS_META[cadre.proposal_status_id] || STATUS_META[DEFAULT_STATUS_ID]
-  // Staged cards drop from the list; saved ones are removed from the position.
-  const drop = onRemove || onDelete
   const score = rating?.total_score
   const report = rating?.performance
   const caste = [cadre.category_name, cadre.caste_name].filter(Boolean).join(' · ')
@@ -374,12 +379,12 @@ export function MemberCard({ cadre, role, rating, onZoom, onRemove, onDelete, st
                   <i>SCORE</i>
                 </span>
               )}
-              {drop && (
+              {onRemove && (
                 <button
                   type="button"
                   className="leap-mcard-remove"
                   title={`Remove ${cadre.member_name}`}
-                  onClick={drop}
+                  onClick={onRemove}
                 >
                   ✕
                 </button>
@@ -433,6 +438,28 @@ export function MemberCard({ cadre, role, rating, onZoom, onRemove, onDelete, st
   )
 }
 
+// Fill a membership_id -> getCadreScores row map, one call per id rather than one call for
+// all of them. getCadreScores is lookup-first: a cadre already in the ratings report answers in
+// milliseconds, but one who is not makes the request run two stored procedures (measured
+// at ~1.6s for a single membership id) before it answers at all. Batched, that cost is
+// paid by every badge on the screen — one cadre nobody has rated yet held up the score,
+// Member Since and Renewals of every member beside them. Per id each card fills the
+// moment its own answer lands, and the already-rated ones do not wait at all.
+// A failure is logged, never surfaced: the ratings database is optional and the card
+// reads "No score" without it.
+export function loadScores(membershipIds, setScores) {
+  for (const mid of [...new Set(membershipIds.filter(Boolean))]) {
+    getCadreScores([mid])
+      .then((data) =>
+        setScores((prev) => ({
+          ...prev,
+          ...Object.fromEntries(data.candidates.map((c) => [String(c.membership_id), c])),
+        }))
+      )
+      .catch((err) => console.error(err))
+  }
+}
+
 // The photo lightbox, shared by every screen that renders a MemberCard.
 export function PhotoViewer({ cadre, onClose }) {
   return (
@@ -456,7 +483,11 @@ export function PhotoViewer({ cadre, onClose }) {
    Members" are the same thing, so they are the same component — mount it keyed by
    proposal_position_id, since a staged list belongs to the position it was staged for.
    `num` is the wizard's step number; the Candidates screen has no step to number. */
-export function AddMembersPanel({ proposalConstituencyId, constituencyId, position, reservation, placeName, num, onAssigned }) {
+export function AddMembersPanel({ constituencyId, position, placeName, num, onAssigned }) {
+  // The role's own reservation, off getPositionsOverview / getPositionsWithCandidates —
+  // it is a proposal_position column, and two roles under one local body routinely
+  // reserve differently.
+  const reservation = position.reservation_type || ''
   const [searchType, setSearchType] = useState(SEARCH_TYPES[0].value)
   const [searchValue, setSearchValue] = useState('')
   // null until a search answers with more than one cadre — a mobile number or a name can
@@ -464,8 +495,7 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
   const [matches, setMatches] = useState(null)
   const [staged, setStaged] = useState([])
   // tdp_cadre_id -> the proposal_status_id its button picked (1 Proposed, 2 Shortlisted).
-  // Assign writes these alone, so a search that stages someone to compare does not also
-  // propose them, and the two buttons are what decides which status the row gets.
+  // Assign writes these alone: the two buttons are what decides which status the row gets.
   const [selection, setSelection] = useState({})
   // membership_id -> the getCadreScores row: the card wants the report behind the score as well as
   // the score. Kept apart from `staged` so a row arriving late does not have to rewrite
@@ -474,7 +504,6 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [assigned, setAssigned] = useState('')
-  const [comparing, setComparing] = useState(false)
   const [zoomed, setZoomed] = useState(null)
 
   const openSlots = position.max_proposals - position.proposed_cnt
@@ -492,18 +521,9 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
   const statusOf = (cadre) => selection[cadre.tdp_cadre_id] || DEFAULT_STATUS_ID
 
   // The score decides the order the staged cards are shown in, so it is fetched as each
-  // cadre is staged rather than waiting for the compare view. Its absence is not an
+  // cadre is staged. Its absence is not an
   // error — the ratings database is optional, and the cards read "No score" without it.
-  const loadScore = (membershipId) => {
-    getCadreScores([membershipId])
-      .then((data) =>
-        setScores((prev) => ({
-          ...prev,
-          ...Object.fromEntries(data.candidates.map((c) => [String(c.membership_id), c])),
-        }))
-      )
-      .catch((err) => console.error(err))
-  }
+  const loadScore = (membershipId) => loadScores([membershipId], setScores)
 
   const typeLabel = SEARCH_TYPES.find((t) => t.value === searchType)
 
@@ -552,13 +572,15 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
     setBusy(true)
     setError('')
     try {
-      // Membership id is the exact match, but the directory returns it empty for plenty of
-      // cadre, so fall back to searchCadre's own name filter and pick the row back out by cadre id
-      // — the directory's cadreId is the same tdp_cadre_id assignCandidate writes.
-      const rows = row.membershipId
-        ? await searchCadre(proposalConstituencyId, 'MembershipId', row.membershipId)
-        : await searchCadre(proposalConstituencyId, 'Name', row.cadreName)
-      const cadre = rows.find((c) => c.tdp_cadre_id === row.cadreId) || (row.membershipId ? rows[0] : null)
+      // By cadre id: the directory's cadreId is the same tdp_cadre_id assignCandidate
+      // writes, so this is one indexed row. This used to fall back to searchCadre's Name
+      // filter when the directory returned no membership id — a LIKE '%name%' over every
+      // cadre in the state with no LIMIT, which is what made picking a name result take
+      // seconds. Membership id stays as the fallback for a row with no cadre id.
+      const rows = row.cadreId
+        ? await searchCadre(position.proposal_position_id, 'CadreId', row.cadreId)
+        : await searchCadre(position.proposal_position_id, 'MembershipId', row.membershipId)
+      const cadre = rows[0]
       if (!cadre) setError(`${row.cadreName} could not be looked up — try searching by Membership ID.`)
       else stage(cadre)
     } catch (err) {
@@ -571,9 +593,14 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
   // One match stages straight away; several put the picker up instead, since only the
   // user can say which of two people with the same name is the one they meant.
   const runSearch = async () => {
+    if (busy) return
     const value = searchValue.trim()
     if (searchType === 'MembershipId' && value.length !== 8) {
       setError('Enter the full 8-digit Membership ID.')
+      return
+    }
+    if (searchType === 'CadreName' && value.length < MIN_NAME_LENGTH) {
+      setError(`Enter at least ${MIN_NAME_LENGTH} characters of the name to search.`)
       return
     }
     if (!value) {
@@ -592,7 +619,7 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
       const rows =
         DIRECTORY_TYPES.includes(searchType)
           ? await searchCadreDirectory(searchType, value, constituencyId)
-          : await searchCadre(proposalConstituencyId, searchType, value)
+          : await searchCadre(position.proposal_position_id, searchType, value)
       if (!rows.length) setError(`No cadre found for that ${typeLabel.label}.`)
       else if (rows.length === 1) await pickMatch(rows[0])
       else setMatches(rows)
@@ -711,11 +738,6 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
           <div className="leap-staged-head">
             <b>{staged.length} staged</b>
             <span>All staged candidates are saved — unmarked ones as Proposed.</span>
-            {staged.length > 1 && (
-              <button type="button" className="leap-btn-ghost" onClick={() => setComparing(true)}>
-                Compare
-              </button>
-            )}
           </div>
           <div className="leap-staged-grid">
             {stagedByScore.map((c) => (
@@ -753,14 +775,6 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
         </button>
       </div>
 
-      {comparing && (
-        <CompareModal
-          candidates={stagedByScore}
-          title={position.role_name}
-          onClose={() => setComparing(false)}
-        />
-      )}
-
       {zoomed && <PhotoViewer cadre={zoomed} onClose={() => setZoomed(null)} />}
     </div>
   )
@@ -781,8 +795,6 @@ export default function NewPositionModal({ initial } = {}) {
 
   const [positionId, setPositionId] = useState('')
 
-  // { candidates, title } for the comparison overlay, or null.
-  const [comparing, setComparing] = useState(null)
   // Bumped after a successful assign so getPositionsOverview's proposed_cnt / open slots re-read.
   const [positionsKey, setPositionsKey] = useState(0)
 
@@ -796,12 +808,18 @@ export default function NewPositionModal({ initial } = {}) {
     electionTypes.find((t) => String(t.proposal_election_type_id) === electionTypeId)?.election_type || ''
   const localBodyLabel = electionType || 'Local Body'
 
-  // ZPTC/MPTC data is mandal-based and Municipal Ward/Corporation Ward data is
-  // town-based (see the proposal_consituency rows behind each type) — restricting
-  // step 3 to the relevant picklist instead of merging both avoids a selection that
-  // can never resolve to a local body.
-  const isMandalOnlyType = electionType === 'ZPTC' || electionType === 'MPTC'
-  const isTownOnlyType = electionType === 'Municipal Ward' || electionType === 'Corporation Ward'
+  // ZPTC/MPTC/MPP data is mandal-based and the municipal types are town-based (see the
+  // proposal_consituency rows behind each type) — restricting step 3 to the relevant
+  // picklist instead of merging both avoids a selection that can never resolve to a
+  // local body. Every name here is a proposal_election_type.election_type value: a type
+  // missing from both sets falls back to the merged picklist, which is why Municipality
+  // and Corporation used to offer mandals and then report themselves "not configured".
+  const MANDAL_ONLY_TYPES = new Set(['ZPTC', 'MPTC', 'MPP'])
+  const TOWN_ONLY_TYPES = new Set([
+    'Municipality', 'Corporation', 'Municipal Ward', 'Corporation Ward', 'GMC Ward',
+  ])
+  const isMandalOnlyType = MANDAL_ONLY_TYPES.has(electionType)
+  const isTownOnlyType = TOWN_ONLY_TYPES.has(electionType)
 
   const mandals = useList(
     assemblyId && !isTownOnlyType ? () => getMandals(assemblyId) : null,
@@ -829,11 +847,6 @@ export default function NewPositionModal({ initial } = {}) {
     proposalConstituencyId ? () => getPositionsOverview(proposalConstituencyId) : null,
     [proposalConstituencyId, positionsKey]
   )
-  const reservationRows = useList(
-    proposalConstituencyId ? () => getReservation(proposalConstituencyId) : null,
-    [proposalConstituencyId]
-  )
-  const reservation = reservationRows[0]?.reservation_type || ''
 
   // "View Members" wants the cadre themselves, and getProposalCandidates is per position — one
   // call per role, only once the user asks for the view.
@@ -843,9 +856,6 @@ export default function NewPositionModal({ initial } = {}) {
   const [memberScores, setMemberScores] = useState({})
   // The member whose photo is open in the lightbox.
   const [zoomed, setZoomed] = useState(null)
-  // removeProposalCandidate's {detail} when a removal fails. Step 6's `error` is not it — that banner is not
-  // on the screen in the view branch.
-  const [membersError, setMembersError] = useState('')
   useEffect(() => {
     if (membersAction !== 'view' || positions.length === 0) return
     let cancelled = false
@@ -853,18 +863,10 @@ export default function NewPositionModal({ initial } = {}) {
       .then((lists) => {
         if (cancelled) return
         setMembers(Object.fromEntries(positions.map((p, i) => [p.proposal_position_id, lists[i]])))
-        const mids = lists.flat().map((c) => c.membership_id).filter(Boolean)
-        if (mids.length === 0) return
         // The scores decorate a list that already renders, so a ratings database that is
         // unset or slow leaves the badge and those two fields blank rather than failing
-        // the whole view.
-        getCadreScores(mids)
-          .then((data) => {
-            if (!cancelled) {
-              setMemberScores(Object.fromEntries(data.candidates.map((c) => [String(c.membership_id), c])))
-            }
-          })
-          .catch((err) => console.error(err))
+        // the whole view. One call per member, not one for all of them — see loadScores.
+        loadScores(lists.flat().map((c) => c.membership_id), setMemberScores)
       })
       .catch((err) => { if (!cancelled) { console.error(err); setMembers({}) } })
     return () => { cancelled = true }
@@ -912,6 +914,21 @@ export default function NewPositionModal({ initial } = {}) {
   const step4Done = step3Done && !!membersAction
   const step5Done = step4Done && membersAction === 'add' && !!position
 
+  // Arriving from the Dashboard's "Assign", steps 1-4 are already answered, so the top of
+  // the wizard is four filled-in picklists with nothing to do — the work is below the fold.
+  // Scroll to Cadre Search once a role reveals it, and to the role list until then. Only for
+  // a prefilled arrival: walking the wizard by hand already leaves you at the step you filled.
+  const membersRef = useRef(null)
+  const cadreSearchRef = useRef(null)
+  useEffect(() => {
+    if (initial?.membersAction !== 'add') return
+    const el = step5Done ? cadreSearchRef.current : membersRef.current
+    el?.scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      block: 'start',
+    })
+  }, [step3Done, step5Done])
+
   const selectElectionType = (id) => {
     setElectionTypeId(id)
     setAssemblyId('')
@@ -940,20 +957,6 @@ export default function NewPositionModal({ initial } = {}) {
     setProposalConstituencyId(id)
     setMembersAction('')
     setPositionId('')
-  }
-
-  // Removing a proposed member is a write with no undo on this screen, so it asks first.
-  // Bumping positionsKey re-reads getPositionsOverview, and the new `positions` array re-runs the effect
-  // that loads the members — one bump refreshes both the counts and the list.
-  const removeMember = async (cadre) => {
-    if (!window.confirm(`Remove ${cadre.member_name} from this position?`)) return
-    setMembersError('')
-    try {
-      await removeProposalCandidate(cadre.proposal_candidate_id)
-      setPositionsKey((k) => k + 1)
-    } catch (err) {
-      setMembersError(err.message)
-    }
   }
 
   return (
@@ -1033,7 +1036,7 @@ export default function NewPositionModal({ initial } = {}) {
         )}
 
         {step3Done && (
-        <div className="leap-modal-step">
+        <div className="leap-modal-step" ref={membersRef}>
           <div className="leap-modal-step-header"><span className="num">5</span><b>Reservation &amp; Members</b><p>Reservation status for this constituency.</p></div>
           <div className="leap-reservation-bar">
             <div className="leap-reservation-place">
@@ -1044,9 +1047,6 @@ export default function NewPositionModal({ initial } = {}) {
               <span><b>{totalSeats}</b>Total seats</span>
               <span className="filled"><b>{filledSeats}</b>Filled</span>
               <span className={unfilledSeats > 0 ? 'unfilled' : ''}><b>{unfilledSeats}</b>Unfilled</span>
-            </span>
-            <span className={`leap-reservation-badge ${reservation ? '' : 'open'}`}>
-              {reservation || 'Unreserved'}
             </span>
           </div>
           <div className="leap-chip-list">
@@ -1068,7 +1068,6 @@ export default function NewPositionModal({ initial } = {}) {
 
           {membersAction === 'view' && (
             <div className="leap-members-view">
-              {membersError && <div className="leap-form-error">{membersError}</div>}
               {positions.map((row) => {
                 const open = openSlots(row)
                 // undefined while getProposalCandidates is still in flight; [] once it says none.
@@ -1081,15 +1080,6 @@ export default function NewPositionModal({ initial } = {}) {
                       <span className={`leap-members-badge ${open <= 0 ? 'full' : ''}`}>
                         {open <= 0 ? 'Full' : `${open} open`}
                       </span>
-                      {rows?.length > 1 && (
-                        <button
-                          type="button"
-                          className="leap-btn-ghost"
-                          onClick={() => setComparing({ candidates: rows, title: row.role_name })}
-                        >
-                          Compare
-                        </button>
-                      )}
                     </div>
                     {rows === undefined && <div className="leap-members-empty">Loading members…</div>}
                     {rows?.length === 0 && <div className="leap-members-empty">No members proposed yet.</div>}
@@ -1102,7 +1092,6 @@ export default function NewPositionModal({ initial } = {}) {
                             role={row.role_name}
                             rating={memberScores[c.membership_id]}
                             onZoom={() => setZoomed(c)}
-                            onDelete={() => removeMember(c)}
                           />
                         ))}
                       </div>
@@ -1132,7 +1121,16 @@ export default function NewPositionModal({ initial } = {}) {
                       // the panel is keyed by it — picking another role remounts it empty.
                       onClick={() => setPositionId(String(row.proposal_position_id))}
                     >
-                      <span className="leap-position-card-name">{row.role_name}</span>
+                      <span className="leap-position-card-head">
+                        <span className="leap-position-card-name">{row.role_name}</span>
+                        {/* This role's own reservation — the rule that decides who may be
+                            proposed for it. Per card because it is a proposal_position
+                            column: a President BC-GENERAL sits beside a Vice-President
+                            ST-WOMEN under one local body. */}
+                        <span className={`leap-reservation-badge ${row.reservation_type ? '' : 'open'}`}>
+                          {row.reservation_type || 'Unreserved'}
+                        </span>
+                      </span>
                       <span className="leap-position-card-badges">
                         <span className="leap-position-card-total">{row.max_positions}</span>
                         <span className="leap-position-card-proposed">{row.proposed_cnt} proposed</span>
@@ -1148,24 +1146,16 @@ export default function NewPositionModal({ initial } = {}) {
         )}
 
         {step5Done && (
-          <AddMembersPanel
-            key={position.proposal_position_id}
-            num={6}
-            position={position}
-            proposalConstituencyId={proposalConstituencyId}
-            constituencyId={assemblyId}
-            reservation={reservation}
-            placeName={proposalConstituencyName}
-            onAssigned={() => setPositionsKey((k) => k + 1)}
-          />
-        )}
-
-        {comparing && (
-          <CompareModal
-            candidates={comparing.candidates}
-            title={comparing.title}
-            onClose={() => setComparing(null)}
-          />
+          <div ref={cadreSearchRef}>
+            <AddMembersPanel
+              key={position.proposal_position_id}
+              num={6}
+              position={position}
+              constituencyId={assemblyId}
+              placeName={proposalConstituencyName}
+              onAssigned={() => setPositionsKey((k) => k + 1)}
+            />
+          </div>
         )}
 
         {zoomed && <PhotoViewer cadre={zoomed} onClose={() => setZoomed(null)} />}

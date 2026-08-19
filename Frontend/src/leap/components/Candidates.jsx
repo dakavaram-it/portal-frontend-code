@@ -2,11 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   getPositionsWithCandidates,
   getProposalCandidates,
-  getCadreScores,
-  removeProposalCandidate,
 } from '../api.js'
-import CompareModal from './CompareModal.jsx'
-import { AddMembersPanel, MemberCard, PhotoViewer, STATUS_META } from './NewPositionModal.jsx'
+import { MemberCard, PhotoViewer, STATUS_META, loadScores } from './NewPositionModal.jsx'
+import DataTable from './committee/DataTable.jsx'
 
 // The proposal_status rows the filter offers. Their ids are what getPositionsWithCandidates counts per
 // position and what STATUS_META names on the card, so the filter, the pills and the cards agree.
@@ -16,6 +14,17 @@ const STATUS_FILTERS = [
   // The getPositionsWithCandidates count key still reads `conformed_` — it is the SQL alias, not a label.
   { id: 3, label: 'Confirmed', countKey: 'conformed_status_cnt' },
 ]
+
+// A reservation reads 'BC-GENERAL', 'SC-WOMEN', … — the category in front is what the
+// chip is tinted by, the same colours the member card's caste field uses.
+// Split on the hyphen *or* the space: an unreserved-category seat is spelt 'GENERAL' /
+// 'GENERAL WOMEN' with no hyphen, and it is still a reservation to show. Exported because
+// the Dashboard's By Location table tints the same values.
+export function reservationClass(reservation) {
+  if (!reservation) return 'open'
+  const category = reservation.split(/[-\s]/)[0].trim().toUpperCase()
+  return ['BC', 'OC', 'SC', 'ST', 'GENERAL'].includes(category) ? `cat-${category}` : ''
+}
 
 // Distinct {value,label} pairs off the unfiltered row list, in first-seen order. The
 // options have to come from every row rather than the filtered ones, or picking a filter
@@ -49,8 +58,7 @@ function Select({ value, onChange, placeholder, items }) {
 export default function Candidates({ initialFilter } = {}) {
   // The proposal_position_id whose full-screen detail is open, or null for the list.
   const [openId, setOpenId] = useState(null)
-  // Bumped after a removal so the list's counts re-read — a position whose last candidate
-  // was dropped leaves getPositionsWithCandidates entirely.
+  // Bumped by the refresh button so the list re-reads.
   const [reloadKey, setReloadKey] = useState(0)
 
   const [electionTypeId, setElectionTypeId] = useState(initialFilter?.electionTypeId || '')
@@ -107,6 +115,121 @@ export default function Candidates({ initialFilter } = {}) {
     [rows, electionTypeId, assemblyId, roleId, statusId]
   )
 
+  // One row per position: where it sits, what it is, how full its proposal slots are, the
+  // per-status breakdown, and the button into its candidates.
+  const columns = useMemo(
+    () => [
+      {
+        key: 'location',
+        label: 'Location',
+        // Sorts assembly-first so a constituency's local bodies stay together, which the
+        // three separate columns used to do by being read left to right.
+        sortValue: (r) => `${r.assembly_name} ${r.local_body_name}`,
+        value: (r) => `${r.local_body_name} ${r.assembly_name} ${r.mandal_town_name || ''}`,
+        csvValue: (r) =>
+          `${r.local_body_name} (${r.assembly_name}${r.mandal_town_name ? ` · ${r.mandal_town_name}` : ''})`,
+        render: (r) => (
+          <>
+            <div className="leap-cand-cell-title">{r.local_body_name}</div>
+            <div className="leap-cand-cell-sub">
+              {r.assembly_name}
+              {r.mandal_town_name ? ` · ${r.mandal_town_name}` : ''}
+            </div>
+          </>
+        ),
+      },
+      {
+        key: 'role_name',
+        label: 'Position',
+        value: (r) => `${r.election_type} ${r.role_name}`,
+        sortValue: (r) => r.role_name,
+        render: (r) => (
+          <>
+            <span className="leap-type-chip">{r.election_type}</span>
+            <div className="leap-cand-cell-title">{r.role_name}</div>
+          </>
+        ),
+      },
+      {
+        key: 'reservation_type',
+        label: 'Reservation',
+        value: (r) => r.reservation_type || 'Unreserved',
+        render: (r) => (
+          <span className={`leap-res-chip ${reservationClass(r.reservation_type)}`}>
+            {r.reservation_type || 'Unreserved'}
+          </span>
+        ),
+      },
+      { key: 'max_positions', label: 'Seats', numeric: true },
+      {
+        key: 'slots',
+        label: 'Slots Filled',
+        // Sorts on how full the position is, not on the printed string.
+        sortValue: (r) => r.proposed_cnt,
+        value: (r) => `${r.proposed_cnt} / ${r.max_proposals}`,
+        render: (r) => {
+          const open = r.max_proposals - r.proposed_cnt
+          const pct = r.max_proposals > 0 ? Math.round((r.proposed_cnt / r.max_proposals) * 100) : 0
+          return (
+            <div className="leap-slot-cell">
+              <div className="leap-cand-card-progress-track">
+                <div
+                  className={`leap-cand-card-progress-fill${open <= 0 ? ' is-full' : ''}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <div className="leap-slot-cell-meta">
+                <b>{r.proposed_cnt} / {r.max_proposals}</b>
+                <span>{open > 0 ? `${open} open` : 'Full'}</span>
+              </div>
+            </div>
+          )
+        },
+      },
+      {
+        key: 'status',
+        label: 'Status',
+        sortable: false,
+        csvValue: (r) =>
+          STATUS_FILTERS.filter((s) => r[s.countKey] > 0)
+            .map((s) => `${r[s.countKey]} ${s.label}`)
+            .join(' · '),
+        render: (r) => {
+          const pills = STATUS_FILTERS.filter((s) => r[s.countKey] > 0)
+          // Every candidate on this position is Shortlisted — a status the filter no
+          // longer offers, so it has no pill and the cell would otherwise be blank.
+          if (pills.length === 0) return '—'
+          return (
+            <span className="leap-cand-card-pills">
+              {pills.map((s) => (
+                <span key={s.id} className={`leap-cand-pill ${STATUS_META[s.id].cls}`}>
+                  {r[s.countKey]} {s.label}
+                </span>
+              ))}
+            </span>
+          )
+        },
+      },
+      {
+        key: 'action',
+        label: '',
+        sortable: false,
+        searchable: false,
+        exportable: false,
+        render: (r) => (
+          <button
+            type="button"
+            className="leap-btn-secondary"
+            onClick={() => setOpenId(r.proposal_position_id)}
+          >
+            View Candidates
+          </button>
+        ),
+      },
+    ],
+    []
+  )
+
   const open = rows.find((r) => r.proposal_position_id === openId)
 
   // A removal can drop the open position out of getPositionsWithCandidates (its last candidate went), so the
@@ -116,16 +239,6 @@ export default function Candidates({ initialFilter } = {}) {
       setOpenId(null)
     }
   }, [rows, openId])
-
-  if (open) {
-    return (
-      <PositionCandidates
-        position={open}
-        onBack={() => setOpenId(null)}
-        onChanged={() => setReloadKey((k) => k + 1)}
-      />
-    )
-  }
 
   const hasFilter = electionTypeId || assemblyId || roleId || statusId
   const reset = () => { setElectionTypeId(''); setAssemblyId(''); setRoleId(''); setStatusId('') }
@@ -170,246 +283,160 @@ export default function Candidates({ initialFilter } = {}) {
         </span>
       </div>
 
-      <div className="leap-cand-list">
-        {loadError ? (
-          <div className="leap-cand-empty leap-cand-error">
-            <div className="leap-cand-empty-title">Could not load positions</div>
-            <div className="leap-cand-empty-sub">
-              The server did not answer this list, so nothing here is the state of the
-              database. ({loadError})
-            </div>
-            <button
-              type="button"
-              className="leap-cand-retry"
-              onClick={() => setReloadKey((k) => k + 1)}
-            >
-              Retry
-            </button>
+      {/* The table is not a card, so it does not go inside the card grid — dropped into
+          .leap-cand-list it would take one 340px track of it. */}
+      {loadError ? (
+        <div className="leap-cand-empty leap-cand-error">
+          <div className="leap-cand-empty-title">Could not load positions</div>
+          <div className="leap-cand-empty-sub">
+            The server did not answer this list, so nothing here is the state of the
+            database. ({loadError})
           </div>
-        ) : filtered.length === 0 ? (
-          <div className="leap-cand-empty">
-            <div className="leap-cand-empty-title">No positions found</div>
-            <div className="leap-cand-empty-sub">
-              {rows.length === 0
-                ? 'No candidate has been proposed for any position yet.'
-                : 'Try changing the filters above.'}
-            </div>
+          <button
+            type="button"
+            className="leap-cand-retry"
+            onClick={() => setReloadKey((k) => k + 1)}
+          >
+            Retry
+          </button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="leap-cand-empty">
+          <div className="leap-cand-empty-title">No positions found</div>
+          <div className="leap-cand-empty-sub">
+            {rows.length === 0
+              ? 'No candidate has been proposed for any position yet.'
+              : 'Try changing the filters above.'}
           </div>
-        ) : (
-          filtered.map((r) => (
-            <PositionCard key={r.proposal_position_id} row={r} onOpen={() => setOpenId(r.proposal_position_id)} />
-          ))
-        )}
-      </div>
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          rows={filtered}
+          rowKey={(r) => r.proposal_position_id}
+          searchPlaceholder="Search local body, role, assembly…"
+          filename="positions-with-candidates"
+          tall
+        />
+      )}
+
+      {open && (
+        <PositionCandidatesModal
+          positions={[open]}
+          title={`${open.local_body_name} · ${open.role_name}`}
+          subtitle={`${open.election_type} · ${open.assembly_name}${open.mandal_town_name ? ` · ${open.mandal_town_name}` : ''}`}
+          reservation={open.reservation_type}
+          onClose={() => setOpenId(null)}
+        />
+      )}
     </div>
   )
 }
 
-/* One position in the list: where it sits (election type, assembly, mandal/town), what it
-   is (local body + role), how full its proposal slots are, and the per-status breakdown of
-   the candidates in it. Clicking anywhere opens the detail. */
-function PositionCard({ row, onOpen }) {
-  const filled = row.proposed_cnt
-  const total = row.max_proposals
-  const pct = total > 0 ? Math.min(100, Math.round((filled / total) * 100)) : 0
-  const full = total > 0 && filled >= total
-
-  return (
-    <div
-      className="leap-cand-card"
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen() } }}
-    >
-      <div className="leap-cand-card-eyebrow">
-        <span className="leap-cand-card-kind">
-          <span className="leap-cand-card-kind-dot" />
-          {row.election_type}
-        </span>
-        <span className="leap-cand-card-eyebrow-meta">
-          {row.assembly_name}{row.mandal_town_name ? ` · ${row.mandal_town_name}` : ''}
-        </span>
-        <span className={`leap-cand-card-reservation ${row.reservation_type ? '' : 'open'}`}>
-          {row.reservation_type || 'Unreserved'}
-        </span>
-      </div>
-
-      <div className="leap-cand-card-identity">
-        <h3>{row.local_body_name}</h3>
-        <div className="leap-cand-card-role">{row.role_name}</div>
-      </div>
-
-      <div className="leap-cand-card-progress">
-        <div className="leap-cand-card-progress-track">
-          <div className={`leap-cand-card-progress-fill${full ? ' is-full' : ''}`} style={{ width: `${pct}%` }} />
-        </div>
-        <div className="leap-cand-card-progress-meta">
-          <span>{filled} of {total} proposal slots used</span>
-          <span>{full ? 'Full' : `${total - filled} open`}</span>
-        </div>
-      </div>
-
-      <div className="leap-cand-card-metrics">
-        <div className={`leap-cand-card-metric${full ? ' is-full' : ''}`}>
-          <div className="leap-cand-card-metric-val">{filled}<span>/{total}</span></div>
-          <div className="leap-cand-card-metric-lbl">Slots Filled</div>
-        </div>
-        <div className="leap-cand-card-metric">
-          <div className="leap-cand-card-metric-val">{row.max_positions}</div>
-          <div className="leap-cand-card-metric-lbl">Seats</div>
-        </div>
-      </div>
-
-      <div className="leap-cand-card-pills">
-        {STATUS_FILTERS.map((s) =>
-          row[s.countKey] > 0 ? (
-            <span key={s.id} className={`leap-cand-pill ${STATUS_META[s.id].cls}`}>
-              {row[s.countKey]} {s.label}
-            </span>
-          ) : null
-        )}
-      </div>
-    </div>
-  )
-}
-
-/* The full-screen view of one position — the reference platform's profiles step: the
-   position's own header, then every candidate mapped to it as the same card the wizard
-   renders, with Compare across them. */
-function PositionCandidates({ position, onBack, onChanged }) {
-  // null while getProposalCandidates is in flight, [] once it says none — the two render differently.
-  const [candidates, setCandidates] = useState(null)
+/* The candidates on one or more positions, over the screen that opened it rather than in
+   place of it: a title row and the same MemberCard grid the wizard renders. A Dashboard
+   location can hold several roles (President + Vice-President), so `positions` is a list
+   and each role gets its own heading once there is more than one. Proposing is not offered
+   here — that is Assign Members' job. Nor is removing: once a candidate is saved they stay
+   on the position; dropping one before it is saved is the staged list's job in Assign Members. */
+export function PositionCandidatesModal({ positions, title, subtitle, reservation, onClose }) {
+  // proposal_position_id -> its candidates. undefined while getProposalCandidates is in
+  // flight, [] once it says none — the two render differently.
+  const [candidates, setCandidates] = useState({})
   // membership_id -> the getCadreScores row behind each card's score badge and its Member Since /
   // Renewals fields.
   const [scores, setScores] = useState({})
   const [zoomed, setZoomed] = useState(null)
-  const [comparing, setComparing] = useState(false)
   const [error, setError] = useState('')
-  const [reloadKey, setReloadKey] = useState(0)
-  // Whether the cadre search panel is open. Only offered while the position has a
-  // proposal slot left — assignCandidate would refuse the write otherwise.
-  const [adding, setAdding] = useState(false)
+
+  // The ids, not the array: the caller builds `positions` inline, so the array itself is a
+  // new reference on every render of the screen behind this modal.
+  const positionIds = positions.map((p) => p.proposal_position_id).join(',')
 
   useEffect(() => {
     let cancelled = false
-    setCandidates(null)
-    getProposalCandidates(position.proposal_position_id)
-      .then((rows) => {
+    setCandidates({})
+    const ids = positionIds.split(',')
+    Promise.all(ids.map((id) => getProposalCandidates(id)))
+      .then((lists) => {
         if (cancelled) return
-        setCandidates(rows)
-        const mids = rows.map((c) => c.membership_id).filter(Boolean)
-        if (mids.length === 0) return
+        setCandidates(Object.fromEntries(ids.map((id, i) => [id, lists[i]])))
         // Decoration on a list that already rendered: an unset or slow ratings database
-        // leaves the badge and those two fields blank rather than failing the view.
-        getCadreScores(mids)
-          .then((data) => {
-            if (!cancelled) {
-              setScores(Object.fromEntries(data.candidates.map((c) => [String(c.membership_id), c])))
-            }
-          })
-          .catch((err) => console.error(err))
+        // leaves the badge and those two fields blank rather than failing the view. One
+        // call per member, not one for all of them — see loadScores.
+        loadScores(lists.flat().map((c) => c.membership_id), setScores)
       })
-      .catch((err) => { if (!cancelled) { console.error(err); setCandidates([]) } })
+      .catch((err) => { if (!cancelled) { console.error(err); setError(err.message) } })
     return () => { cancelled = true }
-  }, [position.proposal_position_id, reloadKey])
-
-  // Same write the wizard's View Members makes (removeProposalCandidate), so it asks first: there is no undo
-  // on this screen. The list behind is told to re-read its counts.
-  const remove = async (cadre) => {
-    if (!window.confirm(`Remove ${cadre.member_name} from this position?`)) return
-    setError('')
-    try {
-      await removeProposalCandidate(cadre.proposal_candidate_id)
-      setReloadKey((k) => k + 1)
-      onChanged()
-    } catch (err) {
-      setError(err.message)
-    }
-  }
-
-  const open = position.max_proposals - position.proposed_cnt
+  }, [positionIds])
 
   return (
-    <div className="leap-cand-screen">
-      <button type="button" className="leap-cand-back" onClick={onBack}>← Candidates</button>
-
-      <div className="leap-cand-detail-head">
-        <div>
-          <div className="leap-cand-detail-eyebrow">
-            {position.election_type} · {position.assembly_name}
-            {position.mandal_town_name ? ` · ${position.mandal_town_name}` : ''}
+    <div className="leap-modal-overlay" onClick={onClose}>
+      <div className="leap-committee-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="leap-modal-title-row">
+          <div>
+            <h3>{title}</h3>
+            <p>{subtitle}</p>
           </div>
-          <h2>{position.local_body_name}</h2>
-          <div className="leap-cand-detail-role">{position.role_name}</div>
-        </div>
-        <div className="leap-cand-detail-stats">
-          <span><b>{position.max_positions}</b>Seats</span>
-          <span className="filled"><b>{position.proposed_cnt}</b>Proposed</span>
-          <span className={open > 0 ? 'unfilled' : ''}><b>{open}</b>Open</span>
-          <span className={`leap-cand-card-reservation ${position.reservation_type ? '' : 'open'}`}>
-            {position.reservation_type || 'Unreserved'}
+          <span className={`leap-cand-card-reservation ${reservation ? '' : 'open'}`}>
+            {reservation || 'Unreserved'}
           </span>
+          <button type="button" className="leap-modal-close" onClick={onClose}>✕</button>
         </div>
+
+        {error && <div className="leap-form-error">{error}</div>}
+
+        {positions.map((p) => {
+          const rows = candidates[String(p.proposal_position_id)]
+          const open = p.max_proposals - p.proposed_cnt
+          // Best score first, unscored last (?? -1) rather than as zeros — the same order
+          // the wizard stages candidates in. Re-sorts on its own once getCadreScores answers.
+          const ranked = [...(rows || [])].sort(
+            (a, b) =>
+              (scores[b.membership_id]?.total_score ?? -1) - (scores[a.membership_id]?.total_score ?? -1)
+          )
+          return (
+            <div key={p.proposal_position_id}>
+              <div className="leap-pop-role">
+                <b>{p.role_name}</b>
+                <span>
+                  {p.max_positions} seat{p.max_positions === 1 ? '' : 's'} ·{' '}
+                  {p.proposed_cnt} of {p.max_proposals} proposed ·{' '}
+                  {open > 0 ? `${open} open` : 'full'}
+                </span>
+              </div>
+              {rows === undefined && <div className="leap-members-empty">Loading candidates…</div>}
+              {rows?.length === 0 && (
+                <div className="leap-members-empty">No candidates mapped to this position.</div>
+              )}
+              {ranked.length > 0 && (
+                <div className="leap-member-grid">
+                  {ranked.map((c, i) => (
+                    <div className="leap-pop-card" key={c.proposal_candidate_id}>
+                      <div className="leap-pop-rank">
+                        <b>#{i + 1}</b>
+                        <span>
+                          {scores[c.membership_id]?.total_score != null
+                            ? `${Math.round(scores[c.membership_id].total_score * 10) / 10} score`
+                            : 'No score'}
+                        </span>
+                      </div>
+                      <MemberCard
+                        cadre={c}
+                        role={p.role_name}
+                        rating={scores[c.membership_id]}
+                        onZoom={() => setZoomed(c)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+
+        {zoomed && <PhotoViewer cadre={zoomed} onClose={() => setZoomed(null)} />}
       </div>
-
-      <div className="leap-cand-detail-section-head">
-        <span className="leap-cand-detail-section-label">MAPPED CANDIDATES</span>
-        {candidates?.length > 1 && (
-          <button type="button" className="leap-btn-ghost" onClick={() => setComparing(true)}>
-            Compare All
-          </button>
-        )}
-        {open > 0 && (
-          <button type="button" className="leap-btn-ghost" onClick={() => setAdding((a) => !a)}>
-            {adding ? 'Close' : 'Add Members'}
-          </button>
-        )}
-      </div>
-
-      {/* The wizard's step 6, against the position already open here — getPositionsWithCandidates carries the
-          proposal_constituency_id its cadre search needs. A successful assign re-reads
-          getProposalCandidates for the new cards and tells the list its counts moved. */}
-      {adding && open > 0 && (
-        <AddMembersPanel
-          key={position.proposal_position_id}
-          position={position}
-          proposalConstituencyId={position.proposal_constituency_id}
-          constituencyId={position.assembly_constituency_id}
-          reservation={position.reservation_type}
-          placeName={position.local_body_name}
-          onAssigned={() => { setReloadKey((k) => k + 1); onChanged() }}
-        />
-      )}
-
-      {error && <div className="leap-form-error">{error}</div>}
-
-      {candidates === null && <div className="leap-members-empty">Loading candidates…</div>}
-      {candidates?.length === 0 && <div className="leap-members-empty">No candidates mapped to this position.</div>}
-      {candidates?.length > 0 && (
-        <div className="leap-member-grid">
-          {candidates.map((c) => (
-            <MemberCard
-              key={c.proposal_candidate_id}
-              cadre={c}
-              role={position.role_name}
-              rating={scores[c.membership_id]}
-              onZoom={() => setZoomed(c)}
-              onDelete={() => remove(c)}
-            />
-          ))}
-        </div>
-      )}
-
-      {comparing && (
-        <CompareModal
-          candidates={candidates}
-          title={position.role_name}
-          onClose={() => setComparing(false)}
-        />
-      )}
-
-      {zoomed && <PhotoViewer cadre={zoomed} onClose={() => setZoomed(null)} />}
     </div>
   )
 }

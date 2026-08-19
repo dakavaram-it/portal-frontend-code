@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 function CloseIcon() {
   return (
@@ -66,6 +66,14 @@ function IconSearch() {
   )
 }
 
+function IconChevron() {
+  return (
+    <svg {...NAV_ICON_PROPS}>
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  )
+}
+
 function IconCommittee() {
   return (
     <svg {...NAV_ICON_PROPS}>
@@ -93,6 +101,10 @@ const CADRE_SEARCH_ITEM = { view: 'cadreSearch', label: 'Cadre Search', icon: <I
 
 export default function Sidebar({ user, onLogout, view, onNavigate, open, onClose }) {
   const closeRef = useRef(null)
+  // The election group collapses, but it opens the session — it holds every screen a
+  // session actually starts on, so shipping it shut would hide the whole app behind a
+  // click.
+  const [electionsOpen, setElectionsOpen] = useState(true)
 
   // Drawer mode (below 1025px): Escape closes it, the page behind stays put, and focus
   // moves into the drawer then back to the button that opened it.
@@ -118,7 +130,20 @@ export default function Sidebar({ user, onLogout, view, onNavigate, open, onClos
   const displayName = [user.firstname, user.lastname].filter(Boolean).join(' ') || user.username
   const initials = displayName.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()
   const hasCommitteeAccess = !!user?.entitlements?.includes('CADRE_COMMITTEE_MANAGEMENT')
-  const nav = [...BASE_NAV, ...(hasCommitteeAccess ? [COMMITTEES_ASSIGN_ITEM] : []), CADRE_SEARCH_ITEM]
+  const electionNav = [...BASE_NAV, ...(hasCommitteeAccess ? [COMMITTEES_ASSIGN_ITEM] : [])]
+
+  const navButton = (item) => (
+    <button
+      type="button"
+      key={item.view}
+      className={`leap-nav-btn ${view === item.view ? 'active' : ''}`}
+      aria-current={view === item.view ? 'page' : undefined}
+      onClick={() => onNavigate(item.view)}
+    >
+      <span className="leap-nav-icon">{item.icon}</span>
+      <span>{item.label}</span>
+    </button>
+  )
 
   return (
     <aside className="leap-sidebar" data-open={open ? 'true' : 'false'}>
@@ -139,21 +164,19 @@ export default function Sidebar({ user, onLogout, view, onNavigate, open, onClos
       </div>
 
       <nav className="leap-nav">
-        <div className="leap-nav-group-label">LOCAL BODY ELECTIONS</div>
-        {nav.map((item) => (
-          <Fragment key={item.view}>
-            {item.view === 'cadreSearch' && <div className="leap-nav-group-label">CADRE</div>}
-            <button
-              type="button"
-              className={`leap-nav-btn ${view === item.view ? 'active' : ''}`}
-              aria-current={view === item.view ? 'page' : undefined}
-              onClick={() => onNavigate(item.view)}
-            >
-              <span className="leap-nav-icon">{item.icon}</span>
-              <span>{item.label}</span>
-            </button>
-          </Fragment>
-        ))}
+        <button
+          type="button"
+          className="leap-nav-group-label leap-nav-group-toggle"
+          aria-expanded={electionsOpen}
+          onClick={() => setElectionsOpen((o) => !o)}
+        >
+          <span>LOCAL BODY ELECTIONS</span>
+          <IconChevron />
+        </button>
+        {electionsOpen && electionNav.map(navButton)}
+
+        <div className="leap-nav-group-label">CADRE</div>
+        {navButton(CADRE_SEARCH_ITEM)}
       </nav>
 
       <div className="leap-sidebar-footer">
