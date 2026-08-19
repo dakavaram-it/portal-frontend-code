@@ -702,13 +702,15 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate, onDataC
   }, [positions])
 
   // One line per role for the Positions tile — "President 2 / 3". A position counts as
-  // filled once a candidate is *proposed* for it, so this is proposed_status_cnt over
-  // max_positions — the same number the tile's own Proposed row totals.
+  // settled once its candidate is *confirmed*, so this is conformed_status_cnt (the SQL
+  // alias kept its old spelling) over max_positions, the positions there are to fill.
+  // Proposed and shortlisted candidates are still in play, so they do not count here —
+  // the card's own Proposed row is where that number lives.
   const roleStats = useMemo(() => {
     const byRole = new Map()
     for (const p of positions) {
       const cur = byRole.get(p.role_name) || { role: p.role_name, filled: 0, total: 0 }
-      cur.filled += p.proposed_status_cnt
+      cur.filled += p.conformed_status_cnt
       cur.total += p.max_positions
       byRole.set(p.role_name, cur)
     }
