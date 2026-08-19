@@ -15,7 +15,7 @@ import {
   removeProposalCandidate,
   useList,
 } from '../api.js'
-import { cadreImageUrl, searchCadre as searchCadreDirectory } from '../cadreSearchApi.js'
+import { MIN_NAME_LENGTH, cadreImageUrl, searchCadre as searchCadreDirectory } from '../cadreSearchApi.js'
 
 // How a cadre is found. `value` must stay one of the backend's CADRE_SEARCH_FILTERS keys,
 // which are also the PSA directory service's keys (see cadreSearchApi.js).
@@ -557,13 +557,15 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
     setBusy(true)
     setError('')
     try {
-      // Membership id is the exact match, but the directory returns it empty for plenty of
-      // cadre, so fall back to searchCadre's own name filter and pick the row back out by cadre id
-      // — the directory's cadreId is the same tdp_cadre_id assignCandidate writes.
-      const rows = row.membershipId
-        ? await searchCadre(proposalConstituencyId, 'MembershipId', row.membershipId)
-        : await searchCadre(proposalConstituencyId, 'Name', row.cadreName)
-      const cadre = rows.find((c) => c.tdp_cadre_id === row.cadreId) || (row.membershipId ? rows[0] : null)
+      // By cadre id: the directory's cadreId is the same tdp_cadre_id assignCandidate
+      // writes, so this is one indexed row. This used to fall back to searchCadre's Name
+      // filter when the directory returned no membership id — a LIKE '%name%' over every
+      // cadre in the state with no LIMIT, which is what made picking a name result take
+      // seconds. Membership id stays as the fallback for a row with no cadre id.
+      const rows = row.cadreId
+        ? await searchCadre(proposalConstituencyId, 'CadreId', row.cadreId)
+        : await searchCadre(proposalConstituencyId, 'MembershipId', row.membershipId)
+      const cadre = rows[0]
       if (!cadre) setError(`${row.cadreName} could not be looked up — try searching by Membership ID.`)
       else stage(cadre)
     } catch (err) {
@@ -576,9 +578,14 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
   // One match stages straight away; several put the picker up instead, since only the
   // user can say which of two people with the same name is the one they meant.
   const runSearch = async () => {
+    if (busy) return
     const value = searchValue.trim()
     if (searchType === 'MembershipId' && value.length !== 8) {
       setError('Enter the full 8-digit Membership ID.')
+      return
+    }
+    if (searchType === 'CadreName' && value.length < MIN_NAME_LENGTH) {
+      setError(`Enter at least ${MIN_NAME_LENGTH} characters of the name to search.`)
       return
     }
     if (!value) {
@@ -902,6 +909,21 @@ export default function NewPositionModal({ initial } = {}) {
   const step4Done = step3Done && !!membersAction
   const step5Done = step4Done && membersAction === 'add' && !!position
 
+  // Arriving from the Dashboard's "Assign", steps 1-4 are already answered, so the top of
+  // the wizard is four filled-in picklists with nothing to do — the work is below the fold.
+  // Scroll to Cadre Search once a role reveals it, and to the role list until then. Only for
+  // a prefilled arrival: walking the wizard by hand already leaves you at the step you filled.
+  const membersRef = useRef(null)
+  const cadreSearchRef = useRef(null)
+  useEffect(() => {
+    if (initial?.membersAction !== 'add') return
+    const el = step5Done ? cadreSearchRef.current : membersRef.current
+    el?.scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      block: 'start',
+    })
+  }, [step3Done, step5Done])
+
   const selectElectionType = (id) => {
     setElectionTypeId(id)
     setAssemblyId('')
@@ -1023,7 +1045,7 @@ export default function NewPositionModal({ initial } = {}) {
         )}
 
         {step3Done && (
-        <div className="leap-modal-step">
+        <div className="leap-modal-step" ref={membersRef}>
           <div className="leap-modal-step-header"><span className="num">5</span><b>Reservation &amp; Members</b><p>Reservation status for this constituency.</p></div>
           <div className="leap-reservation-bar">
             <div className="leap-reservation-place">
@@ -1113,7 +1135,15 @@ export default function NewPositionModal({ initial } = {}) {
                       // the panel is keyed by it — picking another role remounts it empty.
                       onClick={() => setPositionId(String(row.proposal_position_id))}
                     >
-                      <span className="leap-position-card-name">{row.role_name}</span>
+                      <span className="leap-position-card-head">
+                        <span className="leap-position-card-name">{row.role_name}</span>
+                        {/* The proposal constituency's reservation, repeated on every role
+                            card: it is the rule that decides who may be proposed, and the
+                            bar above scrolls out of view by the time a role is picked. */}
+                        <span className={`leap-reservation-badge ${reservation ? '' : 'open'}`}>
+                          {reservation || 'Unreserved'}
+                        </span>
+                      </span>
                       <span className="leap-position-card-badges">
                         <span className="leap-position-card-total">{row.max_positions}</span>
                         <span className="leap-position-card-proposed">{row.proposed_cnt} proposed</span>
@@ -1129,16 +1159,18 @@ export default function NewPositionModal({ initial } = {}) {
         )}
 
         {step5Done && (
-          <AddMembersPanel
-            key={position.proposal_position_id}
-            num={6}
-            position={position}
-            proposalConstituencyId={proposalConstituencyId}
-            constituencyId={assemblyId}
-            reservation={reservation}
-            placeName={proposalConstituencyName}
-            onAssigned={() => setPositionsKey((k) => k + 1)}
-          />
+          <div ref={cadreSearchRef}>
+            <AddMembersPanel
+              key={position.proposal_position_id}
+              num={6}
+              position={position}
+              proposalConstituencyId={proposalConstituencyId}
+              constituencyId={assemblyId}
+              reservation={reservation}
+              placeName={proposalConstituencyName}
+              onAssigned={() => setPositionsKey((k) => k + 1)}
+            />
+          </div>
         )}
 
         {zoomed && <PhotoViewer cadre={zoomed} onClose={() => setZoomed(null)} />}

@@ -23,7 +23,16 @@ export const SEARCH_TYPES = [
   { value: 'CadreName', label: 'Name' },
 ]
 
+// A name is the only searchType matched as a substring, so a short one matches most of the
+// state: the service spends seconds building thousands of rows nobody can pick a candidate
+// out of. Enforced here rather than in each screen because every name search — the wizard's
+// Add Members panel and the Cadre Search & Notes screen — routes through this one call.
+export const MIN_NAME_LENGTH = 4
+
 export const searchCadre = async (searchType, searchValue, constituencyId) => {
+  if (searchType === 'CadreName' && String(searchValue).trim().length < MIN_NAME_LENGTH) {
+    throw new Error(`Enter at least ${MIN_NAME_LENGTH} characters of the name to search.`)
+  }
   const res = await fetch(SEARCH_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', authToken: getToken() || '' },

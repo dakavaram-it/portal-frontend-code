@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { getAssemblies, useLoadable } from '../api.js'
 import { Dropdown, initials } from './NewPositionModal.jsx'
-import { SEARCH_TYPES, cadreImageUrl, searchCadre } from '../cadreSearchApi.js'
+import { MIN_NAME_LENGTH, SEARCH_TYPES, cadreImageUrl, searchCadre } from '../cadreSearchApi.js'
 import CadreNotesModal from './CadreNotesModal.jsx'
 
 const PLACEHOLDERS = {
@@ -179,6 +179,12 @@ export default function CadreSearchNotes({ user }) {
     }
     if (!v) {
       setError('Enter a value to search.')
+      return
+    }
+    // Same floor searchCadre itself enforces — checked here so a two-letter name never
+    // costs a round trip. See MIN_NAME_LENGTH in cadreSearchApi.js.
+    if (nameSearch && v.length < MIN_NAME_LENGTH) {
+      setError(`Enter at least ${MIN_NAME_LENGTH} characters of the name to search.`)
       return
     }
     setConstituencyInvalid(false)

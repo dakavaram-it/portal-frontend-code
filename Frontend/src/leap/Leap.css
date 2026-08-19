@@ -3513,6 +3513,19 @@
   text-align: left;
 }
 
+.leap-position-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Same badge as the reservation bar above, sized down to sit inside a card. */
+.leap-position-card-head .leap-reservation-badge {
+  padding: 3px 10px;
+  font-size: 11px;
+}
+
 .leap-position-card-name {
   font-size: 16px;
   font-weight: 700;
