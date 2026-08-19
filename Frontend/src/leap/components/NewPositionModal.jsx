@@ -15,7 +15,6 @@ import {
   removeProposalCandidate,
   useList,
 } from '../api.js'
-import CompareModal, { scoreTier } from './CompareModal.jsx'
 import { cadreImageUrl, searchCadre as searchCadreDirectory } from '../cadreSearchApi.js'
 
 // How a cadre is found. `value` must stay one of the backend's CADRE_SEARCH_FILTERS keys,
@@ -278,7 +277,15 @@ const ELECTION_TYPE_ICONS = {
 // agree about which half of the election you are in. Anything unlisted reads as local body.
 const PANCHAYAT_RAJ_TYPES = new Set(['MPTC', 'ZPTC', 'MPP', 'ZP'])
 
-// Score tiers colour the badge the same way the compare table's does.
+// A cadre with no ratings row scores null rather than 0, so 'none' is its own tier —
+// unrated must not read as the worst candidate on the list.
+function scoreTier(score) {
+  if (score === null || score === undefined) return 'none'
+  if (score >= 70) return 'high'
+  if (score >= 40) return 'mid'
+  return 'low'
+}
+
 const TIER_COLOR = { none: '#9ca3af', high: '#059669', mid: '#d97706', low: '#dc2626' }
 
 // proposal_status, by id. `done` is the verb a card reads back — the same word for a
@@ -464,8 +471,7 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
   const [matches, setMatches] = useState(null)
   const [staged, setStaged] = useState([])
   // tdp_cadre_id -> the proposal_status_id its button picked (1 Proposed, 2 Shortlisted).
-  // Assign writes these alone, so a search that stages someone to compare does not also
-  // propose them, and the two buttons are what decides which status the row gets.
+  // Assign writes these alone: the two buttons are what decides which status the row gets.
   const [selection, setSelection] = useState({})
   // membership_id -> the getCadreScores row: the card wants the report behind the score as well as
   // the score. Kept apart from `staged` so a row arriving late does not have to rewrite
@@ -474,7 +480,6 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [assigned, setAssigned] = useState('')
-  const [comparing, setComparing] = useState(false)
   const [zoomed, setZoomed] = useState(null)
 
   const openSlots = position.max_proposals - position.proposed_cnt
@@ -492,7 +497,7 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
   const statusOf = (cadre) => selection[cadre.tdp_cadre_id] || DEFAULT_STATUS_ID
 
   // The score decides the order the staged cards are shown in, so it is fetched as each
-  // cadre is staged rather than waiting for the compare view. Its absence is not an
+  // cadre is staged. Its absence is not an
   // error — the ratings database is optional, and the cards read "No score" without it.
   const loadScore = (membershipId) => {
     getCadreScores([membershipId])
@@ -711,11 +716,6 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
           <div className="leap-staged-head">
             <b>{staged.length} staged</b>
             <span>All staged candidates are saved — unmarked ones as Proposed.</span>
-            {staged.length > 1 && (
-              <button type="button" className="leap-btn-ghost" onClick={() => setComparing(true)}>
-                Compare
-              </button>
-            )}
           </div>
           <div className="leap-staged-grid">
             {stagedByScore.map((c) => (
@@ -753,14 +753,6 @@ export function AddMembersPanel({ proposalConstituencyId, constituencyId, positi
         </button>
       </div>
 
-      {comparing && (
-        <CompareModal
-          candidates={stagedByScore}
-          title={position.role_name}
-          onClose={() => setComparing(false)}
-        />
-      )}
-
       {zoomed && <PhotoViewer cadre={zoomed} onClose={() => setZoomed(null)} />}
     </div>
   )
@@ -781,8 +773,6 @@ export default function NewPositionModal({ initial } = {}) {
 
   const [positionId, setPositionId] = useState('')
 
-  // { candidates, title } for the comparison overlay, or null.
-  const [comparing, setComparing] = useState(null)
   // Bumped after a successful assign so getPositionsOverview's proposed_cnt / open slots re-read.
   const [positionsKey, setPositionsKey] = useState(0)
 
@@ -1081,15 +1071,6 @@ export default function NewPositionModal({ initial } = {}) {
                       <span className={`leap-members-badge ${open <= 0 ? 'full' : ''}`}>
                         {open <= 0 ? 'Full' : `${open} open`}
                       </span>
-                      {rows?.length > 1 && (
-                        <button
-                          type="button"
-                          className="leap-btn-ghost"
-                          onClick={() => setComparing({ candidates: rows, title: row.role_name })}
-                        >
-                          Compare
-                        </button>
-                      )}
                     </div>
                     {rows === undefined && <div className="leap-members-empty">Loading members…</div>}
                     {rows?.length === 0 && <div className="leap-members-empty">No members proposed yet.</div>}
@@ -1157,14 +1138,6 @@ export default function NewPositionModal({ initial } = {}) {
             reservation={reservation}
             placeName={proposalConstituencyName}
             onAssigned={() => setPositionsKey((k) => k + 1)}
-          />
-        )}
-
-        {comparing && (
-          <CompareModal
-            candidates={comparing.candidates}
-            title={comparing.title}
-            onClose={() => setComparing(null)}
           />
         )}
 

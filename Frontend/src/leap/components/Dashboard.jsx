@@ -8,6 +8,7 @@ import {
   useLoadable,
 } from '../api.js'
 import { Dropdown, PhotoViewer, initials } from './NewPositionModal.jsx'
+import { PositionCandidatesModal } from './Candidates.jsx'
 
 // proposal_status's own ids (1 Proposed, 2 Shortlisted, 3 Confirmed) — the two the
 // Dashboard's stat tiles drill into. Shortlisted has no tile here, so it is not listed.
@@ -646,6 +647,7 @@ export default function Dashboard({ user, onNavigate }) {
           positions={openCard.positions}
           assemblyId={assemblyId}
           onNavigate={onNavigate}
+          onDataChanged={() => setReloadKey((k) => k + 1)}
         />
       )}
     </div>
@@ -655,15 +657,17 @@ export default function Dashboard({ user, onNavigate }) {
 // One election type's stat tiles and location table. Kept as its own component (rather
 // than inlined in a .map) so its derived stats memoize per group instead of recomputing
 // for every group on every render.
-function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
+function ElectionTypeSection({ label, positions, assemblyId, onNavigate, onDataChanged }) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
   const [sort, setSort] = useState({ key: 'name', dir: 'asc' })
   // { statusId, statusLabel } while the Proposed/Confirmed drill-down is open, else null.
   const [statusModal, setStatusModal] = useState(null)
-  // Bumped by the Total Locations tile's Reservation row so the scroll runs from an
+  // The location whose candidates pop-up is open, or null.
+  const [candidatesFor, setCandidatesFor] = useState(null)
+  // Bumped by the Total Locations tile's filter rows so the scroll runs from an
   // effect, i.e. after By Location has actually rendered.
-  const [reservedTick, setReservedTick] = useState(0)
+  const [filterTick, setFilterTick] = useState(0)
   const byLocationRef = useRef(null)
   // A card is one *post*, which can be one role inside an election type (MPP and Vice-MPP
   // are two cards over one type) or span more than one type. getDashboardCandidatesByStatus is scoped by
@@ -744,6 +748,9 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
         confirmed,
         status: locRows.some((p) => p.started_time) ? 'Started' : 'Not Started',
         proposedCnt,
+        // The location's proposal_position rows, one per role — what the view icon's
+        // candidates pop-up reads.
+        rows: locRows,
         electionTypeId: first.proposal_election_type_id,
         tehsilId: first.tehsil_id,
         townId: first.town_id,
@@ -783,18 +790,22 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
     })
   }, [locationStats, search, statusFilter, sort])
 
-  // Runs after By Location is on the screen — the Reservation row can be clicked while
+  // Runs after By Location is on the screen — a filter row can be clicked while
   // the status drill-down is open, in which case the section does not exist yet at click
   // time. Bumping the tick rather than watching the filter also re-scrolls when the
   // filter is already on.
   useEffect(() => {
-    if (reservedTick > 0) byLocationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [reservedTick])
+    if (filterTick > 0) byLocationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [filterTick])
 
-  const showReserved = () => {
+  // Closes any open drill-down, points By Location at one of STATUS_FILTERS and scrolls
+  // to it. The Total Locations rows that filter rather than drill down all go through it.
+  // Clicking the lit row clears back to All — except while a drill-down is open, where the
+  // filter is off-screen and the click means "show me this", not "turn this off".
+  const showLocations = (filter) => {
+    setStatusFilter((cur) => (cur === filter && !statusModal ? 'All' : filter))
     setStatusModal(null)
-    setStatusFilter(RESERVED_FILTER)
-    setReservedTick((n) => n + 1)
+    setFilterTick((n) => n + 1)
   }
 
   const toggleSort = (key) =>
@@ -818,16 +829,11 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
     })
   }
 
-  const viewLocationCandidates = (l) => {
-    onNavigate({
-      name: 'candidates',
-      filter: {
-        electionTypeId: String(l.electionTypeId),
-        assemblyId: String(assemblyId),
-        proposalConstituencyId: String(l.id),
-      },
-    })
-  }
+  // Only the roles that actually hold candidates go into the pop-up — a location can have
+  // one role proposed for and another still empty, and an empty role's "no candidates"
+  // block would be noise beside the one being looked at.
+  const viewLocationCandidates = (l) =>
+    setCandidatesFor({ ...l, rows: l.rows.filter((p) => p.proposed_cnt > 0) })
 
   if (positions.length === 0) return null
 
@@ -857,8 +863,18 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
           label="TOTAL LOCATIONS"
           value={stats.totalLocations}
           rows={[
-            { label: 'Started', value: statusCounts.All - statusCounts['Not Started'] },
-            { label: 'Not Started', value: statusCounts['Not Started'] },
+            {
+              label: 'Started',
+              value: statusCounts.All - statusCounts['Not Started'],
+              onClick: () => showLocations('Started'),
+              active: statusFilter === 'Started',
+            },
+            {
+              label: 'Not Started',
+              value: statusCounts['Not Started'],
+              onClick: () => showLocations('Not Started'),
+              active: statusFilter === 'Not Started',
+            },
             {
               label: 'Confirmed',
               value: stats.confirmed,
@@ -871,7 +887,7 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
             {
               label: 'View Reservations',
               value: statusCounts[RESERVED_FILTER],
-              onClick: showReserved,
+              onClick: () => showLocations(RESERVED_FILTER),
               active: statusFilter === RESERVED_FILTER,
             },
           ]}
@@ -1023,6 +1039,17 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
           </>
         )}
       </div>
+
+      {candidatesFor && (
+        <PositionCandidatesModal
+          positions={candidatesFor.rows}
+          title={candidatesFor.name}
+          subtitle={`${label}${candidatesFor.where ? ` · ${candidatesFor.where}` : ''}`}
+          reservation={candidatesFor.reservationType}
+          onClose={() => setCandidatesFor(null)}
+          onChanged={onDataChanged}
+        />
+      )}
     </div>
   )
 }

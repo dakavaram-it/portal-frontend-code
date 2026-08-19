@@ -26,7 +26,7 @@ const escapeCsv = (v) => {
 //   value?(row), sortValue?(row), csvValue?(row), render?(row) }
 // `value` is the plain display fallback; `render` overrides display only (used for the
 // per-row delete buttons); export always uses `csvValue` -> `value` -> `row[key]`.
-export default function DataTable({ columns, rows, rowKey, searchPlaceholder = 'Search…', filename = 'export' }) {
+export default function DataTable({ columns, rows, rowKey, searchPlaceholder = 'Search…', filename = 'export', tall = false }) {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState({ key: null, dir: 'asc' })
   const [page, setPage] = useState(1)
@@ -101,7 +101,7 @@ export default function DataTable({ columns, rows, rowKey, searchPlaceholder = '
         </button>
       </div>
 
-      <div className="leap-table-card">
+      <div className={`leap-table-card${tall ? ' leap-table-card-tall' : ''}`}>
         <table className="leap-table">
           <thead>
             <tr>
