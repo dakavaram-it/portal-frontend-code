@@ -94,6 +94,41 @@
   margin: 14px 8px 6px;
 }
 
+/* The elections label doubles as that group's collapse control, so it keeps the label
+   class — type, colour, margins, and the rail's fade-in all come from it — and adds only
+   the row layout and the chevron. */
+.leap-nav-group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: calc(100% - 16px);
+  padding: 0;
+  background: none;
+  border: 0;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.leap-nav-group-toggle svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  opacity: 0.8;
+  transition: transform 0.15s ease;
+}
+
+.leap-nav-group-toggle[aria-expanded='false'] svg {
+  transform: rotate(-90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leap-nav-group-toggle svg {
+    transition: none;
+  }
+}
+
 .leap-nav-icon {
   flex: none;
   display: flex;
@@ -569,17 +604,28 @@
 @media (min-width: 1281px) {
   .leap-dash-tier-columns {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    /* The tiers hold different numbers of bodies — the shorter panel ends where its
-       content ends rather than stretching to match the taller one. */
-    align-items: start;
   }
 }
 
+/* The tiers hold different numbers of bodies (two against three), so left to itself the
+   shorter panel stops ~130px above the taller one and the section below starts under a
+   ragged edge. The grid's default `stretch` is kept — both panels run to the taller one's
+   height, and the shorter one carries the difference as empty space inside its own border
+   rather than as a step in the page. */
 .leap-dash-tier-block {
+  display: flex;
+  flex-direction: column;
   background: #fff;
   border: 1px solid #eef0f3;
   border-radius: 18px;
   padding: 16px 16px 0;
+}
+
+/* The body stack takes the slack, so the panels' bottom edges line up without the last
+   tile row being dragged away from the one above it. */
+.leap-dash-tier-block .leap-dash-body-grid {
+  flex: 1;
+  align-content: start;
 }
 
 /* The tier card is the panel's heading rather than a tab that swaps the other panel out:
