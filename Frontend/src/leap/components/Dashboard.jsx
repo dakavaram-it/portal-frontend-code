@@ -651,7 +651,6 @@ export default function Dashboard({ user, onNavigate }) {
           positions={openCard.positions}
           assemblyId={assemblyId}
           onNavigate={onNavigate}
-          onDataChanged={() => setReloadKey((k) => k + 1)}
         />
       )}
     </div>
@@ -661,7 +660,7 @@ export default function Dashboard({ user, onNavigate }) {
 // One election type's stat tiles and location table. Kept as its own component (rather
 // than inlined in a .map) so its derived stats memoize per group instead of recomputing
 // for every group on every render.
-function ElectionTypeSection({ label, positions, assemblyId, onNavigate, onDataChanged }) {
+function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
   const [sort, setSort] = useState({ key: 'name', dir: 'asc' })
@@ -1075,7 +1074,6 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate, onDataC
           subtitle={`${label}${candidatesFor.where ? ` · ${candidatesFor.where}` : ''}`}
           reservation={candidatesFor.reservationType}
           onClose={() => setCandidatesFor(null)}
-          onChanged={onDataChanged}
         />
       )}
     </div>

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   getPositionsWithCandidates,
   getProposalCandidates,
-  removeProposalCandidate,
 } from '../api.js'
 import { MemberCard, PhotoViewer, STATUS_META, loadScores } from './NewPositionModal.jsx'
 import DataTable from './committee/DataTable.jsx'
@@ -59,8 +58,7 @@ function Select({ value, onChange, placeholder, items }) {
 export default function Candidates({ initialFilter } = {}) {
   // The proposal_position_id whose full-screen detail is open, or null for the list.
   const [openId, setOpenId] = useState(null)
-  // Bumped after a removal so the list's counts re-read — a position whose last candidate
-  // was dropped leaves getPositionsWithCandidates entirely.
+  // Bumped by the refresh button so the list re-reads.
   const [reloadKey, setReloadKey] = useState(0)
 
   const [electionTypeId, setElectionTypeId] = useState(initialFilter?.electionTypeId || '')
@@ -329,7 +327,6 @@ export default function Candidates({ initialFilter } = {}) {
           subtitle={`${open.election_type} · ${open.assembly_name}${open.mandal_town_name ? ` · ${open.mandal_town_name}` : ''}`}
           reservation={open.reservation_type}
           onClose={() => setOpenId(null)}
-          onChanged={() => setReloadKey((k) => k + 1)}
         />
       )}
     </div>
@@ -340,8 +337,9 @@ export default function Candidates({ initialFilter } = {}) {
    place of it: a title row and the same MemberCard grid the wizard renders. A Dashboard
    location can hold several roles (President + Vice-President), so `positions` is a list
    and each role gets its own heading once there is more than one. Proposing is not offered
-   here — that is Assign Members' job. */
-export function PositionCandidatesModal({ positions, title, subtitle, reservation, onClose, onChanged }) {
+   here — that is Assign Members' job. Nor is removing: once a candidate is saved they stay
+   on the position; dropping one before it is saved is the staged list's job in Assign Members. */
+export function PositionCandidatesModal({ positions, title, subtitle, reservation, onClose }) {
   // proposal_position_id -> its candidates. undefined while getProposalCandidates is in
   // flight, [] once it says none — the two render differently.
   const [candidates, setCandidates] = useState({})
@@ -350,7 +348,6 @@ export function PositionCandidatesModal({ positions, title, subtitle, reservatio
   const [scores, setScores] = useState({})
   const [zoomed, setZoomed] = useState(null)
   const [error, setError] = useState('')
-  const [reloadKey, setReloadKey] = useState(0)
 
   // The ids, not the array: the caller builds `positions` inline, so the array itself is a
   // new reference on every render of the screen behind this modal.
@@ -371,21 +368,7 @@ export function PositionCandidatesModal({ positions, title, subtitle, reservatio
       })
       .catch((err) => { if (!cancelled) { console.error(err); setError(err.message) } })
     return () => { cancelled = true }
-  }, [positionIds, reloadKey])
-
-  // Same write the wizard's View Members makes (removeProposalCandidate), so it asks first: there is no undo
-  // on this screen. The list behind is told to re-read its counts.
-  const remove = async (cadre) => {
-    if (!window.confirm(`Remove ${cadre.member_name} from this position?`)) return
-    setError('')
-    try {
-      await removeProposalCandidate(cadre.proposal_candidate_id)
-      setReloadKey((k) => k + 1)
-      onChanged()
-    } catch (err) {
-      setError(err.message)
-    }
-  }
+  }, [positionIds])
 
   return (
     <div className="leap-modal-overlay" onClick={onClose}>
@@ -443,7 +426,6 @@ export function PositionCandidatesModal({ positions, title, subtitle, reservatio
                         role={p.role_name}
                         rating={scores[c.membership_id]}
                         onZoom={() => setZoomed(c)}
-                        onDelete={() => remove(c)}
                       />
                     </div>
                   ))}

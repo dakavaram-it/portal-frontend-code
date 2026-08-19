@@ -11,7 +11,6 @@ import {
   getCadreScores,
   searchCadre,
   assignCandidate,
-  removeProposalCandidate,
   useList,
 } from '../api.js'
 import { MIN_NAME_LENGTH, cadreImageUrl, searchCadre as searchCadreDirectory } from '../cadreSearchApi.js'
@@ -317,7 +316,7 @@ const DEFAULT_STATUS_ID = PROPOSAL_STATUSES[0].id
 // `statuses` is which buttons `onStatus` offers. It defaults to the one this wizard
 // writes; the Candidates screen passes its own set, because there it is an existing status
 // being moved rather than a new one being chosen.
-export function MemberCard({ cadre, role, rating, onZoom, onRemove, onDelete, status, onStatus, statuses = PROPOSAL_STATUSES }) {
+export function MemberCard({ cadre, role, rating, onZoom, onRemove, status, onStatus, statuses = PROPOSAL_STATUSES }) {
   // Not every img_url resolves — a path can outlive the photo it points at, and a broken
   // image reads worse than no photo, so a failed load falls back to initials.
   const [photoFailed, setPhotoFailed] = useState(false)
@@ -325,8 +324,6 @@ export function MemberCard({ cadre, role, rating, onZoom, onRemove, onDelete, st
   // before the column have neither id nor name and are proposals.
   const picked = STATUS_META[status]
   const saved = STATUS_META[cadre.proposal_status_id] || STATUS_META[DEFAULT_STATUS_ID]
-  // Staged cards drop from the list; saved ones are removed from the position.
-  const drop = onRemove || onDelete
   const score = rating?.total_score
   const report = rating?.performance
   const caste = [cadre.category_name, cadre.caste_name].filter(Boolean).join(' · ')
@@ -382,12 +379,12 @@ export function MemberCard({ cadre, role, rating, onZoom, onRemove, onDelete, st
                   <i>SCORE</i>
                 </span>
               )}
-              {drop && (
+              {onRemove && (
                 <button
                   type="button"
                   className="leap-mcard-remove"
                   title={`Remove ${cadre.member_name}`}
-                  onClick={drop}
+                  onClick={onRemove}
                 >
                   ✕
                 </button>
@@ -859,9 +856,6 @@ export default function NewPositionModal({ initial } = {}) {
   const [memberScores, setMemberScores] = useState({})
   // The member whose photo is open in the lightbox.
   const [zoomed, setZoomed] = useState(null)
-  // removeProposalCandidate's {detail} when a removal fails. Step 6's `error` is not it — that banner is not
-  // on the screen in the view branch.
-  const [membersError, setMembersError] = useState('')
   useEffect(() => {
     if (membersAction !== 'view' || positions.length === 0) return
     let cancelled = false
@@ -963,20 +957,6 @@ export default function NewPositionModal({ initial } = {}) {
     setProposalConstituencyId(id)
     setMembersAction('')
     setPositionId('')
-  }
-
-  // Removing a proposed member is a write with no undo on this screen, so it asks first.
-  // Bumping positionsKey re-reads getPositionsOverview, and the new `positions` array re-runs the effect
-  // that loads the members — one bump refreshes both the counts and the list.
-  const removeMember = async (cadre) => {
-    if (!window.confirm(`Remove ${cadre.member_name} from this position?`)) return
-    setMembersError('')
-    try {
-      await removeProposalCandidate(cadre.proposal_candidate_id)
-      setPositionsKey((k) => k + 1)
-    } catch (err) {
-      setMembersError(err.message)
-    }
   }
 
   return (
@@ -1088,7 +1068,6 @@ export default function NewPositionModal({ initial } = {}) {
 
           {membersAction === 'view' && (
             <div className="leap-members-view">
-              {membersError && <div className="leap-form-error">{membersError}</div>}
               {positions.map((row) => {
                 const open = openSlots(row)
                 // undefined while getProposalCandidates is still in flight; [] once it says none.
@@ -1113,7 +1092,6 @@ export default function NewPositionModal({ initial } = {}) {
                             role={row.role_name}
                             rating={memberScores[c.membership_id]}
                             onZoom={() => setZoomed(c)}
-                            onDelete={() => removeMember(c)}
                           />
                         ))}
                       </div>
