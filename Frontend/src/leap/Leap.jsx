@@ -31,6 +31,13 @@ export default function Leap({ user, onLogout }) {
   const [args, setArgs] = useState({})
   // Below 1025px the sidebar is an off-canvas drawer; this is whether it is showing.
   const [navOpen, setNavOpen] = useState(false)
+  // Committees Assign's own panels (KSS/CUBS/Committees) fetch their overview once on
+  // mount and otherwise only on their own writes — unlike every other screen here, its
+  // numbers (booth fill counts, sections created, …) can go stale from work done
+  // elsewhere while the tab sits `hidden` rather than unmounted. Bumped on every sidebar
+  // arrival and threaded down as part of that screen's own remount keys, so landing on it
+  // always re-fetches rather than showing what was last on screen.
+  const [committeesAssignNav, setCommitteesAssignNav] = useState(0)
 
   const openPosition = (id) => setView({ name: 'detail', id })
 
@@ -40,6 +47,7 @@ export default function Leap({ user, onLogout }) {
   const navigate = ({ name, ...payload }) => {
     setOpened((prev) => (prev[name] ? prev : { ...prev, [name]: true }))
     if (Object.keys(payload).length) setArgs((prev) => ({ ...prev, [name]: payload }))
+    if (name === 'committeesAssign') setCommitteesAssignNav((k) => k + 1)
     setView({ name, ...payload })
     setNavOpen(false)
   }
@@ -110,7 +118,7 @@ export default function Leap({ user, onLogout }) {
           />
         )}
         {screen('cadreSearch', <CadreSearchNotes user={user} />)}
-        {screen('committeesAssign', <CommitteesAssign user={user} />)}
+        {screen('committeesAssign', <CommitteesAssign user={user} navKey={committeesAssignNav} />)}
         {view.name === 'positions' && (
           <AllPositions
             positions={positions}

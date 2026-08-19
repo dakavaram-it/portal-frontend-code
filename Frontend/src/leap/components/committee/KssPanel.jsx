@@ -8,10 +8,11 @@ import {
   getKssBooths,
 } from '../../committeeApi.js'
 import { CASTE_LIST } from '../../casteList.js'
+import { cadreImageUrl } from '../../cadreSearchApi.js'
 import { Dropdown, initials } from '../NewPositionModal.jsx'
 import KssDrilldownModal from './KssDrilldownModal.jsx'
 import CommitteeStatTile from './CommitteeStatTile.jsx'
-import useMembershipSearch from './useMembershipSearch.js'
+import useMembershipSearch, { SEARCH_TYPES } from './useMembershipSearch.js'
 
 const ICON_PROPS = {
   viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
@@ -34,6 +35,17 @@ function IconUserCheck() {
 }
 function IconPlus() {
   return <svg {...ICON_PROPS}><path d="M12 5v14" /><path d="M5 12h14" /></svg>
+}
+function IconTrash() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 7h16" />
+      <path d="M9 7V4.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V7" />
+      <path d="M6 7l1 12.5a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5L18 7" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  )
 }
 
 const CASTE_OPTIONS = CASTE_LIST.map((c) => ({ value: String(c.id), label: c.name }))
@@ -70,7 +82,7 @@ function StagedCadreCard({ cadre, casteId, mobileNo, onCasteChange, onMobileChan
   return (
     <div className="leap-committee-staged-card">
       <span className="leap-committee-staged-photo">
-        {cadre.imageUrl ? <img src={cadre.imageUrl} alt="" /> : initials(cadre.cadreName || '?')}
+        {cadre.imageUrl ? <img src={cadreImageUrl(cadre.imageUrl)} alt="" /> : initials(cadre.cadreName || '?')}
       </span>
       <div className="leap-committee-staged-body">
         <div className="leap-committee-staged-name">{cadre.cadreName}</div>
@@ -82,23 +94,133 @@ function StagedCadreCard({ cadre, casteId, mobileNo, onCasteChange, onMobileChan
           <input value={mobileNo} onChange={(e) => onMobileChange(sanitizeMobile(e.target.value))} placeholder="Mobile number" />
         </div>
       </div>
-      {onRemove && <button type="button" className="leap-committee-remove-btn" onClick={onRemove}>Remove</button>}
+      {onRemove && (
+        <button type="button" className="leap-committee-delete-btn" title="Remove" onClick={onRemove}>
+          <IconTrash />
+        </button>
+      )}
     </div>
   )
 }
 
+const SEARCH_PLACEHOLDERS = {
+  MembershipId: 'e.g. 10000000',
+  VoterCardNo: 'e.g. RYT0222026',
+  MobileNo: 'e.g. 9985649860',
+  CadreName: 'e.g. UZAIR',
+}
+
+// The Membership ID / Voter ID / Mobile No / Name choice ahead of a search — same four
+// fields cadreSearchApi.js's SEARCH_TYPES offers on the main Cadre Search screen.
+function SearchTypeRadioGroup({ searchType, onChange }) {
+  return (
+    <div className="leap-committee-search-types" role="radiogroup" aria-label="Search by">
+      {SEARCH_TYPES.map((t) => (
+        <label
+          key={t.value}
+          className={`leap-committee-search-type ${searchType === t.value ? 'selected' : ''}`}
+        >
+          <input
+            type="radio"
+            name="kss-search-type"
+            value={t.value}
+            checked={searchType === t.value}
+            onChange={() => onChange(t.value)}
+          />
+          {t.label}
+        </label>
+      ))}
+    </div>
+  )
+}
+
+// Every other field on the cadre gets its own label/value tile — searchCadre's response
+// carries fields this module has no fixed opinion about ahead of time (and the backend is
+// free to add more), so rather than hand-picking a handful to show, this renders whatever
+// actually came back. cadreName/imageUrl are pulled out for the name line and the photo;
+// cadreId is the internal id passed to assignCandidate/addKSSMember, not a member-facing
+// detail.
+const RESULT_HIDDEN_FIELDS = new Set(['cadreName', 'imageUrl', 'cadreId'])
+
+const fieldLabel = (key) =>
+  key
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/^./, (c) => c.toUpperCase())
+    .trim()
+
+const fieldValue = (v) => {
+  if (v === null || v === undefined || v === '') return '—'
+  if (Array.isArray(v)) return v.length ? v.join(', ') : '—'
+  if (typeof v === 'object') return JSON.stringify(v)
+  return String(v)
+}
+
+// One matched cadre from a (possibly multi-row, for Voter/Mobile/Name searches) result —
+// a preview, not yet staged. `Select Member` is the explicit step that stages it; toggling
+// it off again un-stages the same cadre.
+function SearchResultCard({ cadre, selected, disabled, onToggle }) {
+  const fields = Object.entries(cadre).filter(([k]) => !RESULT_HIDDEN_FIELDS.has(k))
+
+  return (
+    <div className="leap-committee-result-card">
+      <span className="leap-committee-staged-photo">
+        {cadre.imageUrl ? <img src={cadreImageUrl(cadre.imageUrl)} alt="" /> : initials(cadre.cadreName || '?')}
+      </span>
+      <div className="leap-committee-staged-body">
+        <div className="leap-committee-staged-name">{cadre.cadreName}</div>
+        {fields.length > 0 && (
+          <div className="leap-committee-result-grid">
+            {fields.map(([k, v]) => (
+              <div key={k} className="leap-committee-result-field">
+                <span>{fieldLabel(k)}</span>
+                <b>{fieldValue(v)}</b>
+              </div>
+            ))}
+          </div>
+        )}
+        <label className="leap-committee-select-toggle">
+          <input type="checkbox" checked={selected} disabled={disabled} onChange={onToggle} />
+          Select Member
+        </label>
+        {selected && <div className="leap-committee-added-note">Member added — see Selected Members above.</div>}
+      </div>
+    </div>
+  )
+}
+
+// Shared by SerialRangeFields' own booth-change effect and by a form's save() — a
+// section just created shifts the booth's next-serial-no forward, so the fields need the
+// same fetch re-run once the save resolves, not just once when the booth is first picked.
+async function fetchNextSerial(boothId) {
+  try {
+    const r = await getNextSectionSerialNo(boothId)
+    if (!r || r.status === 'Fail') {
+      return { max: '0', from: '0', error: (r && r.message) || 'Could not load the serial-no range for this booth.' }
+    }
+    return {
+      max: r.maxSerialNo > 0 ? String(r.maxSerialNo) : '0',
+      from: r.maxSerialNo > 0 ? String(r.nextSerialNo) : '0',
+      error: '',
+    }
+  } catch (err) {
+    return { max: '0', from: '0', error: err.message }
+  }
+}
+
 // Booth + serial-no range fields, shared by the plain Create and Create & Assign forms.
 function SerialRangeFields({ constituencyId, boothId, setBoothId, maxSerialNo, setMaxSerialNo, fromSerialNo, setFromSerialNo, toSerialNo, setToSerialNo }) {
+  const [serialError, setSerialError] = useState('')
+
   useEffect(() => {
     if (!boothId) return
     let cancelled = false
-    getNextSectionSerialNo(boothId)
-      .then((r) => {
-        if (cancelled || !r) return
-        setMaxSerialNo(r.maxSerialNo > 0 ? String(r.maxSerialNo) : '0')
-        setFromSerialNo(r.maxSerialNo > 0 ? String(r.nextSerialNo) : '0')
-      })
-      .catch((err) => console.error(err))
+    setSerialError('')
+    fetchNextSerial(boothId).then((r) => {
+      if (cancelled) return
+      setMaxSerialNo(r.max)
+      setFromSerialNo(r.from)
+      setSerialError(r.error)
+    })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boothId])
@@ -125,6 +247,7 @@ function SerialRangeFields({ constituencyId, boothId, setBoothId, maxSerialNo, s
           placeholder="e.g. 60"
         />
       </div>
+      {serialError && <div className="leap-form-error">{serialError}</div>}
     </div>
   )
 }
@@ -160,6 +283,9 @@ function CreateKssForm({ constituencyId, onDone }) {
       setSuccess('Section created.')
       setToSerialNo('')
       onDone()
+      const r = await fetchNextSerial(boothId)
+      setMaxSerialNo(r.max)
+      setFromSerialNo(r.from)
       setTimeout(() => setSuccess(''), 2500)
     } catch (err) {
       setError(err.message)
@@ -179,6 +305,7 @@ function CreateKssForm({ constituencyId, onDone }) {
         toSerialNo={toSerialNo} setToSerialNo={setToSerialNo}
       />
       <button type="button" className="leap-btn-primary" disabled={busy || !boothId} onClick={save}>
+        {busy && <span className="leap-btn-spinner" aria-hidden="true" />}
         {busy ? 'Creating…' : 'Create KSS'}
       </button>
       {error && <div className="leap-form-error">{error}</div>}
@@ -198,18 +325,18 @@ function CreateKssWithMembersForm({ constituencyId, onDone }) {
   const [busy, setBusy] = useState(false)
   const search = useMembershipSearch(constituencyId)
 
-  useEffect(() => {
-    if (search.result) {
-      if (staged.length >= 2) { search.reset(); return }
-      if (staged.some((s) => s.cadre.membershipId === search.result.membershipId)) { search.reset(); return }
-      setStaged((prev) => [
-        ...prev,
-        { cadre: search.result, casteId: '', mobileNo: search.result.mobile || '' },
-      ])
-      search.reset()
+  // The explicit "Select Member" step on a search result — mirrors the legacy screen's
+  // own checkbox rather than staging the instant a search resolves, since Voter ID/Mobile/
+  // Name can each match more than one row and the user needs to pick which.
+  const toggleSelect = (cadre) => {
+    const already = staged.some((s) => s.cadre.membershipId === cadre.membershipId)
+    if (already) {
+      setStaged((prev) => prev.filter((s) => s.cadre.membershipId !== cadre.membershipId))
+      return
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search.result])
+    if (staged.length >= 2) { setError('You can add at most two KSS members to this section.'); return }
+    setStaged((prev) => [...prev, { cadre, casteId: '', mobileNo: cadre.mobile || '' }])
+  }
 
   const save = async () => {
     const v = validateRange(fromSerialNo, toSerialNo, maxSerialNo)
@@ -229,6 +356,9 @@ function CreateKssWithMembersForm({ constituencyId, onDone }) {
       setToSerialNo('')
       setStaged([])
       onDone()
+      const r = await fetchNextSerial(boothId)
+      setMaxSerialNo(r.max)
+      setFromSerialNo(r.from)
       setTimeout(() => setSuccess(''), 2500)
     } catch (err) {
       setError(err.message)
@@ -248,42 +378,68 @@ function CreateKssWithMembersForm({ constituencyId, onDone }) {
         toSerialNo={toSerialNo} setToSerialNo={setToSerialNo}
       />
 
-      <p className="leap-field-hint" style={{ color: '#b45309' }}>
+      <p className="leap-field-hint">
         For this section (up to 60 voters) you can add up to two KSS members here.
       </p>
 
-      {staged.map((s, i) => (
-        <StagedCadreCard
-          key={s.cadre.membershipId}
-          cadre={s.cadre}
-          casteId={s.casteId}
-          mobileNo={s.mobileNo}
-          onCasteChange={(v) => setStaged((prev) => prev.map((x, xi) => (xi === i ? { ...x, casteId: v } : x)))}
-          onMobileChange={(v) => setStaged((prev) => prev.map((x, xi) => (xi === i ? { ...x, mobileNo: v } : x)))}
-          onRemove={() => setStaged((prev) => prev.filter((_, xi) => xi !== i))}
-        />
-      ))}
+      {staged.length > 0 && (
+        <>
+          <div className="leap-committee-subhead">Selected Members ({staged.length}/2)</div>
+          <div className="leap-committee-staged-box">
+            {staged.map((s, i) => (
+              <StagedCadreCard
+                key={s.cadre.membershipId}
+                cadre={s.cadre}
+                casteId={s.casteId}
+                mobileNo={s.mobileNo}
+                onCasteChange={(v) => setStaged((prev) => prev.map((x, xi) => (xi === i ? { ...x, casteId: v } : x)))}
+                onMobileChange={(v) => setStaged((prev) => prev.map((x, xi) => (xi === i ? { ...x, mobileNo: v } : x)))}
+                onRemove={() => setStaged((prev) => prev.filter((_, xi) => xi !== i))}
+              />
+            ))}
+
+            <button type="button" className="leap-btn-primary leap-committee-submit-btn" disabled={busy || !boothId} onClick={save}>
+              {busy && <span className="leap-btn-spinner" aria-hidden="true" />}
+              {busy ? 'Saving…' : 'Create KSS & Assign Members'}
+            </button>
+          </div>
+        </>
+      )}
 
       {staged.length < 2 && boothId && (
-        <div className="leap-cadre-search-row">
-          <input
-            value={search.value}
-            onChange={(e) => search.setValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') search.run() }}
-            placeholder="Membership ID (8 digits)"
-          />
-          <button type="button" className="leap-btn-secondary" disabled={search.busy} onClick={search.run}>
-            {search.busy ? 'Searching…' : 'Add member'}
-          </button>
+        <div className="leap-committee-search-box">
+          <div className="leap-committee-subhead leap-committee-subhead-flush">Search Member</div>
+          <SearchTypeRadioGroup searchType={search.searchType} onChange={search.selectType} />
+          <div className="leap-committee-search-row">
+            <input
+              value={search.value}
+              onChange={(e) => search.setValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') search.run() }}
+              placeholder={SEARCH_PLACEHOLDERS[search.searchType]}
+            />
+            <button type="button" className="leap-btn-secondary" disabled={search.busy} onClick={search.run}>
+              {search.busy && <span className="leap-btn-spinner leap-btn-spinner-dark" aria-hidden="true" />}
+              {search.busy ? 'Searching…' : 'Search'}
+            </button>
+          </div>
+          {search.error && <div className="leap-field-hint">{search.error}</div>}
+
+          {search.results && search.results.length > 0 && (
+            <div className="leap-committee-results-list">
+              {search.results.map((cadre) => (
+                <SearchResultCard
+                  key={cadre.membershipId}
+                  cadre={cadre}
+                  selected={staged.some((s) => s.cadre.membershipId === cadre.membershipId)}
+                  disabled={staged.length >= 2 && !staged.some((s) => s.cadre.membershipId === cadre.membershipId)}
+                  onToggle={() => toggleSelect(cadre)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
-      {search.error && <div className="leap-field-hint">{search.error}</div>}
 
-      <div style={{ marginTop: 16 }}>
-        <button type="button" className="leap-btn-primary" disabled={busy || !boothId} onClick={save}>
-          {busy ? 'Saving…' : 'Create KSS & Assign Members'}
-        </button>
-      </div>
       {error && <div className="leap-form-error">{error}</div>}
       {success && <div className="leap-form-success">{success}</div>}
     </div>
@@ -351,7 +507,7 @@ function AssignMembersForm({ constituencyId, onDone }) {
   return (
     <div className="leap-committee-panel">
       <h4>Assign Members</h4>
-      <div className="leap-committee-form-row">
+      <div className="leap-committee-form-row leap-committee-form-row-compact">
         <div className="leap-committee-field">
           <label>Booth</label>
           <BoothPicker constituencyId={constituencyId} value={boothId} onChange={setBoothId} />
@@ -370,15 +526,18 @@ function AssignMembersForm({ constituencyId, onDone }) {
       </div>
 
       {sectionId && (
-        <>
-          <div className="leap-cadre-search-row">
+        <div className="leap-committee-search-box">
+          <div className="leap-committee-subhead leap-committee-subhead-flush">Search Member</div>
+          <SearchTypeRadioGroup searchType={search.searchType} onChange={search.selectType} />
+          <div className="leap-committee-search-row">
             <input
               value={search.value}
               onChange={(e) => search.setValue(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') search.run() }}
-              placeholder="Membership ID (8 digits)"
+              placeholder={SEARCH_PLACEHOLDERS[search.searchType]}
             />
             <button type="button" className="leap-btn-secondary" disabled={search.busy} onClick={search.run}>
+              {search.busy && <span className="leap-btn-spinner leap-btn-spinner-dark" aria-hidden="true" />}
               {search.busy ? 'Searching…' : 'Search'}
             </button>
           </div>
@@ -394,11 +553,12 @@ function AssignMembersForm({ constituencyId, onDone }) {
                 onMobileChange={setMobileNo}
               />
               <button type="button" className="leap-btn-primary" disabled={busy} onClick={add}>
+                {busy && <span className="leap-btn-spinner" aria-hidden="true" />}
                 {busy ? 'Assigning…' : 'Add & Assign'}
               </button>
             </>
           )}
-        </>
+        </div>
       )}
 
       {error && <div className="leap-form-error">{error}</div>}
@@ -488,7 +648,7 @@ export default function KssPanel({ constituencyId, user, locationName }) {
         </button>
         <button
           type="button"
-          className={`leap-btn-secondary accent-amber ${panel === 'createAssign' ? 'is-active' : ''}`}
+          className={`leap-btn-secondary accent-purple ${panel === 'createAssign' ? 'is-active' : ''}`}
           onClick={() => setPanel(panel === 'createAssign' ? null : 'createAssign')}
         >
           <IconPlus /> Create KSS & Assign Members
