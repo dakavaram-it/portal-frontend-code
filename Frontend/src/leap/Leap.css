@@ -1180,8 +1180,8 @@
 .leap-committee-card {
   background: #fff;
   border: 1px solid #eef0f3;
-  border-radius: 18px;
-  padding: 28px 30px 32px;
+  border-radius: 20px;
+  padding: 30px 32px 34px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
@@ -1234,7 +1234,7 @@
 .leap-committee-tabs-row {
   display: flex;
   justify-content: center;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .leap-committee-tabs {
@@ -1289,12 +1289,13 @@
 /* The chip radio row and the section title/tiles beneath it otherwise sit almost flush
    against each other — this is the gap that gives the section its own visual beat. */
 .leap-committee-section-header {
-  margin-top: 24px;
+  margin-top: 28px;
+  margin-bottom: 16px;
 }
 
 .leap-stat-row.leap-committee-stat-row {
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 @media (max-width: 1300px) {
@@ -1326,13 +1327,18 @@
 
 /* A distinct card behind the overview tiles — previously they sat directly on the page
    background with a separate table below; now the table's gone (see CubsPanel.jsx) and
-   the tiles alone need something to visually set the "overview" section apart. */
+   the tiles alone need something to visually set the "overview" section apart. Plain
+   white with the same thin border + resting shadow every other card in the app uses
+   (.leap-stat-tile, .leap-table-card, .leap-dash-tier-block) — it's read-only
+   information, not a selected/active state, so it gets that calm treatment rather than a
+   tint of its own. */
 .leap-committee-overview-card {
-  background: linear-gradient(135deg, #f8fafc, #eef2ff);
-  border: 1px solid #e0e7ff;
-  border-radius: 16px;
-  padding: 18px;
-  margin-top: 14px;
+  background: #fff;
+  border: 1px solid #eef0f3;
+  border-radius: 18px;
+  padding: 22px;
+  margin-top: 20px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 .leap-committee-actions {
@@ -1374,7 +1380,7 @@
    draw their own single box (.leap-table-card / .leap-committee-panel), and wrapping a
    second box around that just doubled the border/padding into a box-inside-a-box. */
 .leap-committee-snapshot-content {
-  margin-top: 18px;
+  margin-top: 22px;
 }
 
 .leap-committee-actions .leap-btn-secondary {
@@ -1449,9 +1455,10 @@
 .leap-committee-panel {
   background: #fff;
   border: 1px solid #eef0f3;
-  border-radius: 14px;
-  padding: 20px 22px;
-  margin-top: 18px;
+  border-radius: 16px;
+  padding: 22px 24px;
+  margin-top: 20px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 .leap-committee-panel h4 {
@@ -1468,15 +1475,6 @@
   margin-top: 10px;
 }
 
-/* The location picker that gates the whole View/Add flow below it — the same tint as the
-   Overview card above it (rather than a different colour of its own), so the two read as
-   one consistent surface rather than a clashing pair. */
-.leap-committee-members-card {
-  background: linear-gradient(135deg, #f8fafc, #eef2ff);
-  border-color: #e0e7ff;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
-}
-
 /* Select Booth/Unit/Cluster and the View/Add pair on one line — the field carries a
    label above it and the buttons don't, so aligning to their bottom edge (not center)
    is what actually lines the dropdown box up with the buttons rather than with their
@@ -1485,7 +1483,7 @@
   display: flex;
   align-items: flex-end;
   flex-wrap: wrap;
-  gap: 14px 20px;
+  gap: 16px 24px;
 }
 
 .leap-committee-members-row .leap-committee-field {
@@ -1500,8 +1498,8 @@
 .leap-committee-form-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 14px;
-  margin-bottom: 14px;
+  gap: 16px;
+  margin-bottom: 16px;
 }
 
 /* Assign Members' own two-field row (Booth/Unassigned KSS) — no `1fr` in the track size,
@@ -1557,13 +1555,13 @@
    than a long scroll of near-empty space under one. */
 .leap-committee-staged-box {
   border: 1.5px dashed #d8dce3;
-  border-radius: 14px;
+  border-radius: 16px;
   background: #fafbfc;
-  padding: 12px;
-  margin: 0 0 14px;
+  padding: 16px;
+  margin: 0 0 18px;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  gap: 12px;
 }
 
 @media (max-width: 640px) {
@@ -1586,20 +1584,22 @@
   margin-top: 2px;
 }
 
-/* A clearly separate, solid-bordered block (as opposed to the dashed staged-member well
-   above) so the search step reads as its own section rather than blending into it. Light
-   yellow, tinting it as the "working" step rather than the neutral white of the finished
-   staged-member well. */
+/* A clearly separate block (as opposed to the dashed staged-member well above) so the
+   search step reads as its own section rather than blending into it — border + top-fade
+   tint + ring shadow, the same recipe the Dashboard's own "open" tier card uses for a
+   highlighted/active state (.leap-dash-tier-card.open), reused here since this is the
+   one genuinely in-progress step in the flow, rather than a flat colour fill of its own. */
 .leap-committee-search-box {
-  border: 1px solid #fde68a;
-  border-radius: 14px;
-  padding: 18px 20px;
-  margin: 0 0 16px;
-  background: #fffbea;
+  border: 1px solid #f59e0b;
+  border-radius: 16px;
+  padding: 20px 22px;
+  margin: 0 0 20px;
+  background: linear-gradient(180deg, #fffbeb 0%, #fff 70%);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.12);
 }
 
 .leap-committee-search-box .leap-committee-subhead {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .leap-committee-search-box .leap-committee-staged-card {
