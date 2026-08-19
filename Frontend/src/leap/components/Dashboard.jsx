@@ -9,6 +9,7 @@ import {
 } from '../api.js'
 import { Dropdown, PhotoViewer, initials } from './NewPositionModal.jsx'
 import { PositionCandidatesModal, reservationClass } from './Candidates.jsx'
+import { Highlight } from './committee/DataTable.jsx'
 
 // proposal_status's own ids (1 Proposed, 2 Shortlisted, 3 Confirmed) — the two the
 // Dashboard's stat tiles drill into. Shortlisted has no tile here, so it is not listed.
@@ -202,11 +203,32 @@ const NOMINATION_CLASS = {
 // groups the work still to do at one end rather than alphabetically scattering it.
 const NOMINATION_RANK = { 'Not Started': 0, Started: 1 }
 
-// Reserved only sits in the same group as the nomination statuses and so is exclusive
-// with them — it is not a status, it is the other question the By Location list gets
-// asked, and the Total Locations tile's Reservation row selects it.
+// Reservation is the other question the By Location list gets asked, and it is not a
+// status — so it has its own dropdown beside the status chips and the two combine.
+// RESERVED_FILTER ("any reservation at all") is what the Total Locations tile's
+// Reservation row selects; the categories themselves come off the rows.
 const RESERVED_FILTER = 'Reserved only'
-const STATUS_FILTERS = ['All', 'Not Started', 'Started', RESERVED_FILTER]
+const UNRESERVED_FILTER = 'Un-reserved'
+const STATUS_FILTERS = ['All', 'Not Started', 'Started']
+
+// A reservation filter's options: the categories actually present in the rows, wrapped in
+// the two blanket choices — so the dropdown can never offer one that filters to nothing.
+// Shared by By Location and the candidate drill-down, which must filter the same way.
+const reservationOptionsFor = (types) => [
+  { value: 'All', label: 'All reservations' },
+  { value: RESERVED_FILTER, label: RESERVED_FILTER },
+  ...[...new Set(types)].sort().map((t) => ({ value: t, label: t })),
+  { value: UNRESERVED_FILTER, label: UNRESERVED_FILTER },
+]
+
+// `types` is a row's reservations — a location can hold several (its roles reserve
+// separately), a candidate holds one or none.
+const matchesReservation = (filter, types) => {
+  if (filter === 'All') return true
+  if (filter === RESERVED_FILTER) return types.length > 0
+  if (filter === UNRESERVED_FILTER) return types.length === 0
+  return types.includes(filter)
+}
 
 const pct = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : 0)
 
@@ -663,6 +685,8 @@ export default function Dashboard({ user, onNavigate }) {
 function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
+  // 'All', RESERVED_FILTER, UNRESERVED_FILTER, or one reservation_type.
+  const [reservationFilter, setReservationFilter] = useState('All')
   const [sort, setSort] = useState({ key: 'name', dir: 'asc' })
   // { statusId, statusLabel } while the Proposed/Confirmed drill-down is open, else null.
   const [statusModal, setStatusModal] = useState(null)
@@ -777,12 +801,17 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
     return counts
   }, [locationStats])
 
+  const reservationOptions = useMemo(
+    () => reservationOptionsFor(locationStats.flatMap((l) => l.reservations)),
+    [locationStats]
+  )
+
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase()
     const rows = locationStats.filter((l) => {
-      if (statusFilter === RESERVED_FILTER) {
-        if (!l.reservationType) return false
-      } else if (statusFilter !== 'All' && l.status !== statusFilter) return false
+      if (statusFilter !== 'All' && l.status !== statusFilter) return false
+      // A location's roles reserve separately, so it matches a category when any of them does.
+      if (!matchesReservation(reservationFilter, l.reservations)) return false
       if (!needle) return true
       return `${l.name} ${l.where || ''}`.toLowerCase().includes(needle)
     })
@@ -794,7 +823,7 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
       if (sort.key === 'status') return dir * (NOMINATION_RANK[a.status] - NOMINATION_RANK[b.status])
       return dir * (a[sort.key] - b[sort.key])
     })
-  }, [locationStats, search, statusFilter, sort])
+  }, [locationStats, search, statusFilter, reservationFilter, sort])
 
   // Runs after By Location is on the screen — a filter row can be clicked while
   // the status drill-down is open, in which case the section does not exist yet at click
@@ -810,6 +839,14 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
   // filter is off-screen and the click means "show me this", not "turn this off".
   const showLocations = (filter) => {
     setStatusFilter((cur) => (cur === filter && !statusModal ? 'All' : filter))
+    setStatusModal(null)
+    setFilterTick((n) => n + 1)
+  }
+
+  // Same, for the reservation dropdown — the View Reservations row picks its
+  // "any reservation" option rather than a category.
+  const showReservations = () => {
+    setReservationFilter((cur) => (cur === RESERVED_FILTER && !statusModal ? 'All' : RESERVED_FILTER))
     setStatusModal(null)
     setFilterTick((n) => n + 1)
   }
@@ -899,8 +936,8 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
             {
               label: 'View Reservations',
               value: statusCounts[RESERVED_FILTER],
-              onClick: () => showLocations(RESERVED_FILTER),
-              active: statusFilter === RESERVED_FILTER,
+              onClick: showReservations,
+              active: reservationFilter === RESERVED_FILTER,
             },
           ]}
         />
@@ -961,18 +998,28 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
                   aria-label="Search locations"
                 />
               </div>
-              <div className="leap-filter-chips" role="group" aria-label="Filter by nomination status">
-                {STATUS_FILTERS.map((s) => (
-                  <button
-                    type="button"
-                    key={s}
-                    className={`leap-filter-chip ${statusFilter === s ? 'active' : ''} ${NOMINATION_CLASS[s] || ''}`}
-                    aria-pressed={statusFilter === s}
-                    onClick={() => setStatusFilter(s)}
-                  >
-                    {s} <span className="leap-filter-chip-count">{statusCounts[s]}</span>
-                  </button>
-                ))}
+              <div className="leap-toolbar-filters">
+                <div className="leap-filter-chips" role="group" aria-label="Filter by nomination status">
+                  {STATUS_FILTERS.map((s) => (
+                    <button
+                      type="button"
+                      key={s}
+                      className={`leap-filter-chip ${statusFilter === s ? 'active' : ''} ${NOMINATION_CLASS[s] || ''}`}
+                      aria-pressed={statusFilter === s}
+                      onClick={() => setStatusFilter(s)}
+                    >
+                      {s} <span className="leap-filter-chip-count">{statusCounts[s]}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="leap-reservation-filter" role="group" aria-label="Filter by reservation">
+                  <Dropdown
+                    value={reservationFilter}
+                    onChange={setReservationFilter}
+                    options={reservationOptions}
+                    placeholder="All reservations"
+                  />
+                </div>
               </div>
             </div>
 
@@ -1000,8 +1047,8 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
                   {visible.map((l) => (
                     <tr key={l.id}>
                       <td className="leap-table-title">
-                        {l.name}
-                        {l.where && <div className="leap-table-sub">{l.where}</div>}
+                        <Highlight text={l.name} needle={search} />
+                        {l.where && <div className="leap-table-sub"><Highlight text={l.where} needle={search} /></div>}
                       </td>
                       <td>{l.roleNames || '—'}</td>
                       <td>{l.requiredPositions}</td>
@@ -1090,6 +1137,9 @@ function CandidateStatusSection({ electionTypeIds, roleNames, assemblyId, status
   const [rows, setRows] = useState(null) // null = loading
   const [error, setError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
+  // Same two controls as By Location, over the candidates instead of the locations.
+  const [search, setSearch] = useState('')
+  const [reservationFilter, setReservationFilter] = useState('All')
   const isConfirmed = statusId === CONFIRMED_STATUS_ID
   // proposal_candidate_id -> true while its own upload is in flight, so one row's spinner
   // never disables another's button.
@@ -1137,6 +1187,28 @@ function CandidateStatusSection({ electionTypeIds, roleNames, assemblyId, status
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [pdfViewer])
+
+  const reservationOptions = useMemo(
+    () => reservationOptionsFor((rows || []).map((c) => c.reservation_type).filter(Boolean)),
+    [rows]
+  )
+
+  const visible = useMemo(() => {
+    const needle = search.trim().toLowerCase()
+    return (rows || []).filter((c) => {
+      if (!matchesReservation(reservationFilter, c.reservation_type ? [c.reservation_type] : [])) return false
+      if (!needle) return true
+      // Every column the table shows, so any text on the row is findable.
+      return [
+        c.member_name, c.role_name, c.local_body_name, c.mandal_town_name, c.membership_id,
+        c.mobile_no, c.gender, c.category_name, c.caste_name, c.reservation_type,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(needle)
+    })
+  }, [rows, search, reservationFilter])
 
   // Patches `nomination_file_path` in place on success rather than refetching getDashboardCandidatesByStatus, so the
   // badge flips to Done without the row order or scroll position jumping.
@@ -1193,7 +1265,11 @@ function CandidateStatusSection({ electionTypeIds, roleNames, assemblyId, status
           <h3>{statusLabel} Candidates</h3>
         </div>
         {rows && rows.length > 0 && (
-          <span className="leap-section-sub">{rows.length} candidate{rows.length !== 1 ? 's' : ''}</span>
+          <span className="leap-section-sub">
+            {visible.length === rows.length
+              ? `${rows.length} candidate${rows.length !== 1 ? 's' : ''}`
+              : `${visible.length} of ${rows.length} candidates`}
+          </span>
         )}
       </div>
 
@@ -1215,6 +1291,31 @@ function CandidateStatusSection({ electionTypeIds, roleNames, assemblyId, status
       )}
 
       {!error && rows && rows.length > 0 && (
+        <div className="leap-dash-toolbar">
+          <div className="leap-search-field">
+            <span className="leap-search-icon"><IconSearch /></span>
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search candidates…"
+              aria-label="Search candidates"
+            />
+          </div>
+          <div className="leap-toolbar-filters">
+            <div className="leap-reservation-filter" role="group" aria-label="Filter by reservation">
+              <Dropdown
+                value={reservationFilter}
+                onChange={setReservationFilter}
+                options={reservationOptions}
+                placeholder="All reservations"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!error && rows && rows.length > 0 && (
         <div className="leap-table-card">
           <table className="leap-table">
             <thead>
@@ -1232,13 +1333,20 @@ function CandidateStatusSection({ electionTypeIds, roleNames, assemblyId, status
               </tr>
             </thead>
             <tbody>
-              {rows.map((c) => (
+              {visible.length === 0 && (
+                <tr className="leap-table-empty-row">
+                  <td colSpan={isConfirmed ? 10 : 9}>No candidate here matches that search.</td>
+                </tr>
+              )}
+              {visible.map((c) => (
                 <tr key={c.proposal_candidate_id}>
                   <td>
-                    {c.local_body_name}
-                    {c.mandal_town_name && <div className="leap-table-sub">{c.mandal_town_name}</div>}
+                    <Highlight text={c.local_body_name} needle={search} />
+                    {c.mandal_town_name && (
+                      <div className="leap-table-sub"><Highlight text={c.mandal_town_name} needle={search} /></div>
+                    )}
                   </td>
-                  <td>{c.role_name}</td>
+                  <td><Highlight text={c.role_name} needle={search} /></td>
                   <td className="leap-table-title">
                     <div className="leap-table-candidate">
                       {/* Same photo, fallback and lightbox as the MemberCard, so a
@@ -1255,14 +1363,14 @@ function CandidateStatusSection({ electionTypeIds, roleNames, assemblyId, status
                       ) : (
                         <span className="leap-mcard-photo initials">{initials(c.member_name)}</span>
                       )}
-                      {c.member_name}
+                      <Highlight text={c.member_name} needle={search} />
                     </div>
                   </td>
-                  <td>{c.membership_id}</td>
-                  <td>{c.mobile_no}</td>
-                  <td>{c.gender || '—'}</td>
-                  <td>{[c.category_name, c.caste_name].filter(Boolean).join(' · ') || '—'}</td>
-                  <td>{c.reservation_type || 'Unreserved'}</td>
+                  <td><Highlight text={c.membership_id} needle={search} /></td>
+                  <td><Highlight text={c.mobile_no} needle={search} /></td>
+                  <td><Highlight text={c.gender || '—'} needle={search} /></td>
+                  <td><Highlight text={[c.category_name, c.caste_name].filter(Boolean).join(' · ') || '—'} needle={search} /></td>
+                  <td><Highlight text={c.reservation_type || 'Unreserved'} needle={search} /></td>
                   <td>{isConfirmed && c.nomination_file_path ? 'Nominated' : statusLabel}</td>
                   {isConfirmed && (
                     <td>

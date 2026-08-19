@@ -20,6 +20,28 @@ const escapeCsv = (v) => {
 
 const textOf = (col, row) => (col.value ? col.value(row) : row[col.key])
 
+// Wraps every occurrence of the search text in a <mark>. The tables search across all
+// their columns, so without it a hit in a column the eye was not on reads as a row that
+// should not be there. Exported because the Dashboard's own tables highlight the same way.
+// indexOf rather than a RegExp: a search box takes any text, and this way there is no
+// pattern to escape.
+export function Highlight({ text, needle }) {
+  const value = text == null ? '' : String(text)
+  const q = (needle || '').trim()
+  if (!q) return value
+  const hay = value.toLowerCase()
+  const nee = q.toLowerCase()
+  const out = []
+  let from = 0
+  for (let at = hay.indexOf(nee); at !== -1; at = hay.indexOf(nee, from)) {
+    if (at > from) out.push(value.slice(from, at))
+    out.push(<mark key={at} className="leap-mark">{value.slice(at, at + nee.length)}</mark>)
+    from = at + nee.length
+  }
+  if (from < value.length) out.push(value.slice(from))
+  return out
+}
+
 // The search and the export, exported so a screen that renders its own search box and
 // CSV button (the Candidates screen) filters and exports what the table would.
 export function searchRows(columns, rows, search) {
@@ -56,7 +78,8 @@ export function exportCsv(columns, rows, filename) {
 // per-row delete buttons); export always uses `csvValue` -> `value` -> `row[key]`.
 // `hideToolbar` is for a caller that renders the search box and the CSV button itself
 // (the Candidates screen puts them around its filter bar) and hands rows already searched.
-export default function DataTable({ columns, rows, rowKey, searchPlaceholder = 'Search…', filename = 'export', tall = false, hideToolbar = false }) {
+// Such a caller passes its own text as `highlight`, since the table's own search is empty.
+export default function DataTable({ columns, rows, rowKey, searchPlaceholder = 'Search…', filename = 'export', tall = false, hideToolbar = false, highlight = '' }) {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState({ key: null, dir: 'asc' })
   const [page, setPage] = useState(1)
@@ -160,7 +183,7 @@ export default function DataTable({ columns, rows, rowKey, searchPlaceholder = '
               <tr key={rowKey(r)}>
                 {columns.map((c) => (
                   <td key={c.key} className={c.numeric ? 'leap-td-numeric' : undefined}>
-                    {c.render ? c.render(r) : (textOf(c, r) ?? '—')}
+                    {c.render ? c.render(r) : <Highlight text={textOf(c, r) ?? '—'} needle={search || highlight} />}
                   </td>
                 ))}
               </tr>

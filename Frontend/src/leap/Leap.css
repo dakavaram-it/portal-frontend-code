@@ -2138,6 +2138,44 @@
 
 /* The status chips keep their own status colour when selected, so the chip that is on
    and the badges it filtered to are visibly the same thing. */
+/* The reservation dropdown is a sibling of the status chips, not a form field, so it
+   takes their padding, font and pill shape — same padding, font-size and border as
+   .leap-filter-chip, and line-height left inherited, which is what makes the two the
+   same height without hard-coding one. */
+/* The search hit inside a table cell. The tables search every column, so the mark is
+   what says which one actually matched. */
+.leap-mark {
+  background: #fef08a;
+  color: inherit;
+  padding: 0 1px;
+  border-radius: 2px;
+}
+
+.leap-toolbar-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.leap-reservation-filter .leap-dropdown {
+  width: 190px;
+}
+
+.leap-reservation-filter .leap-dropdown-btn {
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.leap-reservation-filter .leap-dropdown-list {
+  left: auto;
+  right: 0;
+  min-width: 190px;
+}
+
 .leap-filter-chip.active.not-started { background: #6b7280; border-color: #6b7280; }
 .leap-filter-chip.active.in-progress { background: #b45309; border-color: #b45309; }
 .leap-filter-chip.active.completed { background: #047857; border-color: #047857; }

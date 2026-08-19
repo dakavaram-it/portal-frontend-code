@@ -373,6 +373,7 @@ export default function Candidates({ initialFilter } = {}) {
           rows={visible}
           rowKey={(r) => r.proposal_position_id}
           hideToolbar
+          highlight={search}
           tall
         />
       )}
