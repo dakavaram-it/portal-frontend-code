@@ -89,7 +89,10 @@ export default function Candidates({ initialFilter } = {}) {
   // list, so an unreachable backend or a 404 would read as "nobody has been proposed yet".
   // This is the only screen with a single endpoint behind everything it shows, so the
   // difference is the whole screen rather than one picklist.
-  const [rows, setRows] = useState([])
+  // null until getPositionsWithCandidates answers, so "still loading" and "loaded nothing"
+  // render differently — an empty [] here read as "No positions found" on every mount.
+  const [loadedRows, setLoadedRows] = useState(null)
+  const rows = loadedRows ?? []
   const [loadError, setLoadError] = useState(null)
 
   useEffect(() => {
@@ -98,7 +101,7 @@ export default function Candidates({ initialFilter } = {}) {
     getPositionsWithCandidates()
       .then((data) => {
         if (cancelled) return
-        setRows(data)
+        setLoadedRows(data)
         // Arriving from the Dashboard's View icon for one location: if it holds exactly
         // one position with candidates, skip the list and open its profiles directly —
         // only on this initial load, so a later reload (e.g. after removing a candidate)
@@ -113,7 +116,7 @@ export default function Candidates({ initialFilter } = {}) {
       .catch((err) => {
         if (cancelled) return
         console.error(err)
-        setRows([])
+        setLoadedRows([])
         setLoadError(err.message)
       })
     return () => { cancelled = true }
@@ -357,6 +360,10 @@ export default function Candidates({ initialFilter } = {}) {
           >
             Retry
           </button>
+        </div>
+      ) : loadedRows === null ? (
+        <div className="leap-cand-empty">
+          <div className="leap-cand-empty-title">Loading positions…</div>
         </div>
       ) : visible.length === 0 ? (
         <div className="leap-cand-empty">
