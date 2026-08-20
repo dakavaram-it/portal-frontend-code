@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { getAssemblies, useLoadable } from '../api.js'
+import { getAssemblies, hasEntitlement, useLoadable } from '../api.js'
 import { Dropdown, initials } from './NewPositionModal.jsx'
 import { MIN_NAME_LENGTH, SEARCH_TYPES, cadreImageUrl, searchCadre } from '../cadreSearchApi.js'
 import CadreNotesModal from './CadreNotesModal.jsx'
@@ -138,7 +138,7 @@ export default function CadreSearchNotes({ user }) {
   // Add Note is gated on the login response's own entitlements list — CADRE_PROFILE_NOTES_PUBLIC_ADD
   // is the one that grants it — with user_id 1 (the reserved super-admin account) let
   // through regardless of what entitlements were actually issued.
-  const canAddNotes = !!user?.entitlements?.includes('CADRE_PROFILE_NOTES_PUBLIC_ADD') || user?.user_id === 1
+  const canAddNotes = hasEntitlement(user, 'CADRE_PROFILE_NOTES_PUBLIC_ADD') || user?.user_id === 1
 
   const [constituencyId, setConstituencyId] = useState('')
   const [constituencyInvalid, setConstituencyInvalid] = useState(false)

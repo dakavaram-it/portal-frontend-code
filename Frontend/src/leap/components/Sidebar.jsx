@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { hasEntitlement } from '../api.js'
 
 function CloseIcon() {
   return (
@@ -161,7 +162,7 @@ export default function Sidebar({ user, onLogout, view, onNavigate, open, onClos
   // Most `user` rows carry no firstname/lastname, so fall back to the login name.
   const displayName = [user.firstname, user.lastname].filter(Boolean).join(' ') || user.username
   const initials = displayName.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()
-  const hasCommitteeAccess = !!user?.entitlements?.includes('CADRE_COMMITTEE_MANAGEMENT')
+  const hasCommitteeAccess = hasEntitlement(user, 'CADRE_COMMITTEE_MANAGEMENT')
   const electionNav = [...BASE_NAV, ...(hasCommitteeAccess ? [COMMITTEES_ASSIGN_ITEM] : [])]
 
   const navButton = (item) => (

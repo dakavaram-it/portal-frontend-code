@@ -111,6 +111,15 @@ export const login = async (username, password) => {
   return user
 }
 export const me = () => get('/me')
+
+// `user.entitlements` is a list of `{ entitlement_id, entitlement_name }` rows, not a
+// list of names — `login` and `me` both answer with the id alongside the name so a
+// caller can key on the id rather than on a string. Every gate in the app goes through
+// here rather than reaching into the row shape, so this is the one place that has to
+// change if that shape moves again. `.includes(name)` on the list itself is what broke
+// Committees Assign and PC-Meetings: it silently reads false against object rows.
+export const hasEntitlement = (user, name) =>
+  !!user?.entitlements?.some((e) => e.entitlement_name === name)
 export const logout = () => post('/logout', {})
 export const getElectionTypes = cached('getElectionTypes', () => get('/getProposalElectionTypes'))
 // getUserAccessAssemblies, not getAssemblyConstituenciesInAState: the picklist is the

@@ -94,7 +94,7 @@ Below 1025px the sidebar is an off-canvas drawer (`navOpen`, `.leap-scrim`, `.le
 | `PositionDetail` | `'detail'` | **Unreachable** — nothing sets this view |
 | `AllPositions` / `PositionCard` | `'positions'` | **Unreachable** — nothing sets this view |
 
-Entitlements come off the login response (`user.entitlements`). `CADRE_COMMITTEE_MANAGEMENT` gates whether the Committees Assign nav entry is inserted and whether the PC-MEETINGS group appears at all — the console reports on the meetings those committees hold, so the two are one grant rather than two — every account still lands on the Dashboard. `CADRE_PROFILE_NOTES_PUBLIC_ADD` (or `user_id === 1`) gates the Add Note button.
+Entitlements come off the login response (`user.entitlements`), a list of `{ entitlement_id, entitlement_name }` rows — **never a list of names**. Gate on `hasEntitlement(user, name)` from `api.js` and not on `entitlements.includes(name)`, which reads `false` against object rows and silently hides the screen it gates. `CADRE_COMMITTEE_MANAGEMENT` gates whether the Committees Assign nav entry is inserted and whether the PC-MEETINGS group appears at all — the console reports on the meetings those committees hold, so the two are one grant rather than two — every account still lands on the Dashboard. `CADRE_PROFILE_NOTES_PUBLIC_ADD` (or `user_id === 1`) gates the Add Note button.
 
 ### `Dashboard` (1350 lines)
 
