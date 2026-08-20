@@ -1,0 +1,5 @@
+.pcm-root .drill-modal { width: min(860px, 100%); }
+.pcm-root .drill-modal .modal-head { align-items: flex-start; }
+.pcm-root .drill-close { margin-left: auto; }
+.pcm-root .drill-scroll { min-height: 280px; max-height: 60vh; }
+.pcm-root .drill-modal .table-card table { min-width: 0; }

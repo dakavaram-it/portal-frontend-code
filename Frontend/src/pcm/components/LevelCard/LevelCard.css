@@ -1,0 +1,60 @@
+.pcm-root .level-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-sm);
+  padding: 16px 18px; display: flex; flex-direction: column; gap: 14px;
+  width: 100%; max-width: 380px;
+}
+
+.pcm-root .lc-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.pcm-root .lc-date {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 13px; font-weight: 600; color: var(--text-2);
+}
+.pcm-root .lc-date .icon { color: var(--text-4); }
+
+.pcm-root .lc-split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pcm-root .lc-box {
+  display: flex; flex-direction: column;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.pcm-root .lc-stat {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; padding: 11px 14px; min-width: 0;
+  background: none; border: 0; font: inherit; color: inherit; text-align: left;
+  transition: background-color var(--dur) var(--ease);
+}
+.pcm-root .lc-stat + .lc-stat { border-top: 1px solid var(--border); }
+.pcm-root .lc-stat:hover { background: var(--surface); }
+.pcm-root .lc-stat-val { font-size: 16px; font-weight: 800; letter-spacing: -.03em; color: var(--text-strong); line-height: 1.2; }
+.pcm-root .lc-stat-key {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--text-3); line-height: 1.25;
+}
+
+.pcm-root .lc-summary {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 11px 14px; border-radius: var(--r-md);
+  border: 1px solid var(--border); background: var(--surface-2);
+  font: inherit; font-size: 13px; font-weight: 700; color: var(--text); text-align: left;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.pcm-root .lc-summary:hover { border-color: var(--primary); background: var(--surface); }
+.pcm-root .lc-summary .icon { margin-left: auto; color: var(--text-4); transition: transform var(--dur) var(--ease); }
+.pcm-root .lc-summary[aria-expanded="true"] .icon { transform: rotate(90deg); }
+
+.pcm-root .level-card-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 380px));
+  justify-content: start;
+  margin-top: 4px;
+}
+
+@media (max-width: 720px) {
+  .pcm-root .lc-split { grid-template-columns: 1fr; }
+  .pcm-root .level-card { max-width: none; }
+  .pcm-root .level-card-grid { grid-template-columns: 1fr; }
+}

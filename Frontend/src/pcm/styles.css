@@ -1,0 +1,354 @@
+/* ===== Tokens =====
+   Lifted from the Local Body Election console (its stylesheet calls itself
+   "leap") so the two products read as one suite: soft white cards on a cool
+   grey ground, one blue accent, tinted icon tiles, pill chips, and a dark
+   sidebar carrying the party mark.
+
+   The dark sidebar is *not* a dark theme — there is still no `data-theme`, no
+   toggle and no `prefers-color-scheme` branch. Do not add one.
+
+   Component layout lives next to each .jsx. This file is the design system:
+   tokens, base type, and primitives several views share. */
+.pcm-root {
+  --primary: #2563EB;
+  --primary-600: #1D4ED8;
+  --primary-500: #60A5FA;
+  --secondary: #2563EB;
+
+  --brand: #F5C518;          /* party yellow — the sidebar mark and active nav only */
+  --violet: #6B46C1;
+
+  /* Status ramp, deliberately unchanged: each is picked to pass contrast as
+     small text on white *and* to read correctly as a bar fill. Retuning one
+     breaks the other use. lib/format.js -> tone(pct) is the single mapping
+     from a percentage to one of them. */
+  --accent: #B54708;
+  --accent-500: #F79009;
+  --ok: #067647;
+  --ok-500: #17B26A;
+  --warn: #B54708;
+  --bad: #B42318;
+  --bad-500: #F04438;
+
+  /* The four committee tiers, kept apart from the status ramp: a level is a
+     category, not a judgement. */
+  --lvl-unit: #B54708;
+  --lvl-mandal: #6B46C1;
+  --lvl-ac: #067647;
+  --lvl-pc: #2563EB;
+
+  --bg: #F5F7FA;
+  --surface: #FFFFFF;
+  --surface-2: #FAFBFC;
+  --surface-3: #F3F4F6;
+  --border: #EEF0F3;
+  --border-strong: #E5E7EB;
+  --divider: #F4F5F7;
+
+  --text: #1F2430;
+  --text-strong: #0F172A;    /* figures only — a shade darker than body ink */
+  --text-2: #4B5563;
+  --text-3: #6B7280;
+  --text-4: #9CA3AF;
+  --on-primary: #FFFFFF;
+
+  --side-bg: #1A130F;
+  --side-text: #F2EDE6;
+  --side-active: #33261A;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .06);
+  --shadow-md: 0 4px 12px rgba(16, 24, 40, .08);
+  --shadow-lg: 0 24px 48px -12px rgba(16, 24, 40, .24);
+  --ring: 0 0 0 3px rgba(37, 99, 235, .12);
+
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-pill: 999px;
+
+  --sidebar-w: 260px;
+  --rail-w: 72px;
+  /* In-page layers sit BELOW the portal shell's sidebar, which is a fixed rail at
+     z-index 21 that widens over the content on hover. Upstream these were 20/30,
+     authored for a page that owned its own chrome — at 30 the summary table's
+     sticky header (and its 31 first column) painted across the expanded rail.
+     Their order is kept, only the band moved. The two above the rail stay above
+     it on purpose: a modal has to cover the shell, and the drawer value matches
+     the portal's own. */
+  --z-header: 10;
+  --z-sticky: 12;
+  --z-drawer: 45;
+  --z-modal: 50;
+
+  --ease: cubic-bezier(.4, 0, .2, 1);
+  --dur: .16s;
+  --dur-lg: .26s;
+}
+
+/* ===== Base ===== */
+.pcm-root,
+.pcm-root *,
+.pcm-root::before,
+.pcm-root *::before,
+.pcm-root::after,
+.pcm-root *::after { box-sizing: border-box; }
+.pcm-root { margin: 0; padding: 0; }
+.pcm-root { color-scheme: light; }
+.pcm-root {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Montserrat', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+/* Fira Code stays for identifiers a reader scans character by character —
+   membership ids, mobile numbers. Figures use Montserrat's tabular digits so
+   they match the rest of the type. */
+.pcm-root .mono { font-family: 'Fira Code', ui-monospace, 'Cascadia Mono', monospace; font-variant-ligatures: none; }
+.pcm-root .num { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; }
+.pcm-root button,
+.pcm-root input,
+.pcm-root select,
+.pcm-root textarea { font: inherit; color: inherit; }
+.pcm-root button { cursor: pointer; }
+.pcm-root :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+.pcm-root .sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.pcm-root .icon { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pcm-root .icon-sm { width: 15px; height: 15px; }
+.pcm-root ::selection { background: color-mix(in srgb, var(--primary) 18%, transparent); }
+
+.pcm-root .eyebrow {
+  margin: 0; font-size: 11px; font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--text-3);
+}
+.pcm-root .count { font-size: 11px; font-weight: 600; color: var(--text-4); margin-left: 6px; }
+.pcm-root .muted { color: var(--text-4); }
+.pcm-root .truncate { max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.pcm-root,
+.pcm-root * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+.pcm-root ::-webkit-scrollbar { width: 10px; height: 10px; }
+.pcm-root ::-webkit-scrollbar-track { background: transparent; }
+.pcm-root ::-webkit-scrollbar-thumb { background: var(--border-strong); border: 3px solid var(--surface); border-radius: var(--r-pill); }
+.pcm-root ::-webkit-scrollbar-thumb:hover { background: var(--text-4); }
+
+.pcm-root .card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-sm);
+}
+
+/* One hue per tier, set once and read by the badge, the calendar chip and the
+   legend swatch — so a level looks the same everywhere it appears. */
+.pcm-root .badge-unit,
+.pcm-root .chip-unit,
+.pcm-root .sw-unit { --lvl: var(--lvl-unit); }
+.pcm-root .badge-mandal,
+.pcm-root .chip-mandal,
+.pcm-root .sw-mandal { --lvl: var(--lvl-mandal); }
+.pcm-root .badge-ac,
+.pcm-root .chip-ac,
+.pcm-root .sw-ac { --lvl: var(--lvl-ac); }
+.pcm-root .badge-pc,
+.pcm-root .chip-pc,
+.pcm-root .sw-pc { --lvl: var(--lvl-pc); }
+
+.pcm-root .badge {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: var(--r-pill); white-space: nowrap;
+  border: 1px solid color-mix(in srgb, var(--lvl, var(--border-strong)) 22%, transparent);
+  background: color-mix(in srgb, var(--lvl, var(--text-4)) 10%, transparent);
+  color: var(--lvl, var(--text-3));
+}
+
+.pcm-root .swatch { width: 8px; height: 8px; border-radius: 3px; display: inline-block; flex: none; background: var(--lvl); }
+
+.pcm-root .icon-btn {
+  display: inline-grid; place-items: center; width: 40px; height: 40px; flex: none;
+  border: 1px solid var(--border-strong); border-radius: var(--r-md);
+  background: var(--surface); color: var(--text-3);
+  transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.pcm-root .icon-btn:hover { background: var(--surface-3); color: var(--text); }
+
+.pcm-root .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  height: 40px; padding: 0 15px; border-radius: var(--r-sm);
+  border: 1px solid var(--border-strong); background: var(--surface); color: var(--text);
+  font-size: 13px; font-weight: 600;
+  transition: background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.pcm-root .btn:hover { background: var(--surface-3); }
+.pcm-root .btn-primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.pcm-root .btn-primary:hover { background: var(--primary-600); border-color: var(--primary-600); }
+.pcm-root .btn-ghost { border-color: transparent; background: transparent; color: var(--text-2); }
+.pcm-root .btn-ghost:hover { background: var(--surface-3); color: var(--text); }
+.pcm-root .btn-sm { height: 32px; padding: 0 11px; font-size: 12px; }
+.pcm-root .btn[hidden] { display: none; }
+
+.pcm-root .seg { display: inline-flex; background: var(--surface-3); border-radius: var(--r-sm); padding: 3px; gap: 2px; }
+.pcm-root .seg .btn { border-color: transparent; background: none; font-weight: 600; }
+.pcm-root .seg .btn:hover { background: rgba(255, 255, 255, .7); }
+.pcm-root .seg .btn[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.pcm-root .seg .btn[aria-pressed="true"] .count { color: var(--primary); }
+
+.pcm-root .search {
+  display: flex; align-items: center; gap: 9px;
+  background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--r-md); padding: 0 12px; height: 40px; min-width: 260px;
+  color: var(--text-3);
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.pcm-root .search:focus-within { border-color: var(--primary); box-shadow: var(--ring); }
+.pcm-root .search input { border: 0; background: none; outline: none; width: 100%; font-size: 13px; color: var(--text); }
+.pcm-root .search input::placeholder { color: var(--text-4); }
+.pcm-root .search input::-webkit-search-cancel-button { display: none; }
+.pcm-root .search .kbd {
+  font-family: 'Fira Code', ui-monospace, monospace; font-size: 10px; line-height: 1;
+  padding: 3px 6px; border-radius: 4px; color: var(--text-4);
+  background: var(--surface-3); border: 1px solid var(--border);
+}
+.pcm-root .search:focus-within .kbd { display: none; }
+.pcm-root .search-clear {
+  display: grid; place-items: center; width: 22px; height: 22px; flex: none;
+  border: 0; border-radius: 50%; background: none; color: var(--text-4);
+  transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.pcm-root .search-clear:hover { background: var(--surface-3); color: var(--text); }
+
+.pcm-root .section-head { display: flex; align-items: baseline; gap: 12px; margin: 32px 0 14px; }
+.pcm-root .section-head h2 { font-size: 17px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
+.pcm-root .section-head .sub { font-size: 12px; color: var(--text-3); }
+
+.pcm-root .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-bottom: 14px; }
+.pcm-root .tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.pcm-root .tab {
+  border: 1px solid var(--border-strong); background: var(--surface);
+  padding: 7px 13px; border-radius: var(--r-pill);
+  font-size: 12px; font-weight: 600; color: var(--text-2); min-height: 32px; white-space: nowrap;
+  transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.pcm-root .tab:hover { background: var(--surface-3); color: var(--text); }
+.pcm-root .tab[aria-selected="true"] { background: var(--text); border-color: var(--text); color: #fff; }
+.pcm-root .tab[aria-selected="true"] .count { color: rgba(255, 255, 255, .65); }
+.pcm-root .toolbar-spacer { flex: 1; }
+.pcm-root .toolbar .result-count { font-size: 12px; color: var(--text-3); }
+
+.pcm-root .progress-block { display: flex; align-items: center; gap: 10px; }
+.pcm-root .bar { flex: 1; height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.pcm-root .bar > i { display: block; height: 100%; width: 0; border-radius: var(--r-pill); background: var(--tone, var(--primary)); transition: width .5s var(--ease); }
+.pcm-root .pct { font-size: 11px; font-weight: 700; min-width: 40px; text-align: right; color: var(--text-2); }
+
+.pcm-root .figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+.pcm-root .figures-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pcm-root .figure {
+  display: flex; align-items: flex-start; gap: 14px; min-width: 0;
+  padding: 16px 18px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-sm);
+}
+.pcm-root .f-icon {
+  width: 42px; height: 42px; flex: none; border-radius: 11px; display: grid; place-items: center;
+  color: var(--tint, var(--primary));
+  background: color-mix(in srgb, var(--tint, var(--primary)) 10%, transparent);
+}
+.pcm-root .f-body { min-width: 0; }
+.pcm-root .f-val { font-size: 24px; font-weight: 800; line-height: 1.2; color: var(--text-strong); letter-spacing: -.03em; }
+.pcm-root .f-key { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-3); margin-top: 3px; }
+.pcm-root .f-foot { font-size: 11px; color: var(--text-4); margin-top: 2px; }
+
+.pcm-root .avatar {
+  width: 30px; height: 30px; border-radius: 50%; flex: none;
+  background: var(--surface-3); color: var(--text-2);
+  display: grid; place-items: center; font-size: 11px; font-weight: 700;
+}
+.pcm-root .avatar-sm { width: 28px; height: 28px; font-size: 10px; font-style: normal; }
+
+.pcm-root .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-sm); overflow: hidden; }
+.pcm-root .table-scroll { overflow: auto; max-height: 66vh; }
+.pcm-root table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; }
+.pcm-root .table-card table { min-width: 1240px; }
+.pcm-root thead th {
+  position: sticky; top: 0; z-index: var(--z-sticky);
+  background: var(--surface); color: var(--text-4);
+  text-align: left; font-size: 11px; font-weight: 700;
+  padding: 12px 14px; white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+.pcm-root tbody td { padding: 12px 14px; border-bottom: 1px solid var(--divider); vertical-align: middle; color: var(--text); white-space: nowrap; }
+.pcm-root tbody tr { transition: background-color var(--dur) var(--ease); }
+.pcm-root tbody tr:hover { background: var(--surface-2); }
+.pcm-root tbody tr:last-child td,
+.pcm-root tbody tr:last-child th { border-bottom: 0; }
+.pcm-root td.name,
+.pcm-root th.col-name { position: sticky; left: 0; }
+.pcm-root td.name {
+  font-weight: 600; white-space: nowrap; color: var(--text);
+  background: var(--surface); z-index: 1;
+  box-shadow: 1px 0 0 var(--divider);
+  transition: background-color var(--dur) var(--ease);
+}
+.pcm-root tbody tr:hover td.name { background: var(--surface-2); }
+.pcm-root th.col-name { z-index: calc(var(--z-sticky) + 1); box-shadow: 1px 0 0 var(--divider); }
+.pcm-root td .sub { display: block; font-size: 11px; color: var(--text-4); font-weight: 600; }
+
+.pcm-root .pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 700; letter-spacing: .02em;
+  padding: 4px 10px; border-radius: var(--r-pill); white-space: nowrap;
+  border: 1px solid transparent;
+}
+.pcm-root .pill-yes { background: color-mix(in srgb, var(--ok) 10%, transparent); color: var(--ok); }
+.pcm-root .pill-no { background: color-mix(in srgb, var(--bad) 9%, transparent); color: var(--bad); }
+.pcm-root .pill-present { background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary); }
+.pcm-root .pill-absent { background: var(--surface-3); color: var(--text-3); }
+.pcm-root .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.pcm-root .empty { padding: 52px 20px; text-align: center; color: var(--text-3); }
+.pcm-root .empty .icon {
+  width: 24px; height: 24px; padding: 14px; box-sizing: content-box; margin-bottom: 14px;
+  border-radius: 50%; background: var(--surface-3); color: var(--text-4);
+}
+.pcm-root .empty .empty-title { font-size: 15px; font-weight: 700; color: var(--text); }
+.pcm-root .empty .empty-hint { font-size: 13px; margin-top: 5px; }
+
+.pcm-root .table-foot {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px;
+  padding: 12px 16px; border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--text-3);
+}
+.pcm-root .foot-warn { display: inline-flex; align-items: flex-start; gap: 8px; color: var(--warn); max-width: 76ch; line-height: 1.5; font-weight: 500; }
+.pcm-root .foot-warn .icon { margin-top: 2px; flex: none; }
+
+/* Reduced motion is enforced twice on purpose: lib/motion.js short-circuits the
+   JS, and this flattens the CSS transitions. Keep both. */
+@media (prefers-reduced-motion: reduce) {
+  .pcm-root,
+.pcm-root *,
+.pcm-root::before,
+.pcm-root *::before,
+.pcm-root::after,
+.pcm-root *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+
+@media (max-width: 720px) {
+  .pcm-root .btn,
+.pcm-root .icon-btn,
+.pcm-root select.control,
+.pcm-root .search { min-height: 44px; }
+  .pcm-root .btn-sm,
+.pcm-root .seg .btn { min-height: 38px; }
+  .pcm-root .tab { min-height: 38px; }
+  .pcm-root .tabs { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  .pcm-root .tabs::-webkit-scrollbar { display: none; }
+  .pcm-root .figures-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+  .pcm-root .figures-3 { grid-template-columns: 1fr; }
+  .pcm-root .toolbar .search { order: -1; width: 100%; }
+  .pcm-root .toolbar .select-wrap { flex: 1 1 100%; }
+  .pcm-root .toolbar select.control { width: 100%; min-width: 0; }
+}

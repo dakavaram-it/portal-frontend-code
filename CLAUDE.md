@@ -15,15 +15,16 @@ npm run preview      # serve the built output on 0.0.0.0:9001
 
 There is no test runner, linter, or formatter configured — do not assume `npm test` or `npm run lint` exist. Verification means building (`npm run build`) and clicking through in the browser.
 
-Deps are `react`, `react-dom` and `@fortawesome/fontawesome-free` (imported once in `main.jsx`; the Cadre Search and Notes screens use `fa-*` classes, nothing else does).
+Deps are `react`, `react-dom`, `gsap` (the `pcm/` module's animations, through `pcm/lib/motion.js` — nothing in `leap/` uses it) and `@fortawesome/fontawesome-free` (imported once in `main.jsx`; the Cadre Search and Notes screens use `fa-*` classes, nothing else does).
 
 `main.jsx` deliberately does **not** use `<StrictMode>` — its dev-only double-invoke of effects showed up as a second, aborted request for every screen that loads on mount. Re-adding it changes only what the dev Network tab shows, but expect that noise back.
 
-## Three backends, not one
+## Four backends, not one
 
 | Base | Reached how | Used by |
 |---|---|---|
 | `/leapapi/*` | Vite proxy → `http://127.0.0.1:6644`, prefix rewritten to `/portal-frontend-code` | `api.js` — the whole nomination workflow |
+| `/pcmapi/*` | same gateway, prefix rewritten to `/pc-meetings` | `pcm/lib/api.js` — every PC-Meetings screen |
 | `https://www.mypartydashboard.com/PSA/WebService/Cadre` | called **directly** from the browser (that service answers `Access-Control-Allow-Origin: *`) | `cadreSearchApi.js`, `cadreNotesApi.js` |
 | `https://www.mypartydashboard.com/PSA/WebService/Committee` and `…/WebService/CommitteeWebService` | Committee resource direct; CommitteeWebService **proxied** as `/partyAnalystApi` (its OPTIONS preflight sends no CORS headers, so a direct call is blocked before it leaves the browser) | `committeeApi.js` |
 
@@ -88,11 +89,12 @@ Below 1025px the sidebar is an off-canvas drawer (`navOpen`, `.leap-scrim`, `.le
 | `Candidates` | `'candidates'` — sidebar "View Members", or the Dashboard | Every position holding candidates, state-wide, in a sortable/exportable table |
 | `CadreSearchNotes` | `'cadreSearch'` — sidebar "Cadre Search" | PSA directory search; per-cadre notes behind an entitlement |
 | `CommitteesAssign` | `'committeesAssign'` — sidebar, **only with the `CADRE_COMMITTEE_MANAGEMENT` entitlement** | KSS / CUBS / Main-and-Affiliated committee management against the PSA services |
-| `Sidebar` | always | Two groups: LOCAL BODY ELECTIONS (collapsible, open by default) and CADRE. Footer shows `firstname lastname` falling back to `username`, and logout |
+| `PcMeetings` | `'pcmMeetings'` / `'pcmPrograms'` / `'pcmCalendar'` — the PC-MEETINGS sidebar group, **the same entitlement as Committees Assign** | The committee-meetings console (`pcm/`), one mounted module behind all three entries |
+| `Sidebar` | always | Three groups: LOCAL BODY ELECTIONS (collapsible, open by default), PC-MEETINGS (collapsible, **shut** by default, entitlement-gated) and CADRE. Footer shows `firstname lastname` falling back to `username`, and logout |
 | `PositionDetail` | `'detail'` | **Unreachable** — nothing sets this view |
 | `AllPositions` / `PositionCard` | `'positions'` | **Unreachable** — nothing sets this view |
 
-Entitlements come off the login response (`user.entitlements`). `CADRE_COMMITTEE_MANAGEMENT` gates only whether the Committees Assign nav entry is inserted — every account still lands on the Dashboard. `CADRE_PROFILE_NOTES_PUBLIC_ADD` (or `user_id === 1`) gates the Add Note button.
+Entitlements come off the login response (`user.entitlements`). `CADRE_COMMITTEE_MANAGEMENT` gates whether the Committees Assign nav entry is inserted and whether the PC-MEETINGS group appears at all — the console reports on the meetings those committees hold, so the two are one grant rather than two — every account still lands on the Dashboard. `CADRE_PROFILE_NOTES_PUBLIC_ADD` (or `user_id === 1`) gates the Add Note button.
 
 ### `Dashboard` (1350 lines)
 
@@ -226,6 +228,49 @@ Both `get` and `post` route a `401` through `checkUnauthorized` before throwing:
 **Branding is not centralized.** `Sidebar.jsx` and `Login.jsx` hardcode "Telugu Desam Party", `index.html` titles the app "Local Body Election", and `data.js`'s `PARTY_NAME` says "Praja Vikas Party" and is imported by nothing reachable. Grep for all of them.
 
 **The stage pipeline is truncated — and entirely inside dead code.** `STAGES` has 2 entries while its consumers assume 5–7. None of them render, so none of this is a live bug; it is a landmine for anyone restoring those screens. `stagesFor(kind)` returns the same array for both kinds; seed `stage:` values go up to 5; `PositionCard` does `STAGES[position.stageIndex].full` unguarded and **throws** for any position with `stageIndex >= 2`; `summary()` and `stageCounts()` produce zeros and `NaN`s. `PositionDetail` guards and merely degrades. If you touch `STAGES`, check every one of those.
+
+## The `pcm/` module — PC-Meetings
+
+The committee-meetings console (`PC-MEETINGS/frontend` upstream), ported in as a
+second module beside `leap/`. `PcMeetings.jsx` is that app's `App.jsx` with the
+shell taken out: the portal's `Sidebar` is the only nav, so its own sidebar,
+drawer and scrim are gone and `PCM_VIEWS` maps Leap's three view names onto the
+three screens. Everything else — views, components, `lib/`, the GSAP motion
+helper — is the upstream file unchanged, so a fix belongs upstream first.
+
+- **Its `<div className="pcm-root">` wrapper is load-bearing.** Every rule in
+  every `pcm/*.css` file is prefixed with it (the upstream styles are generic —
+  `.card`, `.btn`, bare `table`/`tbody td` — and would otherwise paint the whole
+  portal), and `:root`'s design tokens live on it too, so anything rendered
+  outside that subtree (a React portal, say) loses the entire palette.
+- **`Login.css` is scoped to `.cycle` for the same reason, in reverse.** It
+  carries Bootstrap's names (`.btn`, `.form-control`, `.input-group`), and
+  unscoped its `.btn { width: 100% }` stretched every PC-Meetings toolbar — a
+  rule that only sets `width` is not overridden by a more specific rule that
+  never mentions it.
+- **Its z-index tokens are rebased, and that is the one deliberate edit to the
+  upstream stylesheet.** `--z-header`/`--z-sticky` are 10/12 here against
+  upstream's 20/30, because the portal's sidebar is a fixed rail at `z-index: 21`
+  that widens over the content on hover: at 30 the App & PC summary's sticky
+  table header (and its 31 first column) painted straight across the expanded
+  rail. Anything sticky added to this module belongs in that band; `--z-drawer`
+  (45) and `--z-modal` (50) stay above the rail on purpose, since a modal has to
+  cover the shell.
+- **`.leap-main` drops its padding for these screens** (`pcm-active`, keyed off
+  `PCM_VIEWS` in `Leap.jsx`): the module paints its own grey ground edge to edge
+  and carries the padding on `.content` instead.
+- **Programmes does not wait for the meetings list.** Its branch sits above the
+  module's shared `loading`/`error` gate, because it reads none of that state —
+  it fetches its own role and activity summaries — and the meetings list is
+  seconds of counting over half a million invitee rows. Anything added to this
+  module that needs only its own data belongs above that gate too.
+- **One mount, three nav entries.** Unlike every other screen it is not one
+  `screen()` per view — it holds the meetings list, the member pages and the
+  rollups it has fetched, and switching entries must not throw those away. It
+  ignores any `view` outside its own three, so stepping out to the election
+  Dashboard and back returns to the screen that was left open.
+- Fonts: `index.html` loads Fira Code (the `.mono` membership ids) and
+  Montserrat 800 (`.f-val` figures) for this module.
 
 ## Styling
 

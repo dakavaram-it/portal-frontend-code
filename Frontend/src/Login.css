@@ -1,5 +1,11 @@
-/* Layout mirrors the original loginPageCss.css from mypartydashboard.com */
+/* Every rule below is confined to `.cycle`, the login screen's own wrapper.
 
+   The names here are Bootstrap's (`.btn`, `.form-control`, `.input-group`) and
+   this file is loaded globally, so unscoped they landed on every other screen
+   too — a bare `.btn` from here stretched the PC-Meetings toolbars to full
+   width, since a rule that only sets `width` is not overridden by a more
+   specific rule that never mentions it. */
+/* Layout mirrors the original loginPageCss.css from mypartydashboard.com */
 .cycle {
   margin: 0;
   padding: 0;
@@ -8,7 +14,7 @@
   overflow: hidden;
 }
 
-#circle-image {
+.cycle #circle-image {
   height: 98vh;
   top: -10vh;
   position: absolute;
@@ -16,7 +22,7 @@
   animation: zoomIn 2s linear;
 }
 
-.loginblock {
+.cycle .loginblock {
   position: absolute;
   width: 30vw;
   left: 60%;
@@ -27,18 +33,18 @@
 }
 
 /* WELCOME heading + decorative shapes */
-.welcomeblock {
+.cycle .welcomeblock {
   position: relative;
 }
 
-.welcomeblock h1 {
+.cycle .welcomeblock h1 {
   font-size: 36px;
   font-weight: 500;
   margin: 20px 0 10px;
   color: #333;
 }
 
-.yellow-circle {
+.cycle .yellow-circle {
   height: 25px;
   width: 25px;
   position: absolute;
@@ -49,7 +55,7 @@
   animation: rotating 2s infinite linear;
 }
 
-.red-circle {
+.cycle .red-circle {
   height: 14px;
   width: 14px;
   position: absolute;
@@ -61,7 +67,7 @@
   animation: rotating 2s infinite linear;
 }
 
-.green-rect {
+.cycle .green-rect {
   height: 10px;
   width: 10px;
   background-color: green;
@@ -71,7 +77,7 @@
   animation: rotating 2s infinite linear;
 }
 
-.loginblock h4 {
+.cycle .loginblock h4 {
   font-size: 18px;
   font-weight: 500;
   margin: 0;
@@ -79,14 +85,14 @@
 }
 
 /* Inputs */
-.input-group {
+.cycle .input-group {
   display: flex;
   align-items: stretch;
   width: 100%;
   margin-top: 30px;
 }
 
-.input-group-addon {
+.cycle .input-group-addon {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -98,7 +104,7 @@
   color: #555;
 }
 
-.form-control {
+.cycle .form-control {
   flex: 1;
   min-width: 0;
   height: 50px;
@@ -113,12 +119,12 @@
   outline: none;
 }
 
-.form-control::placeholder {
+.cycle .form-control::placeholder {
   color: #999;
 }
 
 /* SIGN IN button (Bootstrap btn-success palette) */
-.btn {
+.cycle .btn {
   width: 100%;
   margin-top: 30px;
   padding: 15px;
@@ -130,23 +136,23 @@
   cursor: pointer;
 }
 
-.btn:hover:not(:disabled) {
+.cycle .btn:hover:not(:disabled) {
   background-color: #449d44;
   border-color: #398439;
 }
 
-.btn:disabled {
+.cycle .btn:disabled {
   opacity: 0.65;
   cursor: default;
 }
 
-.login-error {
+.cycle .login-error {
   margin: 20px 0 0;
   font-size: 14px;
   color: #a94442;
 }
 
-.copyright {
+.cycle .copyright {
   margin-top: 20px;
   font-size: 14px;
   color: #333;
@@ -180,7 +186,7 @@
 
 /* Match the original's mobile behavior: form goes full width */
 @media (max-width: 767px) {
-  .loginblock {
+  .cycle .loginblock {
     width: 100vw;
     left: 0;
     padding: 20px;

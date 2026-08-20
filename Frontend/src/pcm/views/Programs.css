@@ -1,0 +1,113 @@
+/* Programmes reuse the shared figure tiles and meeting-card chrome. */
+.pcm-root .role-summary-card .card-head,
+.pcm-root .activity-summary-card .card-head,
+.pcm-root .member-detail-card .card-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 13px 18px; border-bottom: 1px solid var(--border);
+}
+.pcm-root .role-summary-card .card-head h2,
+.pcm-root .activity-summary-card .card-head h2,
+.pcm-root .member-detail-card .card-head h2 {
+  font-size: 15px; font-weight: 700; margin: 0; letter-spacing: -.01em;
+}
+.pcm-root .role-summary-card .card-head .sub,
+.pcm-root .activity-summary-card .card-head .sub,
+.pcm-root .member-detail-card .card-head .sub {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3);
+}
+
+/* These cards' empty state is the common case (no upstream data source yet), not
+   the rare one the shared 52px `.empty` padding was sized for, so they get their own. */
+.pcm-root .role-summary-card .empty,
+.pcm-root .activity-summary-card .empty { padding: 26px 20px; }
+.pcm-root .role-summary-card .empty .icon,
+.pcm-root .activity-summary-card .empty .icon { width: 18px; height: 18px; padding: 9px; margin-bottom: 8px; }
+.pcm-root .role-summary-card .empty .empty-title,
+.pcm-root .activity-summary-card .empty .empty-title { font-size: 13px; }
+.pcm-root .role-summary-card .empty .empty-hint,
+.pcm-root .activity-summary-card .empty .empty-hint { font-size: 12px; }
+
+.pcm-root .activity-summary-card,
+.pcm-root .member-detail-card { margin-top: 16px; }
+
+/* The member card carries a stronger shadow and an accent top edge — the
+   same visual weight a raised, "active" surface gets elsewhere in this
+   design system — since it's the most specific of the three cards, always
+   showing one particular role/activity row rather than the whole list. */
+.pcm-root .member-detail-card {
+  box-shadow: var(--shadow-md);
+  border-top: 3px solid var(--primary);
+}
+
+/* Smaller than the shared 66vh `.table-scroll` default — all three cards cap
+   at a handful of rows and scroll internally for the rest, rather than
+   growing to fit everything. */
+.pcm-root .role-summary-card .table-scroll,
+.pcm-root .activity-summary-card .table-scroll,
+.pcm-root .member-detail-card .table-scroll {
+  max-height: 260px;
+}
+
+/* Same chip shape as the global `.badge`, just keyed off a per-row `--tint`
+   instead of a fixed `--lvl` — Role and Activity are two independent colour
+   rotations over the same token set (see `roleTint`/`activityTint`), so a
+   colour says "which value" within a column, never "role vs activity". */
+.pcm-root .role-chip,
+.pcm-root .activity-chip {
+  display: inline-flex; align-items: center;
+  font-size: 11px; font-weight: 700; letter-spacing: .02em; white-space: nowrap;
+  padding: 3px 10px; border-radius: var(--r-pill);
+  border: 1px solid color-mix(in srgb, var(--tint) 22%, transparent);
+  background: color-mix(in srgb, var(--tint) 10%, transparent);
+  color: var(--tint);
+}
+
+/* `position: relative` + a real z-index, not just flex layout: the entrance
+   animation leaves a lingering inline `transform` on `.activity-summary-card`
+   below, which silently opens its own stacking context. Without one of its
+   own here, `.filter-row` paints as plain in-flow content underneath that
+   card regardless of any z-index set inside it — the dropdown panel would
+   render below the card no matter how high its own z-index went. */
+.pcm-root .filter-row { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+
+.pcm-root .role-select {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+}
+.pcm-root .role-select-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-3); flex: none;
+}
+
+/* Same underline-on-hover treatment LevelTable's drill-down cells use — this
+   view has its own stylesheet, so it gets its own copy of the rule. */
+.pcm-root .cell-count {
+  background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer;
+  text-decoration: underline; text-decoration-style: dotted;
+  text-underline-offset: 3px; text-decoration-color: var(--text-4);
+  transition: color var(--dur) var(--ease);
+}
+.pcm-root .cell-count:hover { color: var(--primary); text-decoration-color: currentColor; }
+
+.pcm-root .level-table-tools {
+  display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 10px;
+  margin-bottom: 10px;
+}
+
+.pcm-root .month-pick { display: flex; align-items: center; gap: 8px; }
+.pcm-root .month-pick-icon { color: var(--text-3); }
+.pcm-root .month-pick .select-wrap select.control { height: 32px; font-size: 12px; min-width: 0; }
+.pcm-root .month-pick .select-wrap:last-child select.control { width: 84px; }
+
+@media (max-width: 640px) {
+  .pcm-root .level-table-tools { justify-content: stretch; }
+  .pcm-root .level-table-tools .seg { width: 100%; }
+  .pcm-root .level-table-tools .seg .btn { flex: 1; }
+  .pcm-root .month-pick { width: 100%; }
+  .pcm-root .month-pick .select-wrap { flex: 1; }
+  .pcm-root .filter-row { flex-direction: column; }
+  .pcm-root .role-select { width: 100%; }
+  .pcm-root .role-select .dd { flex: 1; }
+  .pcm-root .role-select .dd-trigger { width: 100%; min-width: 0; }
+}

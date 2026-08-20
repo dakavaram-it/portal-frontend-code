@@ -87,6 +87,24 @@ function IconCommittee() {
   )
 }
 
+function IconCalendar() {
+  return (
+    <svg {...NAV_ICON_PROPS}>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+      <path d="M3.5 9.5h17M8 3v4M16 3v4" />
+    </svg>
+  )
+}
+
+function IconClipboard() {
+  return (
+    <svg {...NAV_ICON_PROPS}>
+      <path d="M9 4.5h6a1.5 1.5 0 0 1 1.5 1.5v.5h1.5a2 2 0 0 1 2 2V19a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8.5a2 2 0 0 1 2-2h1.5V6A1.5 1.5 0 0 1 9 4.5z" />
+      <path d="M8.5 12.5h7M8.5 16h4.5" />
+    </svg>
+  )
+}
+
 // The nav's own entries, by the `view.name` each one switches Leap to. Everyone gets the
 // same base list — CADRE_COMMITTEE_MANAGEMENT only ever decides whether the Committees
 // Assign entry itself is inserted, nothing else on this list.
@@ -97,6 +115,15 @@ const BASE_NAV = [
 ]
 
 const COMMITTEES_ASSIGN_ITEM = { view: 'committeesAssign', label: 'Committees Assign', icon: <IconCommittee /> }
+
+// PC-Meetings, the committee-meetings console. Behind the same entitlement as
+// Committees Assign: it reports on the meetings those committees hold, so the
+// two are one grant, not two.
+const PC_MEETINGS_NAV = [
+  { view: 'pcmMeetings', label: 'Committee Meetings', icon: <IconGauge /> },
+  { view: 'pcmPrograms', label: 'Programmes', icon: <IconClipboard /> },
+  { view: 'pcmCalendar', label: 'Calendar', icon: <IconCalendar /> },
+]
 const CADRE_SEARCH_ITEM = { view: 'cadreSearch', label: 'Cadre Search', icon: <IconSearch /> }
 
 export default function Sidebar({ user, onLogout, view, onNavigate, open, onClose }) {
@@ -105,6 +132,8 @@ export default function Sidebar({ user, onLogout, view, onNavigate, open, onClos
   // session actually starts on, so shipping it shut would hide the whole app behind a
   // click.
   const [electionsOpen, setElectionsOpen] = useState(true)
+  // PC-Meetings ships collapsed: a session starts on the Dashboard, in the group above.
+  const [meetingsOpen, setMeetingsOpen] = useState(false)
 
   // Drawer mode (below 1025px): Escape closes it, the page behind stays put, and focus
   // moves into the drawer then back to the button that opened it.
@@ -174,6 +203,21 @@ export default function Sidebar({ user, onLogout, view, onNavigate, open, onClos
           <IconChevron />
         </button>
         {electionsOpen && electionNav.map(navButton)}
+
+        {hasCommitteeAccess && (
+          <>
+            <button
+              type="button"
+              className="leap-nav-group-label leap-nav-group-toggle"
+              aria-expanded={meetingsOpen}
+              onClick={() => setMeetingsOpen((o) => !o)}
+            >
+              <span>PC-MEETINGS</span>
+              <IconChevron />
+            </button>
+            {meetingsOpen && PC_MEETINGS_NAV.map(navButton)}
+          </>
+        )}
 
         <div className="leap-nav-group-label">CADRE</div>
         {navButton(CADRE_SEARCH_ITEM)}

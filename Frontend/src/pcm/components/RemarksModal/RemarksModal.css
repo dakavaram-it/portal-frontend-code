@@ -1,0 +1,36 @@
+.pcm-root .modal-backdrop {
+  position: fixed; inset: 0; z-index: var(--z-modal);
+  background: rgba(15, 23, 42, .5); backdrop-filter: blur(3px);
+  display: grid; place-items: center; padding: 20px;
+}
+.pcm-root .modal-backdrop[hidden] { display: none; }
+.pcm-root .modal {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-lg);
+  width: min(560px, 100%); max-height: 90vh; overflow: auto;
+}
+.pcm-root .modal-head { padding: 20px 22px 16px; border-bottom: 1px solid var(--border); display: flex; gap: 13px; align-items: flex-start; }
+.pcm-root .modal-head h3 { margin: 0 0 3px; font-size: 16px; font-weight: 700; color: var(--text-strong); letter-spacing: -.01em; }
+.pcm-root .modal-head .who-sub { font-size: 12px; color: var(--text-3); }
+.pcm-root .modal-body { padding: 18px 22px; display: flex; flex-direction: column; gap: 16px; }
+.pcm-root .field label { display: block; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); margin-bottom: 7px; }
+.pcm-root .field textarea {
+  width: 100%; min-height: 118px; resize: vertical;
+  background: var(--surface); border: 1px solid var(--border-strong); color: var(--text);
+  border-radius: var(--r-sm); padding: 11px 13px; font-size: 13px; line-height: 1.6;
+  outline: none;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.pcm-root .field textarea:focus { border-color: var(--primary); box-shadow: var(--ring); }
+.pcm-root .field-hint { font-size: 11px; color: var(--text-4); margin-top: 7px; }
+.pcm-root .field textarea[readonly] { background: var(--surface-2); color: var(--text-2); }
+.pcm-root .meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+.pcm-root .meta-grid .m-key { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
+.pcm-root .meta-grid .m-val { font-size: 13px; font-weight: 600; }
+.pcm-root .modal-foot { padding: 15px 22px 19px; display: flex; gap: 9px; justify-content: flex-end; border-top: 1px solid var(--border); background: var(--surface-2); }
+
+@media (max-width: 720px) {
+  .pcm-root .meta-grid { grid-template-columns: 1fr; }
+  .pcm-root .modal-foot { flex-wrap: wrap; }
+  .pcm-root .modal-foot .btn { flex: 1; }
+}

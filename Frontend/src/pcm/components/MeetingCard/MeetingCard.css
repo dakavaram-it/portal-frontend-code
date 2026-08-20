@@ -1,0 +1,48 @@
+.pcm-root .meeting-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(348px, 1fr)); }
+.pcm-root .meeting-card {
+  text-align: left; width: 100%; font: inherit; color: inherit;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-lg); padding: 16px 18px; box-shadow: var(--shadow-sm);
+  display: flex; flex-direction: column; gap: 13px;
+  position: relative; overflow: hidden;
+  transition: border-color var(--dur-lg) var(--ease), box-shadow var(--dur-lg) var(--ease), transform var(--dur-lg) var(--ease);
+}
+/* the reference has no such rule, but this bar is the only at-a-glance read of
+   completion across a grid of cards, so it stays */
+.pcm-root .meeting-card::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--tone, var(--border-strong));
+}
+.pcm-root button.meeting-card:hover { border-color: var(--primary); box-shadow: var(--ring), var(--shadow-sm); transform: translateY(-1px); }
+.pcm-root .meeting-card .mc-go { color: var(--text-4); opacity: 0; transition: opacity var(--dur-lg) var(--ease), transform var(--dur-lg) var(--ease); }
+.pcm-root button.meeting-card:hover .mc-go { opacity: 1; transform: translateX(2px); }
+.pcm-root .meeting-card.is-static::before { background: var(--border-strong); }
+
+.pcm-root .mc-head { display: flex; align-items: flex-start; gap: 10px; }
+.pcm-root .mc-head .mc-title { font-size: 15px; font-weight: 700; line-height: 1.35; margin: 3px 0 0; color: var(--text-strong); letter-spacing: -.01em; }
+.pcm-root .mc-id { font-size: 11px; color: var(--text-4); font-weight: 600; letter-spacing: .03em; text-transform: uppercase; }
+.pcm-root .mc-meta { display: flex; flex-wrap: wrap; gap: 6px 15px; font-size: 12px; color: var(--text-3); }
+.pcm-root .mc-meta span { display: inline-flex; align-items: center; gap: 6px; }
+.pcm-root .mc-meta .icon { color: var(--text-4); }
+
+/* adapts to however many cells the card gives it — five on a meeting, two on a programme */
+.pcm-root .stat-strip {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md);
+  overflow: hidden;
+}
+/* min-width:0 and the tightened scale are load-bearing: the Unit-level meeting
+   puts 1,67,624 and 3,13,545 in adjacent cells, which overran the dividers. */
+.pcm-root .stat-strip div { padding: 9px 3px; text-align: center; border-left: 1px solid var(--border); min-width: 0; }
+.pcm-root .stat-strip div:first-child { border-left: 0; }
+/* Never clip either of these: a truncated figure reads as a smaller figure, and
+   a truncated label names the wrong column. The label wraps instead. */
+.pcm-root .stat-strip .s-val { font-size: 12.5px; font-weight: 800; line-height: 1.15; letter-spacing: -.02em; color: var(--text-strong); }
+.pcm-root .stat-strip .s-key {
+  font-size: 9px; color: var(--text-4); margin-top: 3px; letter-spacing: .02em;
+  text-transform: uppercase; font-weight: 600; line-height: 1.25; white-space: normal;
+}
+
+@media (max-width: 720px) {
+  .pcm-root .meeting-grid { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,55 @@
+.pcm-root .rollup {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: var(--shadow-sm); overflow: hidden; margin-top: 16px;
+}
+.pcm-root .rollup-head {
+  display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 14px;
+  padding: 16px 18px; border-bottom: 1px solid var(--border);
+}
+.pcm-root .rollup-sub { margin: 7px 0 0; font-size: 12.5px; color: var(--text-3); }
+.pcm-root .rollup-sub b { font-weight: 700; color: var(--text); }
+.pcm-root .rollup-scroll { max-height: 420px; overflow: auto; }
+
+.pcm-root table.rollup-table { min-width: 760px; }
+.pcm-root .rollup-table th[scope="row"] {
+  position: sticky; left: 0; background: var(--surface); z-index: 1;
+  font-weight: 500; text-align: left; padding: 0;
+  box-shadow: 1px 0 0 var(--divider);
+  border-bottom: 1px solid var(--divider);
+}
+.pcm-root .rollup-table tbody tr:hover th[scope="row"] { background: var(--surface-2); }
+.pcm-root .rollup-table td.n,
+.pcm-root .rollup-table th.n { text-align: right; }
+.pcm-root .rollup-table th.w,
+.pcm-root .rollup-table td.w { width: 190px; }
+.pcm-root .rollup-table .bar { min-width: 74px; }
+.pcm-root .rollup-table tbody td { padding: 9px 14px; }
+.pcm-root .rollup-name {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  background: none; border: 0; padding: 9px 14px; text-align: left;
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--text);
+  transition: color var(--dur) var(--ease);
+}
+.pcm-root .rollup-name:hover { color: var(--primary); }
+.pcm-root .rollup-name .icon { color: var(--text-4); transition: transform var(--dur) var(--ease); }
+.pcm-root .rollup-name .icon.twist { transform: rotate(90deg); }
+.pcm-root .rollup-pc { font-weight: 600; font-size: 11px; color: var(--text-4); margin-left: auto; padding-left: 10px; }
+.pcm-root .rollup-table .is-child th[scope="row"],
+.pcm-root .rollup-table .is-child td { background: var(--surface-2); }
+.pcm-root .rollup-table .is-child .rollup-name { padding-left: 32px; font-weight: 500; color: var(--text-2); }
+.pcm-root .rollup-table .is-picked th[scope="row"],
+.pcm-root .rollup-table .is-picked td {
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+}
+
+.pcm-root .cell-pick {
+  background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer;
+  text-decoration: underline; text-decoration-style: dotted;
+  text-underline-offset: 3px; text-decoration-color: var(--text-4);
+  transition: color var(--dur) var(--ease);
+}
+.pcm-root .cell-pick:hover { color: var(--primary); text-decoration-color: currentColor; }
+
+@media (max-width: 720px) {
+  .pcm-root .rollup-head { align-items: flex-start; }
+}

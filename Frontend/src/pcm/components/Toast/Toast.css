@@ -1,0 +1,9 @@
+.pcm-root .toast {
+  position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 10px;
+  background: var(--text-strong); color: #fff;
+  padding: 12px 17px; border-radius: var(--r-md); font-size: 13px; font-weight: 600;
+  box-shadow: var(--shadow-lg); z-index: 60; opacity: 0; pointer-events: none;
+  max-width: calc(100vw - 32px);
+}
+.pcm-root .toast .icon { color: var(--ok-500); }

@@ -1,0 +1,8 @@
+.pcm-root .donut { position: relative; width: 116px; height: 116px; flex: none; }
+.pcm-root .donut svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.pcm-root .donut .track { stroke: var(--border); }
+/* Donut.jsx must set the arc colour inline: this rule outranks a stroke= attribute. */
+.pcm-root .donut .arc { stroke: var(--primary); stroke-linecap: round; }
+.pcm-root .donut-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+.pcm-root .donut-center .d-num { font-size: 23px; font-weight: 800; letter-spacing: -.03em; line-height: 1; color: var(--text-strong); }
+.pcm-root .donut-center .d-cap { font-size: 10px; color: var(--text-4); margin-top: 5px; letter-spacing: .06em; text-transform: uppercase; font-weight: 600; }

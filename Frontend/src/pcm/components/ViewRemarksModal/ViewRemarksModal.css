@@ -1,0 +1,8 @@
+.pcm-root .drill-close { margin-left: auto; }
+
+.pcm-root .vr-row { display: flex; align-items: center; gap: 8px; }
+.pcm-root .vr-label { font-size: 13px; font-weight: 600; color: var(--text); min-width: 9.5rem; }
+.pcm-root .vr-colon { color: var(--text-3); }
+.pcm-root .vr-status { font-size: 13px; font-weight: 700; }
+.pcm-root .vr-status.is-yes { color: var(--ok); }
+.pcm-root .vr-status.is-no { color: var(--bad); }

@@ -1,0 +1,36 @@
+.pcm-root .dd { position: relative; display: inline-flex; }
+
+.pcm-root .dd-trigger {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  height: 32px; padding: 0 10px; min-width: 200px;
+  background: var(--surface); border: 1px solid var(--border-strong); color: var(--text);
+  border-radius: var(--r-sm); font-size: 12px; text-align: left; cursor: pointer;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.pcm-root .dd-trigger:hover { border-color: var(--text-4); }
+.pcm-root .dd-trigger[aria-expanded="true"] { border-color: var(--primary); box-shadow: var(--ring); }
+.pcm-root .dd-trigger-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pcm-root .dd-trigger .chev { color: var(--text-4); flex: none; transition: transform var(--dur) var(--ease); }
+.pcm-root .dd-trigger[aria-expanded="true"] .chev { transform: rotate(180deg); }
+
+/* Always below the trigger, never above — and a small box with its own
+   scrollbar rather than growing to fit every option. */
+.pcm-root .dd-panel {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: var(--z-modal);
+  margin: 0; padding: 4px; list-style: none;
+  max-height: 208px; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-sm);
+  box-shadow: var(--shadow-md);
+}
+
+.pcm-root .dd-option {
+  display: block; width: 100%; text-align: left;
+  padding: 7px 10px; border-radius: 6px;
+  background: none; border: 0; color: var(--text); font-size: 12.5px; cursor: pointer;
+  transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.pcm-root .dd-option:hover { background: var(--surface-3); }
+.pcm-root .dd-option[aria-selected="true"] {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary); font-weight: 600;
+}

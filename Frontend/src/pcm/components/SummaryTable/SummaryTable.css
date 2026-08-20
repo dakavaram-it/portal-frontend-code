@@ -1,0 +1,18 @@
+.pcm-root .summary-table { margin-top: 16px; }
+.pcm-root .summary-table .table-card table { min-width: 760px; }
+.pcm-root .summary-grid td { white-space: nowrap; }
+/* Location text runs long and varies a lot row to row — nowrap would size
+   the whole column to the longest entry, leaving every shorter row with a
+   wide band of empty space in that cell. */
+.pcm-root .summary-grid td:nth-child(2) { white-space: normal; max-width: 320px; }
+
+.pcm-root .sort-th {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: none; padding: 0; margin: 0;
+  font: inherit; color: inherit; letter-spacing: inherit; cursor: pointer;
+}
+.pcm-root .sort-th:hover { color: var(--text); }
+.pcm-root .sort-icon { opacity: .35; transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+.pcm-root .sort-th:hover .sort-icon { opacity: .8; }
+.pcm-root .sort-icon.is-active { opacity: 1; color: var(--primary); }
+.pcm-root .sort-icon.is-asc { transform: rotate(180deg); }

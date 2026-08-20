@@ -1,0 +1,384 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import gsap from 'gsap';
+import './Programs.css';
+import Dropdown from '../components/Dropdown/Dropdown.jsx';
+import Icon from '../components/Icon/Icon.jsx';
+import LeaderRemarksModal from '../components/LeaderRemarksModal/LeaderRemarksModal.jsx';
+import MemberActivityCard from '../components/MemberActivityCard/MemberActivityCard.jsx';
+import Select from '../components/Select/Select.jsx';
+import { api } from '../lib/api.js';
+import { num } from '../lib/format.js';
+import { prefersReduced, useAnim } from '../lib/motion.js';
+
+/* Programmes are not meetings: the service records who turned up and how many
+   beneficiaries were served, and there is no invitee list to be absent from —
+   so no attendance split here.
+
+   All three cards are real, `party_track`-backed data, refetched whenever
+   `month` changes: `GET .../role-summary` and `.../activity-summary` for the
+   first two, `.../leaders` for the third once a role/activity pairing is
+   open. `null` means "still loading" (each card renders its own "Loading…"),
+   `[]` means "loaded, genuinely nothing there" — `program`/`program_role`/
+   `leader_program_activity` are freshly added and still empty in production,
+   so the second and third cards read empty until the party starts logging
+   participation; the first still shows real Total/Members, since those come
+   straight off the `leader` roster rather than waiting on that.
+
+   `activitySummary` rows carry `roleId`/`activityId` alongside the display
+   names — `roles` (from `/api/programs/roles`, `party_track.role`) filters
+   by matching id straight through. The Activity filter has no roster prop of
+   its own: `party_track.activity` (`/api/programs/activities`) is a
+   different, unrelated scoring system, so its options are derived from
+   `activitySummary` itself, the same way the Assembly filter below derives
+   its options from whatever leader list is on screen.
+
+   There is no remarks column on `leader_program_activity` — Update/View
+   Remarks is a client-side-only overlay (`remarksByMid`), not persisted,
+   same posture the top of this file used to describe for the whole page. */
+const MONTH_NAMES = Array.from({ length: 12 }, (_, i) => new Date(2000, i, 1).toLocaleDateString('en-IN', { month: 'long' }));
+const thisMonth = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); };
+const lastMonth = () => { const d = thisMonth(); return new Date(d.getFullYear(), d.getMonth() - 1, 1); };
+const YEARS = Array.from({ length: 7 }, (_, i) => thisMonth().getFullYear() - i);
+
+const hashInt = (str, seed) => {
+  let h = seed;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return h;
+};
+
+// Role and Activity get separate colour rotations (different hash seeds over
+// the same token set) so the two columns never read as one colour system.
+const CHIP_COLORS = ['var(--primary)', 'var(--violet)', 'var(--ok)', 'var(--accent)', 'var(--bad)'];
+const chipColor = (str, seed) => CHIP_COLORS[hashInt(str, seed) % CHIP_COLORS.length];
+const roleTint = (name) => chipColor(name, 17);
+const activityTint = (name) => chipColor(name, 53);
+
+const sum = (rows, key) => rows.reduce((a, r) => a + (r[key] || 0), 0);
+
+export default function Programs({ roles = [] }) {
+  const ref = useRef(null);
+  const memberCardRef = useRef(null);
+  const skipNextFocusRef = useRef(true); // the default row on mount needs no scroll/entrance of its own
+  const [monthMode, setMonthMode] = useState('this');
+  const [month, setMonth] = useState(thisMonth);
+  const [selectedRole, setSelectedRole] = useState(null);
+  const [selectedActivity, setSelectedActivity] = useState(null); // a program_id, despite the name
+  const [roleSummary, setRoleSummary] = useState(null); // null = loading, [] = loaded and empty
+  const [activitySummary, setActivitySummary] = useState(null);
+  const [openRow, setOpenRow] = useState(null); // the activitySummary row the member card is showing
+  const [leaders, setLeaders] = useState(null); // null = loading, [] = loaded and empty
+  const [remarksByMid, setRemarksByMid] = useState({}); // client-only overlay — no backing column to persist to
+  const [selectedAc, setSelectedAc] = useState(null); // narrows the member card to one Assembly within the open role/activity
+  const [remarkMid, setRemarkMid] = useState(null);
+  const [remarkMode, setRemarkMode] = useState('view'); // which control opened it: 'edit' or 'view'
+
+  useAnim(ref, () => {
+    gsap.from('.role-summary-card, .role-select, .activity-summary-card, .member-detail-card', {
+      y: 14, autoAlpha: 0, duration: .4, stagger: .06
+    });
+  }, [month, roleSummary, activitySummary]);
+
+  // The two role/activity cards share one month scope, so one fetch covers
+  // both — refired whenever `month` picks a new calendar month.
+  useEffect(() => {
+    let cancelled = false;
+    setRoleSummary(null);
+    setActivitySummary(null);
+    const year = month.getFullYear(), mo = month.getMonth() + 1;
+    Promise.all([api.programRoleSummary(year, mo), api.programActivitySummary(year, mo)])
+      .then(([roleRows, activityRows]) => {
+        if (cancelled) return;
+        setRoleSummary(roleRows);
+        setActivitySummary(activityRows);
+      })
+      .catch(() => { if (!cancelled) { setRoleSummary([]); setActivitySummary([]); } });
+    return () => { cancelled = true; };
+  }, [month]);
+
+  // Switching rows — by click or by the filters narrowing to a new default —
+  // scrolls the card into view and gives it a small entrance so the change is
+  // noticeable, but not on the very first render: that row is already on
+  // screen next to the other two cards and needs no scroll-jack on load.
+  useEffect(() => {
+    if (skipNextFocusRef.current) { skipNextFocusRef.current = false; return; }
+    if (!openRow) return;
+    memberCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!prefersReduced()) {
+      gsap.from('.member-detail-card', { y: -12, autoAlpha: 0, duration: .35, ease: 'power2.out' });
+    }
+  }, [openRow]);
+
+  // The open pairing's leaders, refetched whenever the pairing or the month
+  // changes — `leader_program_activity` is counted server-side, never cached.
+  useEffect(() => {
+    if (!openRow) { setLeaders(null); return; }
+    let cancelled = false;
+    setLeaders(null);
+    const year = month.getFullYear(), mo = month.getMonth() + 1;
+    api.programLeaders(openRow.roleId, openRow.activityId, year, mo)
+      .then((rows) => { if (!cancelled) setLeaders(rows); })
+      .catch(() => { if (!cancelled) setLeaders([]); });
+    return () => { cancelled = true; };
+  }, [openRow, month]);
+
+  const pickThis = () => { setMonthMode('this'); setMonth(thisMonth()); };
+  const pickLast = () => { setMonthMode('last'); setMonth(lastMonth()); };
+  const pickCustomMonth = (mo) => { setMonthMode('custom'); setMonth((d) => new Date(d.getFullYear(), +mo, 1)); };
+  const pickCustomYear = (yr) => { setMonthMode('custom'); setMonth((d) => new Date(+yr, d.getMonth(), 1)); };
+  const monthTitle = month.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+
+  const roleRows = roleSummary ?? [];
+  const activityRows = activitySummary ?? [];
+  const filteredActivitySummary = activityRows.filter((r) =>
+    (!selectedRole || r.roleId === selectedRole) &&
+    (!selectedActivity || r.activityId === selectedActivity)
+  );
+
+  // The Activity filter's own roster — every programme actually appearing in
+  // (the unfiltered) activitySummary, not `party_track.activity`.
+  const activityOptions = useMemo(() => {
+    const seen = new Map();
+    for (const r of activityRows) seen.set(r.activityId, r.activity);
+    return [...seen].map(([value, label]) => ({ value, label }));
+  }, [activityRows]);
+
+  const openMembers = (r) => {
+    setOpenRow(r);
+    setSelectedAc(null); // a new role/activity pairing has its own Assembly roster
+  };
+
+  // The shown row belongs to the filtered list; once that list changes, fall
+  // back to its first row rather than going blank — the card should always
+  // have something to show, the same way the first two cards do.
+  useEffect(() => {
+    if (!openRow || !filteredActivitySummary.some((r) => r.roleId === openRow.roleId && r.activityId === openRow.activityId)) {
+      const next = filteredActivitySummary[0];
+      if (next) openMembers(next); else setOpenRow(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activityRows, selectedRole, selectedActivity]);
+
+  const mergedLeaders = useMemo(
+    () => (leaders || []).map((m) => ({ ...m, remarks: remarksByMid[m.mid] || '' })),
+    [leaders, remarksByMid]
+  );
+  const acOptions = useMemo(() => [...new Set(mergedLeaders.map((m) => m.assembly))], [mergedLeaders]);
+  const visibleMembers = selectedAc ? mergedLeaders.filter((m) => m.assembly === selectedAc) : mergedLeaders;
+  const remarkMember = remarkMid !== null ? mergedLeaders.find((m) => m.mid === remarkMid) : null;
+  const saveRemark = (text) => {
+    setRemarksByMid((cur) => ({ ...cur, [remarkMid]: text }));
+    setRemarkMid(null);
+  };
+
+  const totals = {
+    total: sum(roleRows, 'total'), members: sum(roleRows, 'members'),
+    updated: sum(roleRows, 'updated'), notUpdated: sum(roleRows, 'notUpdated')
+  };
+  const activityTotals = {
+    totalMembers: sum(filteredActivitySummary, 'totalMembers'),
+    updated: sum(filteredActivitySummary, 'updated'),
+    notUpdated: sum(filteredActivitySummary, 'notUpdated')
+  };
+  const activityFiltered = Boolean(selectedRole || selectedActivity);
+
+  return (
+    <section className="view" aria-label="Programmes overview" ref={ref}>
+      <div className="level-table-tools">
+        {monthMode === 'custom' && (
+          <div className="month-pick" role="group" aria-label="Select month and year">
+            <Icon name="calendar" sm className="month-pick-icon" />
+            <Select id="programs-month" label="Month" value={month.getMonth()} onChange={pickCustomMonth}>
+              {MONTH_NAMES.map((m, i) => <option key={m} value={i}>{m}</option>)}
+            </Select>
+            <Select id="programs-year" label="Year" value={month.getFullYear()} onChange={pickCustomYear}>
+              {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+            </Select>
+          </div>
+        )}
+        <div className="seg" role="group" aria-label="Select period">
+          <button className="btn btn-sm" type="button" aria-pressed={monthMode === 'this'} onClick={pickThis}>This month</button>
+          <button className="btn btn-sm" type="button" aria-pressed={monthMode === 'last'} onClick={pickLast}>Last month</button>
+          <button className="btn btn-sm" type="button" aria-pressed={monthMode === 'custom'} onClick={() => setMonthMode('custom')}>Custom</button>
+        </div>
+      </div>
+
+      <div className="role-summary-card table-card">
+        <div className="card-head">
+          <h2>Programmes by role</h2>
+          <span className="sub"><Icon name="calendar" sm />{monthTitle}</span>
+        </div>
+        <div className="table-scroll">
+          <table className="role-summary">
+            <caption className="sr-only">Programmes by role for {monthTitle}</caption>
+            <thead>
+              <tr>
+                <th scope="col">Role</th>
+                <th scope="col" className="n">Total</th>
+                <th scope="col" className="n">Members</th>
+                <th scope="col" className="n">Updated</th>
+                <th scope="col" className="n">Not updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {roleRows.map((r) => (
+                <tr key={r.role}>
+                  <td>{r.role}</td>
+                  <td className="n num">{num(r.total)}</td>
+                  <td className="n num">{num(r.members)}</td>
+                  <td className="n num" style={{ color: 'var(--ok)' }}>{num(r.updated)}</td>
+                  <td className="n num" style={{ color: 'var(--bad)' }}>{num(r.notUpdated)}</td>
+                </tr>
+              ))}
+            </tbody>
+            {roleRows.length > 0 && (
+              <tfoot>
+                <tr>
+                  <th scope="row">Total</th>
+                  <td className="n num">{num(totals.total)}</td>
+                  <td className="n num">{num(totals.members)}</td>
+                  <td className="n num">{num(totals.updated)}</td>
+                  <td className="n num">{num(totals.notUpdated)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+        <div className="empty" hidden={roleSummary !== null}>
+          <div className="empty-title">Loading…</div>
+        </div>
+        <div className="empty" hidden={roleSummary === null || roleRows.length > 0}>
+          <Icon name="inbox" />
+          <div className="empty-title">No programmes reported for {monthTitle}</div>
+          <div className="empty-hint">This view has no data source configured yet.</div>
+        </div>
+      </div>
+
+      <div className="filter-row">
+        <div className="role-select">
+          <span className="role-select-label">Role</span>
+          {roles.length > 0 ? (
+            <Dropdown
+              id="programs-role" label="Filter by role"
+              value={selectedRole ?? 'all'}
+              onChange={(v) => setSelectedRole(v === 'all' ? null : v)}
+              options={[{ value: 'all', label: 'All roles' }, ...roles.map((r) => ({ value: r.id, label: r.name }))]}
+            />
+          ) : (
+            <span className="muted">No roles to select yet</span>
+          )}
+        </div>
+
+        <div className="role-select">
+          <span className="role-select-label">Activity</span>
+          {activityOptions.length > 0 ? (
+            <Dropdown
+              id="programs-activity" label="Filter by activity"
+              value={selectedActivity ?? 'all'}
+              onChange={(v) => setSelectedActivity(v === 'all' ? null : v)}
+              options={[{ value: 'all', label: 'All activities' }, ...activityOptions]}
+            />
+          ) : (
+            <span className="muted">No activities to select yet</span>
+          )}
+        </div>
+      </div>
+
+      <div className="activity-summary-card table-card">
+        <div className="card-head">
+          <h2>Programmes by role &amp; activity</h2>
+          <span className="sub"><Icon name="calendar" sm />{monthTitle}</span>
+        </div>
+        <div className="table-scroll">
+          <table className="role-summary">
+            <caption className="sr-only">Programmes by role and activity for {monthTitle}</caption>
+            <thead>
+              <tr>
+                <th scope="col">Role</th>
+                <th scope="col" className="n">Total members</th>
+                <th scope="col">Activity</th>
+                <th scope="col" className="n">Updated</th>
+                <th scope="col" className="n">Not updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredActivitySummary.map((r) => (
+                <tr key={r.roleId + '_' + r.activityId}>
+                  <td><span className="role-chip" style={{ '--tint': roleTint(r.role) }}>{r.role}</span></td>
+                  <td className="n">
+                    <button className="cell-count num" type="button" onClick={() => openMembers(r)}>
+                      {num(r.totalMembers)}
+                    </button>
+                  </td>
+                  <td><span className="activity-chip" style={{ '--tint': activityTint(r.activity) }}>{r.activity}</span></td>
+                  <td className="n num" style={{ color: 'var(--ok)' }}>{num(r.updated)}</td>
+                  <td className="n num" style={{ color: 'var(--bad)' }}>{num(r.notUpdated)}</td>
+                </tr>
+              ))}
+            </tbody>
+            {filteredActivitySummary.length > 0 && (
+              <tfoot>
+                <tr>
+                  <th scope="row">Total</th>
+                  <td className="n num">{num(activityTotals.totalMembers)}</td>
+                  <td />
+                  <td className="n num">{num(activityTotals.updated)}</td>
+                  <td className="n num">{num(activityTotals.notUpdated)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+        <div className="empty" hidden={activitySummary !== null}>
+          <div className="empty-title">Loading…</div>
+        </div>
+        <div className="empty" hidden={activitySummary === null || filteredActivitySummary.length > 0}>
+          <Icon name="inbox" />
+          {activityFiltered ? (
+            <>
+              <div className="empty-title">No rows match this role/activity</div>
+              <div className="empty-hint">Try a different combination, or clear the filters above.</div>
+            </>
+          ) : (
+            <>
+              <div className="empty-title">No programme is linked to a role yet</div>
+              <div className="empty-hint">party_track.program_role has no rows to summarise.</div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {openRow && (
+        <>
+          <div className="filter-row">
+            <div className="role-select">
+              <span className="role-select-label">Assembly</span>
+              <Dropdown
+                id="programs-member-ac" label="Filter by assembly"
+                value={selectedAc ?? 'all'}
+                onChange={(v) => setSelectedAc(v === 'all' ? null : v)}
+                options={[{ value: 'all', label: 'All assemblies' }, ...acOptions.map((a) => ({ value: a, label: a }))]}
+              />
+            </div>
+          </div>
+          <div ref={memberCardRef}>
+            <MemberActivityCard
+              title={openRow.role + ' · ' + openRow.activity}
+              members={leaders === null ? null : visibleMembers}
+              onUpdateRemarks={(mid) => { setRemarkMid(mid); setRemarkMode('edit'); }}
+              onViewRemarks={(mid) => { setRemarkMid(mid); setRemarkMode('view'); }}
+            />
+          </div>
+        </>
+      )}
+
+      {remarkMember && (
+        <LeaderRemarksModal
+          member={remarkMember}
+          mode={remarkMode}
+          onClose={() => setRemarkMid(null)}
+          onSave={saveRemark}
+        />
+      )}
+    </section>
+  );
+}

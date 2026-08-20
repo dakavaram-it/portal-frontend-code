@@ -8,6 +8,7 @@ import Candidates from './components/Candidates.jsx'
 import Dashboard from './components/Dashboard.jsx'
 import CadreSearchNotes from './components/CadreSearchNotes.jsx'
 import CommitteesAssign from './components/CommitteesAssign.jsx'
+import PcMeetings, { PCM_VIEWS } from '../pcm/PcMeetings.jsx'
 import './Leap.css'
 
 export default function Leap({ user, onLogout }) {
@@ -99,7 +100,9 @@ export default function Leap({ user, onLogout }) {
           <path d="M4 7h16M4 12h16M4 17h16" />
         </svg>
       </button>
-      <main className="leap-main">
+      {/* PC-Meetings paints its own ground and carries its own padding (it is a
+          whole console, not a panel), so the main column drops both for it. */}
+      <main className={`leap-main${PCM_VIEWS[view.name] ? ' pcm-active' : ''}`}>
         {screen('dashboard', <Dashboard user={user} onNavigate={navigate} />)}
         {/* The key still remounts the wizard, but only when the Dashboard hands over a
             *different* prefill — a bare sidebar click reuses the stored one. */}
@@ -119,6 +122,15 @@ export default function Leap({ user, onLogout }) {
         )}
         {screen('cadreSearch', <CadreSearchNotes user={user} />)}
         {screen('committeesAssign', <CommitteesAssign user={user} navKey={committeesAssignNav} />)}
+        {/* One mounted module behind all three of its nav entries, rather than
+            one `screen` each: it holds the meetings list, the member pages and
+            the rollups already fetched, and switching entries must not throw
+            those away. Hidden by the group, not by a single view name. */}
+        {Object.keys(PCM_VIEWS).some((v) => opened[v]) && (
+          <div hidden={!PCM_VIEWS[view.name]}>
+            <PcMeetings view={view.name} />
+          </div>
+        )}
         {view.name === 'positions' && (
           <AllPositions
             positions={positions}
