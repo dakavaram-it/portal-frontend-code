@@ -7,7 +7,21 @@ import { num } from '../../lib/format.js';
 // `members` is `null` while its fetch is in flight — kept distinct from `[]`
 // ("loaded, no leaders in this role") the same way the summary cards above
 // distinguish loading from a genuinely empty result.
-export default function MemberActivityCard({ title, members, onUpdateRemarks, onViewRemarks }) {
+const blank = (v) => {
+  if (v == null) return '';
+  const s = String(v).trim();
+  return s === '' || s === '-' || s === '—' ? '' : s;
+};
+
+export default function MemberActivityCard({
+  title,
+  members,
+  uploadsByMid = {},
+  onUpdateRemarks,
+  onViewRemarks,
+  onUpload,
+  onViewAttendance
+}) {
   const loading = members === null;
   const rows = members || [];
   return (
@@ -27,27 +41,59 @@ export default function MemberActivityCard({ title, members, onUpdateRemarks, on
               <th scope="col">MID</th>
               <th scope="col" className="n">Activities participated</th>
               <th scope="col" className="n">Completed</th>
-              <th scope="col">Update</th>
-              <th scope="col">View</th>
+              <th scope="col" className="action-cell">Upload</th>
+              <th scope="col" className="action-cell">Attended status</th>
+              <th scope="col" className="action-cell">Update</th>
+              <th scope="col" className="action-cell">View</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((m) => {
               const given = Boolean(m.remarks);
+              const uploaded = Boolean(uploadsByMid[m.mid]);
               return (
                 <tr key={m.mid}>
-                  <td>{m.parliament}</td>
-                  <td>{m.assembly}</td>
+                  <td>{blank(m.parliament)}</td>
+                  <td>{blank(m.assembly)}</td>
                   <td>{m.name}</td>
-                  <td className="mono">{m.mid}</td>
+                  <td className="mid-cell">{m.mid}</td>
                   <td className="n num">{num(m.participated)}</td>
                   <td className="n num" style={{ color: 'var(--ok)' }}>{num(m.completed)}</td>
-                  <td>
-                    <button className="btn btn-primary btn-sm" type="button" onClick={() => onUpdateRemarks(m.mid)}>
-                      Update Remarks
+                  <td className="action-cell">
+                    <button
+                      className="icon-btn"
+                      type="button"
+                      title="Upload"
+                      aria-label="Upload"
+                      onClick={() => onUpload(m.mid)}
+                    >
+                      <Icon name="upload" sm />
                     </button>
                   </td>
-                  <td>
+                  <td className="action-cell">
+                    <button
+                      className="icon-btn"
+                      type="button"
+                      disabled={!uploaded}
+                      title={uploaded ? 'View attended status' : 'No file uploaded yet'}
+                      aria-label="View attended status"
+                      onClick={() => onViewAttendance(m.mid)}
+                    >
+                      <Icon name="eye" sm />
+                    </button>
+                  </td>
+                  <td className="action-cell">
+                    <button
+                      className="icon-btn"
+                      type="button"
+                      title="Update remarks"
+                      aria-label="Update remarks"
+                      onClick={() => onUpdateRemarks(m.mid)}
+                    >
+                      <Icon name="notes" sm />
+                    </button>
+                  </td>
+                  <td className="action-cell">
                     <button
                       className="icon-btn"
                       type="button"

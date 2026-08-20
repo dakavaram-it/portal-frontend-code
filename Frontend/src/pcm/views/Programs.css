@@ -19,11 +19,14 @@
 /* These cards' empty state is the common case (no upstream data source yet), not
    the rare one the shared 52px `.empty` padding was sized for, so they get their own. */
 .pcm-root .role-summary-card .empty,
-.pcm-root .activity-summary-card .empty { padding: 26px 20px; }
+.pcm-root .activity-summary-card .empty,
+.pcm-root .member-detail-card .empty { padding: 26px 20px; }
 .pcm-root .role-summary-card .empty .icon,
-.pcm-root .activity-summary-card .empty .icon { width: 18px; height: 18px; padding: 9px; margin-bottom: 8px; }
+.pcm-root .activity-summary-card .empty .icon,
+.pcm-root .member-detail-card .empty .icon { width: 18px; height: 18px; padding: 9px; margin-bottom: 8px; }
 .pcm-root .role-summary-card .empty .empty-title,
-.pcm-root .activity-summary-card .empty .empty-title { font-size: 13px; }
+.pcm-root .activity-summary-card .empty .empty-title,
+.pcm-root .member-detail-card .empty .empty-title { font-size: 13px; }
 .pcm-root .role-summary-card .empty .empty-hint,
 .pcm-root .activity-summary-card .empty .empty-hint { font-size: 12px; }
 
@@ -39,13 +42,54 @@
   border-top: 3px solid var(--primary);
 }
 
-/* Smaller than the shared 66vh `.table-scroll` default — all three cards cap
-   at a handful of rows and scroll internally for the rest, rather than
-   growing to fit everything. */
+/* Override the shared 1240px min-width — these summary tables only have a
+   handful of columns and were stretching Role ↔ figures into empty space. */
+.pcm-root .role-summary-card table.role-summary,
+.pcm-root .activity-summary-card table.role-summary {
+  min-width: 0;
+  width: 100%;
+  table-layout: fixed;
+}
+.pcm-root .role-summary-card table.role-summary col.col-role,
+.pcm-root .activity-summary-card table.role-summary col.col-role { width: 28%; }
+.pcm-root .role-summary-card table.role-summary col.col-num,
+.pcm-root .activity-summary-card table.role-summary col.col-num { width: 18%; }
+.pcm-root .activity-summary-card table.role-summary col.col-activity { width: 28%; }
+.pcm-root .activity-summary-card table.role-summary col.col-members { width: 14%; }
+.pcm-root .activity-summary-card table.role-summary col.col-stat { width: 15%; }
+
 .pcm-root .role-summary-card .table-scroll,
-.pcm-root .activity-summary-card .table-scroll,
+.pcm-root .activity-summary-card .table-scroll {
+  max-height: min(420px, 55vh);
+}
 .pcm-root .member-detail-card .table-scroll {
-  max-height: 260px;
+  max-height: min(480px, 60vh);
+}
+.pcm-root .member-detail-card table {
+  min-width: 1100px;
+  font-size: 13px;
+}
+
+.pcm-root .role-summary th.n,
+.pcm-root .role-summary td.n { text-align: right; }
+.pcm-root .role-summary tbody th[scope="row"],
+.pcm-root .role-summary tfoot th[scope="row"] {
+  font-weight: 700; text-align: left; padding: 12px 14px;
+  color: var(--text-strong);
+}
+.pcm-root .role-summary tbody td {
+  padding: 12px 14px;
+  vertical-align: middle;
+}
+/* Sticky footer so Total stays fully visible and isn't clipped by the scroll. */
+.pcm-root .role-summary tfoot th,
+.pcm-root .role-summary tfoot td {
+  position: sticky; bottom: 0; z-index: 1;
+  font-weight: 700; color: var(--text-strong);
+  background: var(--surface-2);
+  border-top: 1px solid var(--border); border-bottom: 0;
+  padding: 12px 14px;
+  box-shadow: 0 -1px 0 var(--border);
 }
 
 /* Same chip shape as the global `.badge`, just keyed off a per-row `--tint`
@@ -55,11 +99,14 @@
 .pcm-root .role-chip,
 .pcm-root .activity-chip {
   display: inline-flex; align-items: center;
-  font-size: 11px; font-weight: 700; letter-spacing: .02em; white-space: nowrap;
-  padding: 3px 10px; border-radius: var(--r-pill);
+  font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; white-space: nowrap;
+  padding: 4px 10px; border-radius: var(--r-pill);
   border: 1px solid color-mix(in srgb, var(--tint) 22%, transparent);
   background: color-mix(in srgb, var(--tint) 10%, transparent);
   color: var(--tint);
+  max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis;
 }
 
 /* `position: relative` + a real z-index, not just flex layout: the entrance
@@ -100,6 +147,57 @@
 .pcm-root .month-pick .select-wrap select.control { height: 32px; font-size: 12px; min-width: 0; }
 .pcm-root .month-pick .select-wrap:last-child select.control { width: 84px; }
 
+/* Member detail: MID matches Committee Meetings' identifier treatment. */
+.pcm-root .member-detail-card td.mid-cell {
+  font-family: 'Fira Code', ui-monospace, 'Cascadia Mono', monospace;
+  font-variant-ligatures: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  letter-spacing: .01em;
+}
+.pcm-root .member-detail-card .action-cell {
+  width: 56px; text-align: center; padding-left: 8px; padding-right: 8px;
+}
+.pcm-root .member-detail-card .icon-btn:disabled {
+  opacity: .4; cursor: not-allowed;
+}
+.pcm-root .member-detail-card .icon-btn:disabled:hover {
+  background: var(--surface); color: var(--text-3);
+}
+
+/* Attendance upload modal — reuse RemarksModal chrome; only the file field differs. */
+.pcm-root .upload-drop {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  min-height: 140px; padding: 20px;
+  border: 1.5px dashed var(--border-strong); border-radius: var(--r-md);
+  background: var(--surface-2); color: var(--text-3); text-align: center;
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+.pcm-root .upload-drop:hover,
+.pcm-root .upload-drop:focus-within {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 5%, var(--surface-2));
+}
+.pcm-root .upload-drop input[type="file"] {
+  position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden;
+}
+.pcm-root .upload-drop-label { font-size: 13px; font-weight: 600; color: var(--text-2); }
+.pcm-root .upload-file-name { font-size: 12px; font-weight: 600; color: var(--text); max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.pcm-root .upload-preview {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 8px 0;
+}
+.pcm-root .upload-preview img {
+  max-width: 100%; max-height: 360px; border-radius: var(--r-md);
+  border: 1px solid var(--border); background: var(--surface-2);
+}
+.pcm-root .upload-preview iframe {
+  width: 100%; min-height: 360px; border: 1px solid var(--border); border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
 @media (max-width: 640px) {
   .pcm-root .level-table-tools { justify-content: stretch; }
   .pcm-root .level-table-tools .seg { width: 100%; }
@@ -110,4 +208,6 @@
   .pcm-root .role-select { width: 100%; }
   .pcm-root .role-select .dd { flex: 1; }
   .pcm-root .role-select .dd-trigger { width: 100%; min-width: 0; }
+  .pcm-root .role-summary-card table.role-summary,
+  .pcm-root .activity-summary-card table.role-summary { table-layout: auto; }
 }

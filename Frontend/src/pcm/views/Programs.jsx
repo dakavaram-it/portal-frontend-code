@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import gsap from 'gsap';
 import './Programs.css';
+import AttendanceUploadModal from '../components/AttendanceUploadModal/AttendanceUploadModal.jsx';
 import Dropdown from '../components/Dropdown/Dropdown.jsx';
 import Icon from '../components/Icon/Icon.jsx';
 import LeaderRemarksModal from '../components/LeaderRemarksModal/LeaderRemarksModal.jsx';
@@ -20,9 +21,9 @@ import { prefersReduced, useAnim } from '../lib/motion.js';
    open. `null` means "still loading" (each card renders its own "Loading…"),
    `[]` means "loaded, genuinely nothing there" — `program`/`program_role`/
    `leader_program_activity` are freshly added and still empty in production,
-   so the second and third cards read empty until the party starts logging
-   participation; the first still shows real Total/Members, since those come
-   straight off the `leader` roster rather than waiting on that.
+   so the second card falls back to `STATIC_ACTIVITY_SUMMARY` for UI testing
+   only; the first still shows real Total/Members from the `leader` roster,
+   and the member card still calls the live leaders endpoint.
 
    `activitySummary` rows carry `roleId`/`activityId` alongside the display
    names — `roles` (from `/api/programs/roles`, `party_track.role`) filters
@@ -34,7 +35,8 @@ import { prefersReduced, useAnim } from '../lib/motion.js';
 
    There is no remarks column on `leader_program_activity` — Update/View
    Remarks is a client-side-only overlay (`remarksByMid`), not persisted,
-   same posture the top of this file used to describe for the whole page. */
+   same posture the top of this file used to describe for the whole page.
+   Attendance uploads (`uploadsByMid`) are likewise client-only for now. */
 const MONTH_NAMES = Array.from({ length: 12 }, (_, i) => new Date(2000, i, 1).toLocaleDateString('en-IN', { month: 'long' }));
 const thisMonth = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); };
 const lastMonth = () => { const d = thisMonth(); return new Date(d.getFullYear(), d.getMonth() - 1, 1); };
@@ -55,6 +57,25 @@ const activityTint = (name) => chipColor(name, 53);
 
 const sum = (rows, key) => rows.reduce((a, r) => a + (r[key] || 0), 0);
 
+// Service returns "—" for missing place names — treat those as blank in the UI.
+const hasPlace = (v) => {
+  if (v == null) return false;
+  const s = String(v).trim();
+  return s !== '' && s !== '-' && s !== '—';
+};
+
+/* UI-only fixture for "Programmes by role & activity" while program_role is
+   empty — not used for by-role summary or the leaders card. */
+const STATIC_ACTIVITY_SUMMARY = [
+  { role: 'Minister', roleId: 'static-r1', activity: 'Village Outreach', activityId: 'static-a1', totalMembers: 42, updated: 28, notUpdated: 14 },
+  { role: 'Minister', roleId: 'static-r1', activity: 'Booth Coordination', activityId: 'static-a2', totalMembers: 42, updated: 19, notUpdated: 23 },
+  { role: 'MLA', roleId: 'static-r2', activity: 'Village Outreach', activityId: 'static-a1', totalMembers: 67, updated: 51, notUpdated: 16 },
+  { role: 'MLA', roleId: 'static-r2', activity: 'Public Meeting Drive', activityId: 'static-a3', totalMembers: 67, updated: 40, notUpdated: 27 },
+  { role: 'MP', roleId: 'static-r3', activity: 'Booth Coordination', activityId: 'static-a2', totalMembers: 18, updated: 12, notUpdated: 6 },
+  { role: 'District President', roleId: 'static-r4', activity: 'Membership Camp', activityId: 'static-a4', totalMembers: 35, updated: 22, notUpdated: 13 },
+  { role: 'District President', roleId: 'static-r4', activity: 'Public Meeting Drive', activityId: 'static-a3', totalMembers: 35, updated: 15, notUpdated: 20 }
+];
+
 export default function Programs({ roles = [] }) {
   const ref = useRef(null);
   const memberCardRef = useRef(null);
@@ -68,9 +89,12 @@ export default function Programs({ roles = [] }) {
   const [openRow, setOpenRow] = useState(null); // the activitySummary row the member card is showing
   const [leaders, setLeaders] = useState(null); // null = loading, [] = loaded and empty
   const [remarksByMid, setRemarksByMid] = useState({}); // client-only overlay — no backing column to persist to
+  const [uploadsByMid, setUploadsByMid] = useState({}); // client-only attendance attachments
   const [selectedAc, setSelectedAc] = useState(null); // narrows the member card to one Assembly within the open role/activity
   const [remarkMid, setRemarkMid] = useState(null);
   const [remarkMode, setRemarkMode] = useState('view'); // which control opened it: 'edit' or 'view'
+  const [uploadMid, setUploadMid] = useState(null);
+  const [uploadMode, setUploadMode] = useState('upload'); // 'upload' or 'view'
 
   useAnim(ref, () => {
     gsap.from('.role-summary-card, .role-select, .activity-summary-card, .member-detail-card', {
@@ -89,9 +113,14 @@ export default function Programs({ roles = [] }) {
       .then(([roleRows, activityRows]) => {
         if (cancelled) return;
         setRoleSummary(roleRows);
-        setActivitySummary(activityRows);
+        // Only the by role & activity card uses a static fallback for testing.
+        setActivitySummary(activityRows.length ? activityRows : STATIC_ACTIVITY_SUMMARY);
       })
-      .catch(() => { if (!cancelled) { setRoleSummary([]); setActivitySummary([]); } });
+      .catch(() => {
+        if (cancelled) return;
+        setRoleSummary([]);
+        setActivitySummary(STATIC_ACTIVITY_SUMMARY);
+      });
     return () => { cancelled = true; };
   }, [month]);
 
@@ -134,6 +163,17 @@ export default function Programs({ roles = [] }) {
     (!selectedActivity || r.activityId === selectedActivity)
   );
 
+  // Role filter options come from the activity card's rows when present
+  // (covers the static fixture's ids); otherwise the live roles roster.
+  const roleOptions = useMemo(() => {
+    if (activityRows.length) {
+      const seen = new Map();
+      for (const r of activityRows) seen.set(r.roleId, r.role);
+      return [...seen].map(([value, label]) => ({ value, label }));
+    }
+    return roles.map((r) => ({ value: r.id, label: r.name }));
+  }, [activityRows, roles]);
+
   // The Activity filter's own roster — every programme actually appearing in
   // (the unfiltered) activitySummary, not `party_track.activity`.
   const activityOptions = useMemo(() => {
@@ -162,12 +202,27 @@ export default function Programs({ roles = [] }) {
     () => (leaders || []).map((m) => ({ ...m, remarks: remarksByMid[m.mid] || '' })),
     [leaders, remarksByMid]
   );
-  const acOptions = useMemo(() => [...new Set(mergedLeaders.map((m) => m.assembly))], [mergedLeaders]);
+  const acOptions = useMemo(
+    () => [...new Set(mergedLeaders.map((m) => m.assembly).filter(hasPlace))],
+    [mergedLeaders]
+  );
+  useEffect(() => {
+    if (selectedAc && !acOptions.includes(selectedAc)) setSelectedAc(null);
+  }, [selectedAc, acOptions]);
   const visibleMembers = selectedAc ? mergedLeaders.filter((m) => m.assembly === selectedAc) : mergedLeaders;
   const remarkMember = remarkMid !== null ? mergedLeaders.find((m) => m.mid === remarkMid) : null;
+  const uploadMember = uploadMid !== null ? mergedLeaders.find((m) => m.mid === uploadMid) : null;
   const saveRemark = (text) => {
     setRemarksByMid((cur) => ({ ...cur, [remarkMid]: text }));
     setRemarkMid(null);
+  };
+  const saveUpload = (file) => {
+    setUploadsByMid((cur) => {
+      const prev = cur[uploadMid];
+      if (prev?.url) URL.revokeObjectURL(prev.url);
+      return { ...cur, [uploadMid]: file };
+    });
+    setUploadMid(null);
   };
 
   const totals = {
@@ -210,6 +265,13 @@ export default function Programs({ roles = [] }) {
         <div className="table-scroll">
           <table className="role-summary">
             <caption className="sr-only">Programmes by role for {monthTitle}</caption>
+            <colgroup>
+              <col className="col-role" />
+              <col className="col-num" />
+              <col className="col-num" />
+              <col className="col-num" />
+              <col className="col-num" />
+            </colgroup>
             <thead>
               <tr>
                 <th scope="col">Role</th>
@@ -222,7 +284,7 @@ export default function Programs({ roles = [] }) {
             <tbody>
               {roleRows.map((r) => (
                 <tr key={r.role}>
-                  <td>{r.role}</td>
+                  <td><span className="role-chip" style={{ '--tint': roleTint(r.role) }}>{r.role}</span></td>
                   <td className="n num">{num(r.total)}</td>
                   <td className="n num">{num(r.members)}</td>
                   <td className="n num" style={{ color: 'var(--ok)' }}>{num(r.updated)}</td>
@@ -256,12 +318,12 @@ export default function Programs({ roles = [] }) {
       <div className="filter-row">
         <div className="role-select">
           <span className="role-select-label">Role</span>
-          {roles.length > 0 ? (
+          {roleOptions.length > 0 ? (
             <Dropdown
               id="programs-role" label="Filter by role"
               value={selectedRole ?? 'all'}
               onChange={(v) => setSelectedRole(v === 'all' ? null : v)}
-              options={[{ value: 'all', label: 'All roles' }, ...roles.map((r) => ({ value: r.id, label: r.name }))]}
+              options={[{ value: 'all', label: 'All roles' }, ...roleOptions]}
             />
           ) : (
             <span className="muted">No roles to select yet</span>
@@ -291,6 +353,13 @@ export default function Programs({ roles = [] }) {
         <div className="table-scroll">
           <table className="role-summary">
             <caption className="sr-only">Programmes by role and activity for {monthTitle}</caption>
+            <colgroup>
+              <col className="col-role" />
+              <col className="col-members" />
+              <col className="col-activity" />
+              <col className="col-stat" />
+              <col className="col-stat" />
+            </colgroup>
             <thead>
               <tr>
                 <th scope="col">Role</th>
@@ -320,7 +389,7 @@ export default function Programs({ roles = [] }) {
                 <tr>
                   <th scope="row">Total</th>
                   <td className="n num">{num(activityTotals.totalMembers)}</td>
-                  <td />
+                  <td aria-hidden="true" />
                   <td className="n num">{num(activityTotals.updated)}</td>
                   <td className="n num">{num(activityTotals.notUpdated)}</td>
                 </tr>
@@ -364,8 +433,11 @@ export default function Programs({ roles = [] }) {
             <MemberActivityCard
               title={openRow.role + ' · ' + openRow.activity}
               members={leaders === null ? null : visibleMembers}
+              uploadsByMid={uploadsByMid}
               onUpdateRemarks={(mid) => { setRemarkMid(mid); setRemarkMode('edit'); }}
               onViewRemarks={(mid) => { setRemarkMid(mid); setRemarkMode('view'); }}
+              onUpload={(mid) => { setUploadMid(mid); setUploadMode('upload'); }}
+              onViewAttendance={(mid) => { setUploadMid(mid); setUploadMode('view'); }}
             />
           </div>
         </>
@@ -377,6 +449,16 @@ export default function Programs({ roles = [] }) {
           mode={remarkMode}
           onClose={() => setRemarkMid(null)}
           onSave={saveRemark}
+        />
+      )}
+
+      {uploadMember && (uploadMode === 'upload' || uploadsByMid[uploadMid]) && (
+        <AttendanceUploadModal
+          member={uploadMember}
+          mode={uploadMode}
+          file={uploadsByMid[uploadMid]}
+          onClose={() => setUploadMid(null)}
+          onSave={saveUpload}
         />
       )}
     </section>
