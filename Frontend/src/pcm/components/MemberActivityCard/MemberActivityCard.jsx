@@ -7,6 +7,10 @@ import { num } from '../../lib/format.js';
 // `members` is `null` while its fetch is in flight — kept distinct from `[]`
 // ("loaded, no leaders in this role") the same way the summary cards above
 // distinguish loading from a genuinely empty result.
+//
+// Variants:
+// - `calendar` / `log` — Update-only (entries modals); no Upload / Attended / View
+// - `default` — Upload / Attended / Update remarks / View remarks
 const blank = (v) => {
   if (v == null) return '';
   const s = String(v).trim();
@@ -16,7 +20,9 @@ const blank = (v) => {
 export default function MemberActivityCard({
   title,
   members,
+  variant = 'default',
   uploadsByMid = {},
+  onUpdate,
   onUpdateRemarks,
   onViewRemarks,
   onUpload,
@@ -24,6 +30,8 @@ export default function MemberActivityCard({
 }) {
   const loading = members === null;
   const rows = members || [];
+  const entriesOnly = variant === 'calendar' || variant === 'log';
+
   return (
     <div className="member-detail-card table-card">
       <div className="card-head">
@@ -41,10 +49,10 @@ export default function MemberActivityCard({
               <th scope="col">MID</th>
               <th scope="col" className="n">Activities participated</th>
               <th scope="col" className="n">Completed</th>
-              <th scope="col" className="action-cell">Upload</th>
-              <th scope="col" className="action-cell">Attended status</th>
+              {!entriesOnly && <th scope="col" className="action-cell">Upload</th>}
+              {!entriesOnly && <th scope="col" className="action-cell">Attended status</th>}
               <th scope="col" className="action-cell">Update</th>
-              <th scope="col" className="action-cell">View</th>
+              {!entriesOnly && <th scope="col" className="action-cell">View</th>}
             </tr>
           </thead>
           <tbody>
@@ -59,52 +67,58 @@ export default function MemberActivityCard({
                   <td className="mid-cell">{m.mid}</td>
                   <td className="n num">{num(m.participated)}</td>
                   <td className="n num" style={{ color: 'var(--ok)' }}>{num(m.completed)}</td>
+                  {!entriesOnly && (
+                    <td className="action-cell">
+                      <button
+                        className="icon-btn"
+                        type="button"
+                        title="Upload"
+                        aria-label="Upload"
+                        onClick={() => onUpload(m.mid)}
+                      >
+                        <Icon name="upload" sm />
+                      </button>
+                    </td>
+                  )}
+                  {!entriesOnly && (
+                    <td className="action-cell">
+                      <button
+                        className="icon-btn"
+                        type="button"
+                        disabled={!uploaded}
+                        title={uploaded ? 'View attended status' : 'No file uploaded yet'}
+                        aria-label="View attended status"
+                        onClick={() => onViewAttendance(m.mid)}
+                      >
+                        <Icon name="eye" sm />
+                      </button>
+                    </td>
+                  )}
                   <td className="action-cell">
                     <button
                       className="icon-btn"
                       type="button"
-                      title="Upload"
-                      aria-label="Upload"
-                      onClick={() => onUpload(m.mid)}
-                    >
-                      <Icon name="upload" sm />
-                    </button>
-                  </td>
-                  <td className="action-cell">
-                    <button
-                      className="icon-btn"
-                      type="button"
-                      disabled={!uploaded}
-                      title={uploaded ? 'View attended status' : 'No file uploaded yet'}
-                      aria-label="View attended status"
-                      onClick={() => onViewAttendance(m.mid)}
-                    >
-                      <Icon name="eye" sm />
-                    </button>
-                  </td>
-                  <td className="action-cell">
-                    <button
-                      className="icon-btn"
-                      type="button"
-                      title="Update remarks"
-                      aria-label="Update remarks"
-                      onClick={() => onUpdateRemarks(m.mid)}
+                      title={entriesOnly ? 'Update' : 'Update remarks'}
+                      aria-label={entriesOnly ? 'Update' : 'Update remarks'}
+                      onClick={() => (entriesOnly ? onUpdate(m.mid) : onUpdateRemarks(m.mid))}
                     >
                       <Icon name="notes" sm />
                     </button>
                   </td>
-                  <td className="action-cell">
-                    <button
-                      className="icon-btn"
-                      type="button"
-                      disabled={!given}
-                      title={given ? 'View remarks' : 'No remarks recorded yet'}
-                      aria-label="View remarks"
-                      onClick={() => onViewRemarks(m.mid)}
-                    >
-                      <Icon name="eye" sm />
-                    </button>
-                  </td>
+                  {!entriesOnly && (
+                    <td className="action-cell">
+                      <button
+                        className="icon-btn"
+                        type="button"
+                        disabled={!given}
+                        title={given ? 'View remarks' : 'No remarks recorded yet'}
+                        aria-label="View remarks"
+                        onClick={() => onViewRemarks(m.mid)}
+                      >
+                        <Icon name="eye" sm />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}

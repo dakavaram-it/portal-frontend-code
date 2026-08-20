@@ -263,7 +263,7 @@ export default function PcMeetings({ view: navView }) {
             half a million invitee rows. Its own roster (`roles`, the filter
             dropdown) fills in when it lands; the screen does not wait for it. */}
         {view === 'programs' ? (
-          <Programs roles={programRoles} />
+          <Programs roles={programRoles} meetings={meetings} />
         ) : error ? (
           <div className="empty">
             <Icon name="inbox" />

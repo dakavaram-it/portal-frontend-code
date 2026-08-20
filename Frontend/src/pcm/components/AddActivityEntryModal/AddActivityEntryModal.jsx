@@ -1,23 +1,18 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import Icon from '../Icon/Icon.jsx';
-import { initials } from '../../lib/format.js';
 import { prefersReduced } from '../../lib/motion.js';
 import '../RemarksModal/RemarksModal.css';
+import '../LeaderMeetingEntriesModal/LeaderMeetingEntriesModal.css';
 
-export default function AttendanceUploadModal({ member, mode = 'upload', file, onClose, onSave }) {
+export default function AddActivityEntryModal({ onClose, onSave }) {
+  const [date, setDate] = useState('');
+  const [remarks, setRemarks] = useState('');
   const [picked, setPicked] = useState(null);
   const [localUrl, setLocalUrl] = useState(null);
   const openerRef = useRef(document.activeElement);
   const backdropRef = useRef(null);
   const panelRef = useRef(null);
-
-  const previewUrl = mode === 'view' ? file?.url : localUrl;
-  const previewName = mode === 'view' ? file?.name : picked?.name;
-  const isPdf = Boolean(
-    (previewName && /\.pdf$/i.test(previewName)) ||
-    (file?.type || picked?.type || '').includes('pdf')
-  );
 
   useLayoutEffect(() => {
     if (prefersReduced()) return;
@@ -56,7 +51,7 @@ export default function AttendanceUploadModal({ member, mode = 'upload', file, o
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const title = mode === 'view' ? 'Attended status' : 'Upload';
+  const canSave = Boolean(date);
 
   return (
     <div
@@ -64,26 +59,55 @@ export default function AttendanceUploadModal({ member, mode = 'upload', file, o
       ref={backdropRef}
       onClick={(e) => { if (e.target === backdropRef.current) onClose(); }}
     >
-      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="upload-modal-title" tabIndex={-1} ref={panelRef}>
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-activity-entry-title"
+        tabIndex={-1}
+        ref={panelRef}
+      >
         <div className="modal-head">
-          <div className="avatar" aria-hidden="true">{initials(member.name)}</div>
           <div>
-            <h3 id="upload-modal-title">{title}</h3>
-            <div className="who-sub">{member.name}</div>
+            <h3 id="add-activity-entry-title">Add entry</h3>
+            <div className="who-sub">Fill in the details below</div>
           </div>
+          <button className="icon-btn drill-close" type="button" aria-label="Close" onClick={onClose}>
+            <Icon name="x" sm />
+          </button>
         </div>
 
         <div className="modal-body">
-          {mode === 'view' ? (
-            <div className="upload-preview">
-              {isPdf ? (
-                <iframe title={previewName || 'Attachment'} src={previewUrl} />
-              ) : (
-                <img src={previewUrl} alt={previewName || 'Attachment'} />
-              )}
-              {previewName && <div className="upload-file-name">{previewName}</div>}
-            </div>
-          ) : (
+          <div className="field">
+            <label htmlFor="add-activity-date">Date</label>
+            <input
+              id="add-activity-date"
+              className="date-input"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              onClick={(e) => {
+                try { e.currentTarget.showPicker?.(); } catch { /* unsupported / already open */ }
+              }}
+              onFocus={(e) => {
+                try { e.currentTarget.showPicker?.(); } catch { /* unsupported / already open */ }
+              }}
+              aria-label="Select date"
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="add-activity-remarks">Remarks</label>
+            <textarea
+              id="add-activity-remarks"
+              placeholder="Type remarks…"
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+            />
+          </div>
+
+          <div className="field">
+            <label>Upload</label>
             <label className="upload-drop">
               <Icon name="upload" />
               <span className="upload-drop-label">{picked ? 'Replace file' : 'Choose a file to upload'}</span>
@@ -101,26 +125,29 @@ export default function AttendanceUploadModal({ member, mode = 'upload', file, o
                 }}
               />
             </label>
-          )}
+          </div>
         </div>
 
         <div className="modal-foot">
-          <button className="btn" type="button" onClick={onClose}>
-            {mode === 'view' ? 'Close' : 'Cancel'}
+          <button className="btn" type="button" onClick={onClose}>Cancel</button>
+          <button
+            className="btn btn-primary"
+            type="button"
+            disabled={!canSave}
+            onClick={() => {
+              if (!date) return;
+              onSave({
+                id: 'a-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+                date,
+                remarks: remarks.trim(),
+                file: picked
+                  ? { name: picked.name, type: picked.type, url: URL.createObjectURL(picked) }
+                  : null
+              });
+            }}
+          >
+            Submit
           </button>
-          {mode === 'upload' && (
-            <button
-              className="btn btn-primary"
-              type="button"
-              disabled={!picked}
-              onClick={() => {
-                if (!picked) return;
-                onSave({ name: picked.name, type: picked.type, url: URL.createObjectURL(picked) });
-              }}
-            >
-              Save
-            </button>
-          )}
         </div>
       </div>
     </div>

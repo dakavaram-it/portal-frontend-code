@@ -4,6 +4,8 @@ import './Programs.css';
 import AttendanceUploadModal from '../components/AttendanceUploadModal/AttendanceUploadModal.jsx';
 import Dropdown from '../components/Dropdown/Dropdown.jsx';
 import Icon from '../components/Icon/Icon.jsx';
+import LeaderActivityEntriesModal from '../components/LeaderActivityEntriesModal/LeaderActivityEntriesModal.jsx';
+import LeaderMeetingEntriesModal from '../components/LeaderMeetingEntriesModal/LeaderMeetingEntriesModal.jsx';
 import LeaderRemarksModal from '../components/LeaderRemarksModal/LeaderRemarksModal.jsx';
 import MemberActivityCard from '../components/MemberActivityCard/MemberActivityCard.jsx';
 import Select from '../components/Select/Select.jsx';
@@ -33,10 +35,10 @@ import { prefersReduced, useAnim } from '../lib/motion.js';
    `activitySummary` itself, the same way the Assembly filter below derives
    its options from whatever leader list is on screen.
 
-   There is no remarks column on `leader_program_activity` — Update/View
-   Remarks is a client-side-only overlay (`remarksByMid`), not persisted,
-   same posture the top of this file used to describe for the whole page.
-   Attendance uploads (`uploadsByMid`) are likewise client-only for now. */
+   Calendar Meetings gets the meeting-entries Update overlay; AC Cadre /
+   Parliament Lunch-Dinner / Field Performance / Ground AC Grievance /
+   Central Party Office Grievance get the simpler date/files/remarks overlay
+   (`logEntriesByMid`). Remaining activities keep remarks + upload overlays. */
 const MONTH_NAMES = Array.from({ length: 12 }, (_, i) => new Date(2000, i, 1).toLocaleDateString('en-IN', { month: 'long' }));
 const thisMonth = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); };
 const lastMonth = () => { const d = thisMonth(); return new Date(d.getFullYear(), d.getMonth() - 1, 1); };
@@ -64,19 +66,51 @@ const hasPlace = (v) => {
   return s !== '' && s !== '-' && s !== '—';
 };
 
+// Only this programme activity gets the meeting-entries Update modal.
+const isCalendarMeetingsActivity = (name) =>
+  /calendar\s*meetings?/i.test(String(name || '').trim());
+
+// Date / files / remarks Update modal — matched by normalised activity name.
+const LOG_ACTIVITIES = new Set([
+  'ac cadre meetings',
+  'parliament lunch/dinner meetings',
+  'parliament lunch dinner meetings',
+  'field performance',
+  'ground ac grievance',
+  'central party office grievance'
+]);
+const normActivity = (name) => String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+const isLogEntriesActivity = (name) => {
+  const n = normActivity(name);
+  if (LOG_ACTIVITIES.has(n)) return true;
+  // tolerate "Parliament Lunch / Dinner Meetings" spacing variants
+  if (/^parliament\s+lunch\s*\/?\s*dinner\s+meetings?$/.test(n)) return true;
+  return false;
+};
+
+const memberCardVariant = (activity) => {
+  if (isCalendarMeetingsActivity(activity)) return 'calendar';
+  if (isLogEntriesActivity(activity)) return 'log';
+  return 'default';
+};
+
 /* UI-only fixture for "Programmes by role & activity" while program_role is
    empty — not used for by-role summary or the leaders card. */
 const STATIC_ACTIVITY_SUMMARY = [
+  { role: 'Minister', roleId: 'static-r1', activity: 'Calendar Meetings', activityId: 'static-a0', totalMembers: 42, updated: 28, notUpdated: 14 },
+  { role: 'Minister', roleId: 'static-r1', activity: 'AC Cadre Meetings', activityId: 'static-a5', totalMembers: 42, updated: 25, notUpdated: 17 },
+  { role: 'MLA', roleId: 'static-r2', activity: 'Parliament Lunch/Dinner Meetings', activityId: 'static-a6', totalMembers: 67, updated: 40, notUpdated: 27 },
+  { role: 'MLA', roleId: 'static-r2', activity: 'Field Performance', activityId: 'static-a7', totalMembers: 67, updated: 33, notUpdated: 34 },
+  { role: 'MP', roleId: 'static-r3', activity: 'Ground AC Grievance', activityId: 'static-a8', totalMembers: 18, updated: 10, notUpdated: 8 },
+  { role: 'District President', roleId: 'static-r4', activity: 'Central Party Office Grievance', activityId: 'static-a9', totalMembers: 35, updated: 20, notUpdated: 15 },
   { role: 'Minister', roleId: 'static-r1', activity: 'Village Outreach', activityId: 'static-a1', totalMembers: 42, updated: 28, notUpdated: 14 },
   { role: 'Minister', roleId: 'static-r1', activity: 'Booth Coordination', activityId: 'static-a2', totalMembers: 42, updated: 19, notUpdated: 23 },
-  { role: 'MLA', roleId: 'static-r2', activity: 'Village Outreach', activityId: 'static-a1', totalMembers: 67, updated: 51, notUpdated: 16 },
+  { role: 'MLA', roleId: 'static-r2', activity: 'Calendar Meetings', activityId: 'static-a0', totalMembers: 67, updated: 51, notUpdated: 16 },
   { role: 'MLA', roleId: 'static-r2', activity: 'Public Meeting Drive', activityId: 'static-a3', totalMembers: 67, updated: 40, notUpdated: 27 },
-  { role: 'MP', roleId: 'static-r3', activity: 'Booth Coordination', activityId: 'static-a2', totalMembers: 18, updated: 12, notUpdated: 6 },
-  { role: 'District President', roleId: 'static-r4', activity: 'Membership Camp', activityId: 'static-a4', totalMembers: 35, updated: 22, notUpdated: 13 },
-  { role: 'District President', roleId: 'static-r4', activity: 'Public Meeting Drive', activityId: 'static-a3', totalMembers: 35, updated: 15, notUpdated: 20 }
+  { role: 'District President', roleId: 'static-r4', activity: 'Membership Camp', activityId: 'static-a4', totalMembers: 35, updated: 22, notUpdated: 13 }
 ];
 
-export default function Programs({ roles = [] }) {
+export default function Programs({ roles = [], meetings = [] }) {
   const ref = useRef(null);
   const memberCardRef = useRef(null);
   const skipNextFocusRef = useRef(true); // the default row on mount needs no scroll/entrance of its own
@@ -88,13 +122,16 @@ export default function Programs({ roles = [] }) {
   const [activitySummary, setActivitySummary] = useState(null);
   const [openRow, setOpenRow] = useState(null); // the activitySummary row the member card is showing
   const [leaders, setLeaders] = useState(null); // null = loading, [] = loaded and empty
-  const [remarksByMid, setRemarksByMid] = useState({}); // client-only overlay — no backing column to persist to
-  const [uploadsByMid, setUploadsByMid] = useState({}); // client-only attendance attachments
+  const [entriesByMid, setEntriesByMid] = useState({}); // Calendar Meetings Update rows (client-only)
+  const [logEntriesByMid, setLogEntriesByMid] = useState({}); // date/files/remarks Update rows
+  const [remarksByMid, setRemarksByMid] = useState({}); // other activities' remarks overlay
+  const [uploadsByMid, setUploadsByMid] = useState({}); // other activities' attendance uploads
   const [selectedAc, setSelectedAc] = useState(null); // narrows the member card to one Assembly within the open role/activity
+  const [updateMid, setUpdateMid] = useState(null); // entries Update modal (calendar or log)
   const [remarkMid, setRemarkMid] = useState(null);
-  const [remarkMode, setRemarkMode] = useState('view'); // which control opened it: 'edit' or 'view'
+  const [remarkMode, setRemarkMode] = useState('view');
   const [uploadMid, setUploadMid] = useState(null);
-  const [uploadMode, setUploadMode] = useState('upload'); // 'upload' or 'view'
+  const [uploadMode, setUploadMode] = useState('upload');
 
   useAnim(ref, () => {
     gsap.from('.role-summary-card, .role-select, .activity-summary-card, .member-detail-card', {
@@ -210,6 +247,11 @@ export default function Programs({ roles = [] }) {
     if (selectedAc && !acOptions.includes(selectedAc)) setSelectedAc(null);
   }, [selectedAc, acOptions]);
   const visibleMembers = selectedAc ? mergedLeaders.filter((m) => m.assembly === selectedAc) : mergedLeaders;
+  const cardVariant = memberCardVariant(openRow?.activity);
+  const calendarActivity = cardVariant === 'calendar';
+  const logActivity = cardVariant === 'log';
+  const defaultActivity = cardVariant === 'default';
+  const updateMember = updateMid !== null ? mergedLeaders.find((m) => m.mid === updateMid) : null;
   const remarkMember = remarkMid !== null ? mergedLeaders.find((m) => m.mid === remarkMid) : null;
   const uploadMember = uploadMid !== null ? mergedLeaders.find((m) => m.mid === uploadMid) : null;
   const saveRemark = (text) => {
@@ -433,7 +475,9 @@ export default function Programs({ roles = [] }) {
             <MemberActivityCard
               title={openRow.role + ' · ' + openRow.activity}
               members={leaders === null ? null : visibleMembers}
+              variant={cardVariant}
               uploadsByMid={uploadsByMid}
+              onUpdate={setUpdateMid}
               onUpdateRemarks={(mid) => { setRemarkMid(mid); setRemarkMode('edit'); }}
               onViewRemarks={(mid) => { setRemarkMid(mid); setRemarkMode('view'); }}
               onUpload={(mid) => { setUploadMid(mid); setUploadMode('upload'); }}
@@ -443,16 +487,35 @@ export default function Programs({ roles = [] }) {
         </>
       )}
 
-      {remarkMember && (
+      {calendarActivity && updateMember && (
+        <LeaderMeetingEntriesModal
+          member={updateMember}
+          entries={entriesByMid[updateMid] || []}
+          meetings={meetings}
+          onClose={() => setUpdateMid(null)}
+          onChange={(rows) => setEntriesByMid((cur) => ({ ...cur, [updateMid]: rows }))}
+        />
+      )}
+
+      {logActivity && updateMember && (
+        <LeaderActivityEntriesModal
+          member={updateMember}
+          entries={logEntriesByMid[updateMid] || []}
+          onClose={() => setUpdateMid(null)}
+          onChange={(rows) => setLogEntriesByMid((cur) => ({ ...cur, [updateMid]: rows }))}
+        />
+      )}
+
+      {defaultActivity && remarkMember && (
         <LeaderRemarksModal
-          member={remarkMember}
+          member={{ ...remarkMember, activity: openRow?.activity || remarkMember.activity }}
           mode={remarkMode}
           onClose={() => setRemarkMid(null)}
           onSave={saveRemark}
         />
       )}
 
-      {uploadMember && (uploadMode === 'upload' || uploadsByMid[uploadMid]) && (
+      {defaultActivity && uploadMember && (uploadMode === 'upload' || uploadsByMid[uploadMid]) && (
         <AttendanceUploadModal
           member={uploadMember}
           mode={uploadMode}
