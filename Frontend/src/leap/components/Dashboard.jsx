@@ -95,10 +95,21 @@ function IconSearch() {
 // configured a proposal constituency for yet still has to appear, as a static card, or
 // the screen would silently pretend that half the election does not exist.
 //
-// `types` are matched against a row's `election_type`; `roles` (when present) narrow that
-// to one post inside a shared type, since e.g. MPP and Vice-MPP are two roles of one
-// election type. Names are compared normalized, so 'Vice-MPP' and 'Vice MPP' are one.
-// Anything the tree does not claim is still shown — see `otherBody` below.
+// A card claims rows by `roleIds` — `proposal_role_id`, and nothing else. One role id is
+// one post in this tree, which is the whole reason it can be matched on alone:
+//
+//   - Not by name. Names are edited in the database (roles 1/2 were 'President' and
+//     'Vice-President' before they were 'Sarpanch' and 'Upa-Sarpanch'), and every rename
+//     silently emptied whichever card had spelt the old one.
+//   - Not by election type either, which is the trap the id pairs still fell into: a
+//     position's election type is its *constituency's*, not the post's, and the two
+//     disagree all over the data. Sarpanch and Upa-Sarpanch positions are filed under an
+//     MPTC constituency; role 5 Corporator is filed under three types (Municipal Ward,
+//     Corporation Ward and MPTC). Pinning a card to one type made it read "Not configured"
+//     while its own rows sat in the Other group below.
+//
+// An empty `roleIds` is a post with no role configured at all (the two ward seats).
+// Anything the tree does not claim is still shown — see the Other body below.
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
 
 // Each tier owns a tone, and everything the user selects inside it wears that tone: the
@@ -118,12 +129,9 @@ const ELECTION_TIERS = [
         icon: <IconLayers />,
         accent: '#2563eb',
         cards: [
-          // The chair rows are filed under the MPTC election type, not under an MPP one —
-          // so MPTC has to name its own role or it claims them as well, and its two
-          // siblings have to claim that type or the rows land nowhere.
-          { label: 'MPTC', types: ['MPTC'], roles: ['MPTC Member', 'MPTC'] },
-          { label: 'MPP', types: ['MPTC', 'MPP'], roles: ['MPP', 'President', 'Chairman', 'Chairperson'] },
-          { label: 'Vice-MPP', types: ['MPTC', 'MPP', 'Vice-MPP'], roles: ['Vice-MPP', 'Vice-President', 'Vice-Chairman'] },
+          { label: 'MPTC', roleIds: [4] },
+          { label: 'MPP', roleIds: [6] },
+          { label: 'Vice-MPP', roleIds: [7] },
         ],
       },
       {
@@ -132,12 +140,9 @@ const ELECTION_TIERS = [
         icon: <IconPin />,
         accent: '#7c3aed',
         cards: [
-          { label: 'ZPTC', types: ['ZPTC'] },
-          // 'Zilla Parishath' is the proposal_election_type row's own spelling — the
-          // shorthand alone matched nothing, so both chair cards read "Not configured"
-          // however much data the district held.
-          { label: 'ZP Chairman', types: ['Zilla Parishath', 'ZP'], roles: ['Chairman', 'Chairperson', 'President', 'ZP Chairman'] },
-          { label: 'Vice-Chairman', types: ['Zilla Parishath', 'ZP'], roles: ['Vice-Chairman', 'Vice-President', 'Vice-Chairperson'] },
+          { label: 'ZPTC', roleIds: [3] },
+          { label: 'ZP Chairman', roleIds: [12] },
+          { label: 'Vice-Chairman', roleIds: [13] },
         ],
       },
     ],
@@ -153,9 +158,11 @@ const ELECTION_TIERS = [
         icon: <IconLayers />,
         accent: '#d97706',
         cards: [
-          { label: 'Ward Councillor', types: ['Municipal Ward', 'Ward Councillor'] },
-          { label: 'Chairperson', types: ['Municipality'], roles: ['Chairperson', 'Chairman', 'President'] },
-          { label: 'Vice-Chairperson', types: ['Municipality'], roles: ['Vice-Chairperson', 'Vice-Chairman', 'Vice-President'] },
+          { label: 'Chairperson', roleIds: [8] },
+          { label: 'Vice-Chairperson', roleIds: [9] },
+          // No proposal_role of its own: municipal-ward seats are filed under role 5
+          // Corporator, which the Corporator card below claims.
+          { label: 'Ward Councillor', roleIds: [] },
         ],
       },
       {
@@ -164,12 +171,9 @@ const ELECTION_TIERS = [
         icon: <IconPin />,
         accent: '#0891b2',
         cards: [
-          // MPTC is in the type list for the same reason it is on the MPP cards: a
-          // Corporator row is filed under it. `roles` keeps that from making this card
-          // claim the MPTC members as well.
-          { label: 'Corporator', types: ['Corporation Ward', 'Corporator', 'MPTC'], roles: ['Corporator'] },
-          { label: 'Mayor', types: ['Corporation'], roles: ['Mayor', 'President', 'Chairperson'] },
-          { label: 'Deputy Mayor', types: ['Corporation'], roles: ['Deputy Mayor', 'Vice-Mayor', 'Vice-President'] },
+          { label: 'Corporator', roleIds: [5] },
+          { label: 'Mayor', roleIds: [10] },
+          { label: 'Deputy Mayor', roleIds: [11] },
         ],
       },
       {
@@ -178,21 +182,20 @@ const ELECTION_TIERS = [
         icon: <IconSeats />,
         accent: '#059669',
         cards: [
-          { label: 'Ward Member', types: ['Ward', 'Ward Member'] },
-          { label: 'Sarpanch', types: ['Panchayat'], roles: ['Sarpanch', 'President', 'Chairman'] },
-          { label: 'Upa Sarpanch', types: ['Panchayat'], roles: ['Upa Sarpanch', 'Vice-President', 'Vice-Sarpanch'] },
+          { label: 'Sarpanch', roleIds: [1] },
+          { label: 'Upa Sarpanch', roleIds: [2] },
+          // No proposal_role exists for a panchayat ward seat either, so this card is
+          // static by definition — not a mapping guess that could be hiding rows.
+          { label: 'Ward Member', roleIds: [] },
         ],
       },
     ],
   },
 ]
 
-// A row belongs to a card when its election type is one the card claims and — for the
-// cards that share a type with a sibling — its role is one the card names too.
-const cardMatches = (card, row) => {
-  if (!card.types.some((t) => norm(t) === norm(row.election_type))) return false
-  return !card.roles || card.roles.some((r) => norm(r) === norm(row.role_name))
-}
+// A row belongs to a card when its own proposal_role_id is one the card claims.
+// See the note above ELECTION_TIERS for why the role id alone, and not the election type.
+const cardMatches = (card, row) => card.roleIds.includes(Number(row.proposal_role_id))
 
 const NOMINATION_CLASS = {
   'Not Started': 'not-started',
