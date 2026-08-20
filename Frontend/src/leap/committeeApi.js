@@ -1,3 +1,5 @@
+import { getToken } from './api.js'
+
 // Committees Assign talks to two more mypartydashboard.com services beyond Cadre Search &
 // Notes' PSA/Cadre resource (cadreSearchApi.js / cadreNotesApi.js): PSA's own Committee
 // resource, which is what the KSS/CUBS screen in the legacy build
@@ -15,17 +17,14 @@ const PSA_BASE = 'https://www.mypartydashboard.com/PSA/WebService'
 // browser before it ever reaches the server.
 const PARTY_ANALYST_BASE = '/partyAnalystApi/WebService/CommitteeWebService'
 
-// Committee Management (both PSA_BASE and WebService/CommitteeWebService) has no
-// per-user token issuance wired up yet, so this is a placeholder shared token — a real
-// JWT, hardcoded for now. Swap this for a dynamic, per-session token once the backend can
-// issue one; when this one expires, replace the string with a fresh JWT.
-const COMMITTEE_STATIC_TOKEN =
-  'eyJhbGciOiJIUzUxMiJ9.eyJleHAiOjE3ODcyMTg4MjksInN1YiI6Ijc5MjUxIiwiaWF0IjoxNzg3MTMyNDI5fQ.tDukJZ4X_qVMnhRvzbKp0tuY_1-2LR7mYGzLdTtbyxuoXC0S-oT74epydV4bGl7S1AOu1Cw0Ib1AwldqQmFCqQ'
-
 const post = async (base, path, body) => {
   const res = await fetch(`${base}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', authToken: COMMITTEE_STATIC_TOKEN },
+    // The session token, same as cadreSearchApi.js / cadreNotesApi.js send. This was a
+    // hardcoded JWT for user 79251, which made every session's committee calls act as
+    // that one account and went dead on its own 24h `exp`; `/login` issues one signed
+    // with the key these services already verify, so there is nothing to hardcode.
+    headers: { 'Content-Type': 'application/json', authToken: getToken() || '' },
     body: JSON.stringify(body),
   })
   // Read as text first, not res.json() — some of these endpoints (checkIsVacancyForDesignationNew
