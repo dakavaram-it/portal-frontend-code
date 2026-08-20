@@ -109,7 +109,6 @@ export default function Dashboard({ meetings, remarksCategories, onToast, onSave
           level={picked}
           rows={summaryRows}
           onUpdateRemarks={(row) => { setRemarkRow(row); setRemarkMode('edit'); }}
-          onViewRemarks={(row) => { setRemarkRow(row); setRemarkMode('view'); }}
         />
       )}
 

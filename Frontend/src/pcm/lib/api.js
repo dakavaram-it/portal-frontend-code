@@ -89,6 +89,9 @@ export const api = {
   pcCompletedSchedules: (meetingIds) => schedules('pc-completed', meetingIds),
   pcNotCompletedSchedules: (meetingIds) => schedules('pc-not-completed', meetingIds),
   pcNotUpdatedSchedules: (meetingIds) => schedules('pc-not-updated', meetingIds),
+  // Roster locations with no `meeting_conducted_status` row at all — the
+  // PC-side twin of `notScheduledSchedules`, behind PC Status' Not Updated.
+  pcNeverUpdatedSchedules: (meetingIds) => schedules('pc-never-updated', meetingIds),
 
   // Every non-empty PC remark, across a level's meetings.
   pcRemarksSchedules: (meetingIds) => schedules('pc-remarks', meetingIds),

@@ -37,10 +37,19 @@ function SortHead({ label, sortKey, active, dir, onSort }) {
 
 export default function SummaryTable({ level, rows, onUpdateRemarks }) {
   const loading = rows === null;
-  const isAc = level === 'AC';
   const hasAssembly = level === 'Mandal' || level === 'Unit';
+  const hasParliament = level === 'AC' || level === 'Mandal' || level === 'Unit';
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
+  // The eye icon only ever reveals the remark text in place — no modal, no
+  // edit path — so this is plain local expand/collapse state, not a callback
+  // into the parent the way Status Update is.
+  const [openRemarks, setOpenRemarks] = useState(() => new Set());
+  const toggleRemark = (id) => setOpenRemarks((cur) => {
+    const next = new Set(cur);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
 
   const list = useMemo(() => {
     const base = rows || [];
@@ -66,20 +75,21 @@ export default function SummaryTable({ level, rows, onUpdateRemarks }) {
             <caption className="sr-only">{LEVEL_LABEL[level] || level} App and PC summary</caption>
             <thead>
               <tr>
-                {isAc && <SortHead label="Parliament" sortKey="parliament" active={sortKey === 'parliament'} dir={sortDir} onSort={onSort} />}
+                {hasParliament && <SortHead label="Parliament" sortKey="parliament" active={sortKey === 'parliament'} dir={sortDir} onSort={onSort} />}
                 {hasAssembly && <SortHead label="Assembly" sortKey="assembly" active={sortKey === 'assembly'} dir={sortDir} onSort={onSort} />}
                 <SortHead label="Location" sortKey="location" active={sortKey === 'location'} dir={sortDir} onSort={onSort} />
                 <SortHead label="App status" sortKey="appConducted" active={sortKey === 'appConducted'} dir={sortDir} onSort={onSort} />
                 <SortHead label="PC Status" sortKey="pcConducted" active={sortKey === 'pcConducted'} dir={sortDir} onSort={onSort} />
-                <th scope="col">View Remark</th>
+                <th scope="col">Status Update</th>
+                <th scope="col">Remarks</th>
               </tr>
             </thead>
             <tbody>
               {list.map((r) => (
                 <tr key={r.id}>
-                  {isAc && <td>{r.parliament || '—'}</td>}
+                  {hasParliament && <td>{r.parliament || '—'}</td>}
                   {hasAssembly && <td>{r.assembly || '—'}</td>}
-                  <td>{r.location || '—'}</td>
+                  <td className="location-cell">{r.location || '—'}</td>
                   <td><Status held={r.appConducted} /></td>
                   <td><Status held={r.pcConducted} /></td>
                   <td>
@@ -90,8 +100,26 @@ export default function SummaryTable({ level, rows, onUpdateRemarks }) {
                       title={r.conductedStatusId ? undefined : 'No PC status recorded for this location yet'}
                       onClick={() => onUpdateRemarks(r)}
                     >
-                      Update Remarks
+                      Status Update
                     </button>
+                  </td>
+                  <td>
+                    <button
+                      className="remark-eye"
+                      type="button"
+                      disabled={!r.conductedStatusId}
+                      aria-expanded={openRemarks.has(r.id)}
+                      aria-label={(openRemarks.has(r.id) ? 'Hide' : 'View') + ' remark'}
+                      title={r.conductedStatusId ? undefined : 'No PC status recorded for this location yet'}
+                      onClick={() => toggleRemark(r.id)}
+                    >
+                      <Icon name="eye" sm />
+                    </button>
+                    {openRemarks.has(r.id) && (
+                      <div className={'remark-preview' + (r.remarks ? '' : ' is-empty')}>
+                        {r.remarks || 'No remark yet'}
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -3,8 +3,30 @@
 .pcm-root .summary-grid td { white-space: nowrap; }
 /* Location text runs long and varies a lot row to row — nowrap would size
    the whole column to the longest entry, leaving every shorter row with a
-   wide band of empty space in that cell. */
-.pcm-root .summary-grid td:nth-child(2) { white-space: normal; max-width: 320px; }
+   wide band of empty space in that cell. Targeted by class, not position:
+   Parliament/Assembly are conditional columns ahead of it, so Location
+   isn't reliably the same nth-child at every level. */
+.pcm-root .summary-grid td.location-cell { white-space: normal; max-width: 320px; }
+
+/* The eye toggle — compact, table-row scale rather than the 40px .icon-btn
+   used in page chrome — reveals the remark in place and nothing else: no
+   modal, no navigation. */
+.pcm-root .remark-eye {
+  display: inline-grid; place-items: center; width: 28px; height: 28px; flex: none;
+  border: 1px solid var(--border-strong); border-radius: var(--r-sm);
+  background: var(--surface); color: var(--text-3); cursor: pointer;
+  transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.pcm-root .remark-eye:hover:not(:disabled) { background: var(--surface-3); color: var(--text); }
+.pcm-root .remark-eye:disabled { cursor: default; opacity: .5; }
+.pcm-root .remark-eye[aria-expanded="true"] { color: var(--primary); border-color: var(--primary); }
+
+/* The remark text itself, once the eye toggle reveals it — wraps rather
+   than clamping, since it's now shown on demand instead of every row. */
+.pcm-root .remark-preview {
+  margin-top: 6px; max-width: 260px; white-space: normal; color: var(--text-2);
+}
+.pcm-root .remark-preview.is-empty { color: var(--text-4); font-style: italic; }
 
 .pcm-root .sort-th {
   display: inline-flex; align-items: center; gap: 4px;

@@ -2,14 +2,20 @@ import { useMemo } from 'react';
 import { api } from '../../lib/api.js';
 import { LEVEL_LABEL, badgeClass, num } from '../../lib/format.js';
 import { isoDay } from '../../lib/calendar.js';
-import { NOT_SCHEDULED_COLUMNS, NOT_UPDATED_COLUMNS, PC_NOT_UPDATED_COLUMNS, PC_REMARKS_COLUMNS } from '../../lib/schedules.js';
+import {
+  NOT_SCHEDULED_COLUMNS, NOT_UPDATED_COLUMNS, PC_NOT_UPDATED_COLUMNS, PC_REMARKS_COLUMNS, columnsFor
+} from '../../lib/schedules.js';
 import './LevelTable.css';
 
-// The Total column lists the meetings themselves, not an org roster — id,
-// title and date are all a meeting has that's meaningful in a plain list.
-const MEETING_COLUMNS = [
-  { key: 'id', label: 'Meeting ID' },
-  { key: 'title', label: 'Title' },
+// The Total column lists every roster location behind the level's meetings —
+// the same three buckets `tally` sums (conducted, not conducted, never
+// scheduled) — one row per location. None of the schedule endpoints carry
+// `date`, only `meetingId`, so it's joined in client-side from `items`.
+const TOTAL_COLUMNS = [
+  { key: 'meetingId', label: 'Meeting ID' },
+  { key: 'parliament', label: 'Parliament' },
+  { key: 'assembly', label: 'Assembly' },
+  { key: 'location', label: 'Location' },
   { key: 'date', label: 'Date' }
 ];
 
@@ -28,7 +34,7 @@ const empty = () => ({
   notScheduled: 0,
   pcCompleted: 0,
   pcNotCompleted: 0,
-  appAndPc: 0,
+  pcNotUpdated: 0,
   remarks: 0
 });
 
@@ -62,19 +68,21 @@ function tally(items) {
     // meeting — distinct from `notConducted`, which is scheduled-but-not-done.
     a.notScheduled += m.notScheduled || 0;
     a.remarks += m.pcRemarks || 0;
-    /* PC Status is the real `meeting_conducted_status` feed, partitioned the
-       same three-bucket way App Status is now: `is_conducted = 'Y'` sums
-       into Completed, IS NULL into Not conducted, and PC not updated is the
-       remainder off `pc.total` — explicit `'N'` — rather than its own
-       independent condition, so Completed + Not conducted + PC not updated
-       always foots to `pc.total` with nothing double-counted. A meeting with
-       no rows there at all (`m.pc` is null) contributes to none of the
-       three — there is nothing to count yet, not even a null row. */
+    /* PC Status' Conducted/Not conducted is a strict two-state read of
+       `meeting_conducted_status`: `is_conducted = 'Y'` is Conducted,
+       anything else — `IS NULL`, and 'N' on the rare row that carries one —
+       is Not conducted, so the two always foot to `pc.total`. Not Updated
+       sits outside that total the same way `notScheduled` sits outside
+       `units.total`: it's roster locations with no conducted-status row at
+       all, not a subset of the rows counted in `pc.total`. A meeting with
+       no rows there at all (`m.pc` is null) contributes nothing to either
+       Conducted or Not conducted — there is nothing to count yet — but can
+       still carry a Not Updated figure, so that one is read unconditionally. */
     if (m.pc) {
       a.pcCompleted += m.pc.conducted;
-      a.pcNotCompleted += m.pc.notUpdated;
-      a.appAndPc += m.pc.total - m.pc.conducted - m.pc.notUpdated;
+      a.pcNotCompleted += m.pc.notConducted;
     }
+    a.pcNotUpdated += m.pc ? m.pc.notUpdated : 0;
     return a;
   }, empty());
 }
@@ -131,40 +139,23 @@ export default function LevelTable({
      no row to filter — so this fetches both slices and merges them. */
   const openNotConducted = async (level, items) => {
     const title = (LEVEL_LABEL[level] || level) + ' · App Not Conducted';
+    const columns = columnsFor(NOT_SCHEDULED_COLUMNS, level);
     const ids = items.map((m) => m.id);
-    if (!ids.length) return onCount({ title, rows: [], columns: NOT_UPDATED_COLUMNS });
+    if (!ids.length) return onCount({ title, rows: [], columns });
     try {
+      // Not-updated rows carry a real `time`; never-scheduled rows have none
+      // to carry — dropped here rather than shown blank, since this list has
+      // no Time column at all (a mixed conducted/never-scheduled list would
+      // read oddly half-filled).
       const [notHeld, neverScheduled] = await Promise.all([
         api.notUpdatedSchedules(ids),
         api.notScheduledSchedules(ids)
       ]);
-      const rows = [...notHeld.rows, ...neverScheduled.rows.map((r) => ({ ...r, time: '' }))];
-      onCount({ title, rows, columns: NOT_UPDATED_COLUMNS });
+      const strip = ({ time, ...rest }) => rest;
+      const rows = [...notHeld.rows.map(strip), ...neverScheduled.rows];
+      onCount({ title, rows, columns });
     } catch {
-      onCount({ title, rows: [], columns: NOT_UPDATED_COLUMNS });
-    }
-  };
-
-  /* PC not updated is now the remainder off `pc.total` — explicit `'N'` —
-     rather than its own condition, so there's no single `meeting_conducted_
-     status` filter for it either. `pcNotCompletedSchedules` (NULL OR 'N')
-     minus `pcNotUpdatedSchedules` (NULL), matched by row id, leaves exactly
-     the 'N' rows — the same diff the Not conducted/PC not updated split
-     already does in `tally`, just performed on rows instead of counts. */
-  const openPcNotUpdated = async (level, items) => {
-    const title = (LEVEL_LABEL[level] || level) + ' · PC Not Updated';
-    const ids = items.map((m) => m.id);
-    if (!ids.length) return onCount({ title, rows: [], columns: PC_NOT_UPDATED_COLUMNS });
-    try {
-      const [combined, notConducted] = await Promise.all([
-        api.pcNotCompletedSchedules(ids),
-        api.pcNotUpdatedSchedules(ids)
-      ]);
-      const notConductedIds = new Set(notConducted.rows.map((r) => r.id));
-      const rows = combined.rows.filter((r) => !notConductedIds.has(r.id));
-      onCount({ title, rows, columns: PC_NOT_UPDATED_COLUMNS });
-    } catch {
-      onCount({ title, rows: [], columns: PC_NOT_UPDATED_COLUMNS });
+      onCount({ title, rows: [], columns });
     }
   };
 
@@ -175,10 +166,30 @@ export default function LevelTable({
   // The Not Conducted *cell* below displays `notConducted + notScheduled`
   // combined, PC-Status-style, but Total adds each raw bucket once, not that
   // combined display value, so it isn't double-counting `notScheduled`.
-  // The click-through still lists the meetings themselves, since there's no
-  // single fetch for the individual rows behind a sum across more than one.
-  const openTotal = (level, items) => {
-    onCount({ title: (LEVEL_LABEL[level] || level) + ' · Total', rows: items, columns: MEETING_COLUMNS });
+  // The click-through fetches the same three slices and lists every one of
+  // their rows together, so the count in the modal foots to the cell.
+  const openTotal = async (level, items) => {
+    const title = (LEVEL_LABEL[level] || level) + ' · Total';
+    const columns = columnsFor(TOTAL_COLUMNS, level);
+    const ids = items.map((m) => m.id);
+    if (!ids.length) return onCount({ title, rows: [], columns });
+    const dateById = new Map(items.map((m) => [m.id, m.date]));
+    const withDate = (rows) => rows.map((r) => ({ ...r, date: dateById.get(r.meetingId) }));
+    try {
+      const [conducted, notHeld, neverScheduled] = await Promise.all([
+        api.conductedSchedules(ids),
+        api.notUpdatedSchedules(ids),
+        api.notScheduledSchedules(ids)
+      ]);
+      const rows = [
+        ...withDate(conducted.rows),
+        ...withDate(notHeld.rows),
+        ...withDate(neverScheduled.rows)
+      ];
+      onCount({ title, rows, columns });
+    } catch {
+      onCount({ title, rows: [], columns });
+    }
   };
 
   return (
@@ -232,7 +243,7 @@ export default function LevelTable({
                 <th scope="col" className="n">Not Updated</th>
                 <th scope="col" className="n">Conducted</th>
                 <th scope="col" className="n">Not conducted</th>
-                <th scope="col" className="n">PC not updated</th>
+                <th scope="col" className="n">Not updated</th>
                 <th scope="col" className="n" />
               </tr>
             </thead>
@@ -255,7 +266,7 @@ export default function LevelTable({
                   />
                   <Cell
                     value={r.conducted} tone="var(--ok)"
-                    onClick={() => openSchedule(api.conductedSchedules, NOT_UPDATED_COLUMNS, 'App Conducted', r.level, r.items)}
+                    onClick={() => openSchedule(api.conductedSchedules, columnsFor(NOT_UPDATED_COLUMNS, r.level), 'App Conducted', r.level, r.items)}
                   />
                   <Cell
                     value={r.notConducted + r.notScheduled} tone="var(--bad)"
@@ -263,19 +274,19 @@ export default function LevelTable({
                   />
                   <Cell
                     value={r.notScheduled}
-                    onClick={() => openSchedule(api.notScheduledSchedules, NOT_SCHEDULED_COLUMNS, 'Not Updated', r.level, r.items)}
+                    onClick={() => openSchedule(api.notScheduledSchedules, columnsFor(NOT_SCHEDULED_COLUMNS, r.level), 'Not Updated', r.level, r.items)}
                   />
                   <Cell
                     value={r.pcCompleted} tone="var(--ok)"
-                    onClick={() => openSchedule(api.pcCompletedSchedules, PC_NOT_UPDATED_COLUMNS, 'Conducted', r.level, r.items)}
+                    onClick={() => openSchedule(api.pcCompletedSchedules, columnsFor(PC_NOT_UPDATED_COLUMNS, r.level), 'Conducted', r.level, r.items)}
                   />
                   <Cell
                     value={r.pcNotCompleted} tone="var(--accent)"
-                    onClick={() => openSchedule(api.pcNotUpdatedSchedules, PC_NOT_UPDATED_COLUMNS, 'Not conducted', r.level, r.items)}
+                    onClick={() => openSchedule(api.pcNotCompletedSchedules, columnsFor(PC_NOT_UPDATED_COLUMNS, r.level), 'Not conducted', r.level, r.items)}
                   />
                   <Cell
-                    value={r.appAndPc}
-                    onClick={() => openPcNotUpdated(r.level, r.items)}
+                    value={r.pcNotUpdated}
+                    onClick={() => openSchedule(api.pcNeverUpdatedSchedules, columnsFor(NOT_SCHEDULED_COLUMNS, r.level), 'Not updated', r.level, r.items)}
                   />
                   <Cell
                     value={r.remarks}

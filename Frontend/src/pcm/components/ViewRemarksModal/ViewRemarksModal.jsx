@@ -10,7 +10,10 @@ export default function ViewRemarksModal({ meeting, row, mode = 'view', categori
   const [category, setCategory] = useState(row.categoryId ? String(row.categoryId) : '');
   const [text, setText] = useState(row.remarks || '');
   const [saving, setSaving] = useState(false);
-  const [editable, setEditable] = useState(mode === 'edit');
+  // Fixed to the mode the caller opened with, not a toggle: View Remark is
+  // strictly read-only now that Status Update is its own button — there is
+  // no in-modal upgrade path from one to the other.
+  const editable = mode === 'edit';
   const openerRef = useRef(document.activeElement);
   const backdropRef = useRef(null);
   const panelRef = useRef(null);
@@ -77,7 +80,7 @@ export default function ViewRemarksModal({ meeting, row, mode = 'view', categori
       >
         <div className="modal-head">
           <div>
-            <h3 id="vr-title">{mode === 'edit' ? 'Update Remarks' : 'View Remarks'}</h3>
+            <h3 id="vr-title">{mode === 'edit' ? 'Status Update' : 'View Remarks'}</h3>
             <div className="who-sub">{meeting.title}{row.location ? ' · ' + row.location : ''}</div>
           </div>
           <button className="icon-btn drill-close" type="button" aria-label="Close" onClick={onClose}>
@@ -120,9 +123,6 @@ export default function ViewRemarksModal({ meeting, row, mode = 'view', categori
         </div>
         <div className="modal-foot">
           <button className="btn" type="button" onClick={onClose}>Cancel</button>
-          <button className="btn" type="button" hidden={editable} onClick={() => setEditable(true)}>
-            <Icon name="pencil" sm /> Edit
-          </button>
           <button className="btn btn-primary" type="button" hidden={!editable} disabled={saving} onClick={save}>
             {saving ? 'Saving…' : 'Save remarks'}
           </button>
