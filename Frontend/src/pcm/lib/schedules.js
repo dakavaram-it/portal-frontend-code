@@ -54,3 +54,12 @@ export function columnsFor(base, level) {
   if (level === 'AC') return base.filter((c) => c.key !== 'assembly');
   return base;
 }
+
+// PC Status' Not-conducted Role column reports the row's own tier name
+// verbatim ('Unit', 'Mandal', 'AC', 'Parliament') at every level — pure
+// noise next to a title that already says the tier — so it's dropped
+// everywhere. Shared by LevelTable (the whole-level cell) and LevelCard
+// (the per-meeting stat).
+export function pcNotConductedColumnsFor(level) {
+  return columnsFor(PC_NOT_UPDATED_COLUMNS, level).filter((c) => c.key !== 'role');
+}

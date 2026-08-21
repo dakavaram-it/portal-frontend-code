@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Icon from '../Icon/Icon.jsx';
+import Select from '../Select/Select.jsx';
 import { LEVEL_LABEL } from '../../lib/format.js';
 import './SummaryTable.css';
 
@@ -41,6 +42,7 @@ export default function SummaryTable({ level, rows, onUpdateRemarks }) {
   const hasParliament = level === 'AC' || level === 'Mandal' || level === 'Unit';
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
+  const [assemblyFilter, setAssemblyFilter] = useState('');
   // The eye icon only ever reveals the remark text in place — no modal, no
   // edit path — so this is plain local expand/collapse state, not a callback
   // into the parent the way Status Update is.
@@ -51,8 +53,22 @@ export default function SummaryTable({ level, rows, onUpdateRemarks }) {
     return next;
   });
 
+  // Options come off the rows themselves, not a separate picklist call —
+  // there is no endpoint for "assemblies this meeting's rows touch", and
+  // the rows already carry the answer.
+  const assemblies = useMemo(() => {
+    if (!hasAssembly || !rows) return [];
+    return [...new Set(rows.map((r) => r.assembly).filter(Boolean))].sort();
+  }, [rows, hasAssembly]);
+
+  // A filter picked for one meeting's assembly list may not exist in the
+  // next meeting's — drop it rather than silently filtering to nothing.
+  useEffect(() => {
+    if (assemblyFilter && !assemblies.includes(assemblyFilter)) setAssemblyFilter('');
+  }, [assemblies, assemblyFilter]);
+
   const list = useMemo(() => {
-    const base = rows || [];
+    const base = assemblyFilter ? (rows || []).filter((r) => r.assembly === assemblyFilter) : (rows || []);
     if (!sortKey) return base;
     const get = SORT_KEYS[sortKey];
     const sorted = [...base].sort((a, b) => {
@@ -60,7 +76,7 @@ export default function SummaryTable({ level, rows, onUpdateRemarks }) {
       return av < bv ? -1 : av > bv ? 1 : 0;
     });
     return sortDir === 'desc' ? sorted.reverse() : sorted;
-  }, [rows, sortKey, sortDir]);
+  }, [rows, sortKey, sortDir, assemblyFilter]);
 
   function onSort(key) {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -69,6 +85,14 @@ export default function SummaryTable({ level, rows, onUpdateRemarks }) {
 
   return (
     <div className="summary-table">
+      {hasAssembly && assemblies.length > 0 && (
+        <div className="summary-table-tools">
+          <Select id="summary-assembly-filter" label="Filter by assembly" value={assemblyFilter} onChange={setAssemblyFilter}>
+            <option value="">All Assemblies</option>
+            {assemblies.map((a) => <option key={a} value={a}>{a}</option>)}
+          </Select>
+        </div>
+      )}
       <div className="table-card">
         <div className="table-scroll">
           <table className="summary-grid">
@@ -127,7 +151,9 @@ export default function SummaryTable({ level, rows, onUpdateRemarks }) {
           </table>
         </div>
         <div className="empty" hidden={loading || list.length > 0}>
-          <div className="empty-title">No rows for this level</div>
+          <div className="empty-title">
+            {assemblyFilter ? `No rows for ${assemblyFilter}` : 'No rows for this level'}
+          </div>
         </div>
         <div className="empty" hidden={!loading}>
           <div className="empty-title">Loading…</div>
