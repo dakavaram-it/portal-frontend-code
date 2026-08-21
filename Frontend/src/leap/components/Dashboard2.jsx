@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react'
-import { getGeoBreakdown, getLocations, getPositionSummary, getReservationSummary } from '../dashboard2Api.js'
+import {
+  confirmCandidate,
+  getGeoBreakdown,
+  getLocations,
+  getPositionSummary,
+  getReservationSummary,
+  markNominated,
+  removeCandidate,
+} from '../dashboard2Api.js'
 import { CLAIMED_ROLE_IDS, ELECTION_TREE, cardMatches } from '../electionTree.js'
 // Scores come from /leapapi, not from this screen's own backend. They live in a second,
 // optional database (report_ratings) and Total Score is a real formula — half the
@@ -71,6 +79,7 @@ const STEPS = [
 ]
 const STAGES = ['Not started', 'Proposal received', 'Confirmed', 'Nomination filed', 'Door to Door done', 'Door to Door - 2 done', 'Result declared']
 const SS = { 'Not started': ['#fdecec', '#a52a1f'], 'Proposal received': ['#fdf3e3', '#8a5a05'], Confirmed: ['#eaf6ef', '#1c7a45'], 'Nomination filed': ['#e9f3f2', '#0a5b53'], 'Door to Door done': ['#e8f0fb', '#1d5fbd'], 'Door to Door - 2 done': ['#e4ecfa', '#164a9e'], 'Result declared': ['#f0eefc', '#4a3bb0'] }
+const PROPOSED_STATUS_ID = 1
 const CHIPS = [
   ['Total locations', 'total', 0, 0, T.ink, 'every location in this position'],
   ['Started', 'proposed', 1, 0, T.green, 'at least one name received'],
@@ -157,6 +166,7 @@ const toRow = (p) => ({
 })
 
 const toCand = (c, rating) => ({
+  id: c.proposal_candidate_id,
   score: rating && rating.total_score != null ? Math.round(rating.total_score * 10) / 10 : null,
   name: [c.member_name, c.last_name].filter(Boolean).join(' ').trim() || '—',
   phone: c.mobile_no || '—',
@@ -173,12 +183,14 @@ const toCand = (c, rating) => ({
   isNominated: c.is_nominated === 'Y',
 })
 
-const READ_ONLY_NOTE = 'Dashboard 2 is read-only — use Assign Members to propose or confirm a name.'
+// Proposing a name still belongs to Assign Members: that flow owns cadre search and the
+// eligibility rules, and none of it is duplicated here.
+const PROPOSE_ELSEWHERE = 'To put a new name forward, use Assign Members.'
 
 export default function Dashboard2() {
   const [state, setStateRaw] = useState({
     step: 0, detail: null, chip: 1, pc: null, ac: null, quota: 'All locations',
-    drawer: null, compare: null, toast: null, docs: {}, lfilter: 'all',
+    drawer: null, compare: null, pick: null, busy: false, toast: null, docs: {}, lfilter: 'all',
   })
   const setState = (patch) => setStateRaw((prev) => ({ ...prev, ...(typeof patch === 'function' ? patch(prev) : patch) }))
 
@@ -253,13 +265,31 @@ export default function Dashboard2() {
     loadScores((loc.candidates || []).map((c) => c.membership_id), setScores)
   }, [st.compare, locs])
 
-  const openDetail = (r, chip) => setState({ detail: r, chip, step: CHIPS[chip][3], drawer: null, compare: null, lfilter: 'all', quota: 'All locations' })
+  // Every write goes through here: it blocks a second click, refetches the locations the
+  // change affected, and surfaces the backend's own {detail} text — the 409s ("already has
+  // a confirmed candidate", "confirm before filing") are the useful half of this screen.
+  const runWrite = async (fn, done) => {
+    if (state.busy) return
+    setState({ busy: true })
+    try {
+      await fn()
+      const body = await getLocations(detail, st.ac)
+      setLocs(body)
+      flash(done)
+    } catch (err) {
+      flash(err.message)
+    } finally {
+      setState({ busy: false })
+    }
+  }
+
+  const openDetail = (r, chip) => setState({ detail: r, chip, pick: null, step: CHIPS[chip][3], drawer: null, compare: null, lfilter: 'all', quota: 'All locations' })
   const setStep = (i) => {
     const c = CHIPS.filter((x) => x[3] === i && x[2] > 0)[0]
     setState({ step: i, chip: c ? c[2] : 1, drawer: null, compare: null, lfilter: 'all' })
   }
   const closeDetail = () => setState({ detail: null, drawer: null, compare: null })
-  const closeCompare = () => setState({ compare: null })
+  const closeCompare = () => setState({ compare: null, pick: null })
   const closeDrawer = () => setState({ drawer: null })
 
   const docState = (id, stage) => state.docs[id] || DOCS.map((doc) => (stage >= 3 ? true : doc[2]))
@@ -572,13 +602,16 @@ export default function Dashboard2() {
       const cands = l ? candsOf(l) : []
       const quota = l ? quotaOf(l) : '—'
       const cell = (v, tone) => ({ v, tone: tone || T.ink, best: '' })
+      // The name holding the seat, if any. A location may hold at most one — the backend
+      // refuses a second with a 409 rather than trusting the screen to prevent it.
+      const confirmedId = (cands.filter((c) => c.isConfirmed)[0] || {}).id || null
       cmp = {
         crumb: d.name + ' · ' + d.body + ' · AC ' + acName,
         title: (l ? l.local_body_name : '') + ' — ' + nm(cands.length) + ' proposed',
         // Deliberately not a verdict. Whether a name may be assigned to this seat is decided
         // by eligibility_flag() in the /leapapi backend, on the write — restating that rule
         // here would be a second copy free to drift from it.
-        help: 'Location reserved for ' + quota + '. Read-only: confirm a name in Assign Members.',
+        help: 'Location reserved for ' + quota + '. Pick a name, then confirm it.',
         cands: cands.map((c) => ({
           // null, not 0, while the score is still in flight or the cadre is unrated — and
           // '—' rather than a number for both, because unrated must not read as zero.
@@ -587,13 +620,18 @@ export default function Dashboard2() {
           // tier, never the worst-candidate red — the score is null and not 0 when nobody
           // has rated them yet, and it reads grey while the request is still in flight.
           scoreFg: TIER_COLOR[scoreTier(c.score)],
-          border: c.isConfirmed ? accent : '#e9edeb', bg: c.isConfirmed ? '#f4faf9' : '#fff',
-          dotRing: c.isConfirmed ? accent : '#cfd8d5', dotFill: c.isConfirmed ? accent : '#fff',
+          border: (st.pick ?? confirmedId) === c.id ? accent : '#e9edeb',
+          bg: (st.pick ?? confirmedId) === c.id ? '#f4faf9' : '#fff',
+          dotRing: (st.pick ?? confirmedId) === c.id ? accent : '#cfd8d5',
+          dotFill: (st.pick ?? confirmedId) === c.id ? accent : '#fff',
           fit: c.casteGroup + ' · ' + c.gender,
           fitBg: '#f1f4f3', fitFg: T.mute,
           state: c.isConfirmed ? 'Confirmed' : c.status,
           stateBg: c.isConfirmed ? '#e9f3f2' : '#f1f4f3', stateFg: c.isConfirmed ? '#0a5b53' : T.mute,
-          pick: () => flash(READ_ONLY_NOTE),
+          pick: () => setState({ pick: c.id }),
+          // Soft delete: the slot reopens and who was proposed survives.
+          removeLabel: state.busy ? '…' : 'Remove',
+          remove: () => runWrite(() => removeCandidate(c.id), c.name + ' removed from this location'),
         })),
         attrs: [
           { label: 'Status', cells: cands.map((c) => cell(c.isNominated ? 'Nomination filed' : c.status, c.isConfirmed ? T.green : T.ink)) },
@@ -605,10 +643,24 @@ export default function Dashboard2() {
           { label: 'Member since', cells: cands.map((c) => cell(c.since)) },
           { label: 'Mobile', cells: cands.map((c) => cell(c.phone)) },
         ].map((a, i2) => Object.assign(a, { rowBg: i2 % 2 ? '#fbfcfc' : '#fff' })),
-        foot: 'Seat reserved for ' + quota + '. Confirming happens in Assign Members, which re-checks the reservation on the write.',
-        btnLabel: 'Read-only',
-        btnBg: '#e6ebe9', btnFg: '#7d8a86', btnCursor: 'default',
-        confirmGo: () => flash(READ_ONLY_NOTE),
+        foot: confirmedId
+          ? 'A candidate is confirmed for this seat. Un-confirm to pick a different name. ' + PROPOSE_ELSEWHERE
+          : st.pick
+            ? 'Confirming settles this seat — no further name can be proposed for it. ' + PROPOSE_ELSEWHERE
+            : 'Select one name above to enable confirmation. ' + PROPOSE_ELSEWHERE,
+        btnLabel: state.busy ? 'Saving…' : confirmedId ? 'Un-confirm' : 'Confirm candidate',
+        btnBg: state.busy || (!confirmedId && !st.pick) ? '#e6ebe9' : accent,
+        btnFg: state.busy || (!confirmedId && !st.pick) ? '#7d8a86' : '#fff',
+        btnCursor: state.busy || (!confirmedId && !st.pick) ? 'default' : 'pointer',
+        confirmGo: () => {
+          if (state.busy) return
+          if (confirmedId) {
+            runWrite(() => confirmCandidate(confirmedId, PROPOSED_STATUS_ID), 'Confirmation withdrawn')
+            return
+          }
+          if (!st.pick) { flash('Select a name first'); return }
+          runWrite(() => confirmCandidate(st.pick), 'Candidate confirmed')
+        },
       }
     }
     hasCompare = !!ci
@@ -621,9 +673,9 @@ export default function Dashboard2() {
       const c = l ? leadOf(l).c : null
       const ACTS = [
         ['No name for this location yet', 'Nothing has gone up for this seat. Names are added in Assign Members.'],
-        ['Names are waiting to be compared', 'More than one name may be on this seat. Compare them, then confirm one in Assign Members.'],
-        ['Candidate confirmed', 'The seat is settled. Nomination papers are filed against this candidate.'],
-        ['Nomination filed', 'Papers are on record for this location.'],
+        ['Names are waiting to be compared', 'Compare the names on this seat side by side, then confirm one.'],
+        ['Candidate confirmed', 'The seat is settled. Mark the nomination filed once the papers are in.'],
+        ['Nomination filed', 'Papers are on record for this location. Withdrawing puts it back to Confirmed.'],
         ['Door to Door', 'No source table for field visits yet — this stage reads 0 everywhere.'],
         ['Door to Door - 2', 'No source table for the second round yet — this stage reads 0 everywhere.'],
         ['Result declared', 'No source table for declared results yet — this stage reads 0 everywhere.'],
@@ -657,8 +709,26 @@ export default function Dashboard2() {
         actionStep: 'Stage ' + stage,
         actionTitle: act[0], actionHelp: act[1],
         isDocs: stage >= 2, isD2d: false, isResult: false,
-        primary: 'Read-only', primaryBg: '#e6ebe9', primaryFg: '#7d8a86',
-        primaryGo: () => flash(READ_ONLY_NOTE),
+        // One button, whatever the location's next real step is. Stage 0 has nothing to act
+        // on here — a new name is proposed in Assign Members, not on this screen.
+        primary: state.busy ? 'Saving…'
+          : stage === 0 ? 'Nothing to do here'
+          : stage === 1 ? 'Compare and confirm'
+          : stage === 2 ? 'Mark nomination filed'
+          : 'Withdraw nomination',
+        primaryBg: state.busy || stage === 0 ? '#e6ebe9' : accent,
+        primaryFg: state.busy || stage === 0 ? '#7d8a86' : '#fff',
+        primaryGo: () => {
+          if (state.busy) return
+          if (stage === 0) { flash(PROPOSE_ELSEWHERE); return }
+          if (stage === 1) { setState({ compare: di, drawer: null, pick: null }); return }
+          const confirmed = (cands.filter((x) => x.isConfirmed)[0] || {}).id
+          if (!confirmed) { flash('No confirmed candidate on this location'); return }
+          runWrite(
+            () => markNominated(confirmed, stage === 2 ? 'Y' : 'N'),
+            stage === 2 ? 'Nomination marked as filed' : 'Nomination withdrawn',
+          )
+        },
       }
       // The papers checklist is a local scratchpad — there is no per-document endpoint.
       // Only the location's Nomination filed stage is real.
@@ -670,8 +740,8 @@ export default function Dashboard2() {
         won: { border: '#e2e7e5', bg: '#fff', fg: '#9aa5a1', w: '1px' },
         lost: { border: '#e2e7e5', bg: '#fff', fg: '#9aa5a1', w: '1px' },
         note: 'No source table for declared results yet.',
-        wonGo: () => flash(READ_ONLY_NOTE),
-        lostGo: () => flash(READ_ONLY_NOTE),
+        wonGo: () => flash('No source table for declared results yet.'),
+        lostGo: () => flash('No source table for declared results yet.'),
       }
     }
     hasDrawer = !!di
@@ -1003,6 +1073,7 @@ export default function Dashboard2() {
                       <div style={sx('margin-top:10px;display:flex;gap:6px;flex-wrap:wrap')}>
                         <span style={sx(`font:600 9.5px/1 'IBM Plex Sans';letter-spacing:.07em;text-transform:uppercase;padding:5px 7px;border-radius:4px;background:${c.fitBg};color:${c.fitFg}`)}>{c.fit}</span>
                         <span style={sx(`font:600 9.5px/1 'IBM Plex Sans';letter-spacing:.07em;text-transform:uppercase;padding:5px 7px;border-radius:4px;background:${c.stateBg};color:${c.stateFg}`)}>{c.state}</span>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); c.remove() }} style={sx(`margin-left:auto;cursor:pointer;border:1px solid #e3d3d6;background:#fff;border-radius:4px;padding:4px 7px;font:600 9.5px/1 'IBM Plex Sans';letter-spacing:.07em;text-transform:uppercase;color:#b3123b`)}>{c.removeLabel}</button>
                       </div>
                     </div>
                   ))}
