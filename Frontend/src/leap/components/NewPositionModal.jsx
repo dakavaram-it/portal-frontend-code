@@ -288,14 +288,15 @@ function scoreTier(score) {
 
 const TIER_COLOR = { none: '#9ca3af', high: '#059669', mid: '#d97706', low: '#dc2626' }
 
-// proposal_status, by id. `done` is the verb a card reads back — the same word for a
-// staged cadre whose button is on and for a saved member's status block, so the two say
-// the same thing. Confirmed is here to be *read*: this screen never writes it. `cls` is a
-// CSS class, not a label — it stayed `conform` when the status was renamed.
+// proposal_status, by id — the whole table, which now holds these two alone (Shortlisted
+// was dropped and Confirmed moved down from 3 to 2 with it). `done` is the verb a card
+// reads back — the same word for a staged cadre whose button is on and for a saved
+// member's status block, so the two say the same thing. Confirmed is here to be *read*:
+// this screen never writes it. `cls` is a CSS class, not a label — it stayed `conform`
+// when the status was renamed.
 export const STATUS_META = {
   1: { done: 'Proposed', cls: 'propose' },
-  2: { done: 'Shortlisted', cls: 'shortlist' },
-  3: { done: 'Confirmed', cls: 'conform' },
+  2: { done: 'Confirmed', cls: 'conform' },
 }
 
 // What the staged card's button writes.
@@ -430,7 +431,7 @@ export function MemberCard({ cadre, role, rating, onZoom, onRemove, status, onSt
         </div>
       ) : (
         // Where the staged card's buttons are, a saved member carries what was written
-        // instead — Proposed, Shortlisted or Confirmed. Read-only: nothing here changes
+        // instead — Proposed or Confirmed. Read-only: nothing here changes
         // a saved row's status.
         !onRemove && <div className={`leap-mcard-status ${saved.cls}`}>{saved.done}</div>
       )}
@@ -494,7 +495,8 @@ export function AddMembersPanel({ constituencyId, position, placeName, num, onAs
   // match several, and the user says which one before anything is staged.
   const [matches, setMatches] = useState(null)
   const [staged, setStaged] = useState([])
-  // tdp_cadre_id -> the proposal_status_id its button picked (1 Proposed, 2 Shortlisted).
+  // tdp_cadre_id -> the proposal_status_id its button picked (1 Proposed, the only one
+  // this screen writes).
   // Assign writes these alone: the two buttons are what decides which status the row gets.
   const [selection, setSelection] = useState({})
   // membership_id -> the getCadreScores row: the card wants the report behind the score as well as
@@ -892,6 +894,12 @@ export default function NewPositionModal({ initial } = {}) {
 
   const openSlots = (p) => p.max_proposals - p.proposed_cnt
 
+  // getPositionsOverview's own count: non-zero means a candidate for this role is already
+  // Confirmed, the seat is settled and assignProposalCandidate will refuse any further
+  // proposal for it (409) however many slots are still unused. Closed for good, unlike a
+  // full position, which reopens if somebody is removed.
+  const completed = (p) => p.confirmed_cnt > 0
+
   // A seat here is a `max_proposals` slot, summed over the roles — the same number the
   // per-role "N open" badge counts down, not `max_positions`. Two roles of three each
   // read as six seats, and each candidate proposed fills one of them.
@@ -904,7 +912,7 @@ export default function NewPositionModal({ initial } = {}) {
   // search; a body with two open roles still has to be picked from.
   useEffect(() => {
     if (membersAction !== 'add' || positionId) return
-    const open = positions.filter((p) => openSlots(p) > 0)
+    const open = positions.filter((p) => openSlots(p) > 0 && !completed(p))
     if (open.length === 1) setPositionId(String(open[0].proposal_position_id))
   }, [membersAction, positions, positionId])
 
@@ -1077,8 +1085,10 @@ export default function NewPositionModal({ initial } = {}) {
                     <div className="leap-members-group-head">
                       <b className="leap-members-role">{row.role_name}</b>
                       <span className="leap-members-count">{row.proposed_cnt} / {row.max_proposals} proposed</span>
-                      <span className={`leap-members-badge ${open <= 0 ? 'full' : ''}`}>
-                        {open <= 0 ? 'Full' : `${open} open`}
+                      <span
+                        className={`leap-members-badge ${completed(row) || open <= 0 ? 'full' : ''}`}
+                      >
+                        {completed(row) ? 'Completed' : open <= 0 ? 'Full' : `${open} open`}
                       </span>
                     </div>
                     {rows === undefined && <div className="leap-members-empty">Loading members…</div>}
@@ -1108,15 +1118,22 @@ export default function NewPositionModal({ initial } = {}) {
               <div className="leap-position-card-list">
                 {positions.map((row) => {
                   // Matches checkPositionAvailability's rule: a position is available while it has
-                  // proposal slots left, not seats.
+                  // proposal slots left, not seats — and while nobody is confirmed for it.
                   const open = openSlots(row)
+                  const done = completed(row)
                   return (
                     <button
                       type="button"
                       key={row.proposal_position_id}
                       className={`leap-position-card ${positionId === String(row.proposal_position_id) ? 'selected' : ''}`}
-                      disabled={open <= 0}
-                      title={open <= 0 ? 'Position has reached its maximum proposals' : undefined}
+                      disabled={done || open <= 0}
+                      title={
+                        done
+                          ? 'Position is completed — a candidate is already confirmed'
+                          : open <= 0
+                            ? 'Position has reached its maximum proposals'
+                            : undefined
+                      }
                       // Everything staged below belongs to the role it was staged for, and
                       // the panel is keyed by it — picking another role remounts it empty.
                       onClick={() => setPositionId(String(row.proposal_position_id))}
@@ -1134,7 +1151,9 @@ export default function NewPositionModal({ initial } = {}) {
                       <span className="leap-position-card-badges">
                         <span className="leap-position-card-total">{row.max_positions}</span>
                         <span className="leap-position-card-proposed">{row.proposed_cnt} proposed</span>
-                        <span className={`leap-position-card-open ${open <= 0 ? 'zero' : ''}`}>{open} open</span>
+                        <span className={`leap-position-card-open ${done || open <= 0 ? 'zero' : ''}`}>
+                          {done ? 'Completed' : `${open} open`}
+                        </span>
                       </span>
                     </button>
                   )

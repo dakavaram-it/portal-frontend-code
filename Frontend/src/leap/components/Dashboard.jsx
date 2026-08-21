@@ -11,10 +11,11 @@ import { Dropdown, PhotoViewer, initials } from './NewPositionModal.jsx'
 import { PositionCandidatesModal, reservationClass } from './Candidates.jsx'
 import { Highlight } from './committee/DataTable.jsx'
 
-// proposal_status's own ids (1 Proposed, 2 Shortlisted, 3 Confirmed) — the two the
-// Dashboard's stat tiles drill into. Shortlisted has no tile here, so it is not listed.
+// proposal_status's own ids — the lookup now holds exactly these two, and the Dashboard's
+// stat tiles drill into both. Shortlisted was dropped from the table and Confirmed moved
+// down from 3 to 2 with it; these must stay in step with the backend's own constants.
 const PROPOSED_STATUS_ID = 1
-const CONFIRMED_STATUS_ID = 3
+const CONFIRMED_STATUS_ID = 2
 
 const ICON_PROPS = {
   viewBox: '0 0 24 24',
@@ -611,8 +612,8 @@ export default function Dashboard({ user, onNavigate }) {
                             // Seats, not positions: a proposal_position row can hold more than one
                             // seat (max_positions), and what the card reports is how much of the
                             // post is actually settled — confirmed candidates over the seats there
-                            // are to fill. Proposed and shortlisted rows are still in play, so they
-                            // do not count here; the tier bar above still measures proposal slots.
+                            // are to fill. A merely proposed row is still in play, so it does
+                            // not count here; the tier bar above still measures proposal slots.
                             const totalSeats = card.positions.reduce((n, p) => n + p.max_positions, 0)
                             const confirmed = card.positions.reduce((n, p) => n + p.conformed_status_cnt, 0)
                             return (
@@ -730,8 +731,8 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
   // One line per role for the Positions tile — "President 2 / 3". A position counts as
   // settled once its candidate is *confirmed*, so this is conformed_status_cnt (the SQL
   // alias kept its old spelling) over max_positions, the positions there are to fill.
-  // Proposed and shortlisted candidates are still in play, so they do not count here —
-  // the card's own Proposed row is where that number lives.
+  // A proposed candidate is still in play, so they do not count here — the card's own
+  // Proposed row is where that number lives.
   const roleStats = useMemo(() => {
     const byRole = new Map()
     for (const p of positions) {
@@ -762,8 +763,16 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
       const proposed = locRows.reduce((n, p) => n + p.proposed_status_cnt, 0)
       const confirmed = locRows.reduce((n, p) => n + p.conformed_status_cnt, 0)
       // Any role at this location having a live candidate is what decides where the view
-      // icon goes — not just the "Proposed" status column above, which is one of three.
+      // icon goes — not just the "Proposed" status column above, which is one of two.
       const proposedCnt = locRows.reduce((n, p) => n + p.proposed_cnt, 0)
+      // Which roles here can still take a candidate. A position closes two ways: its
+      // proposal slots fill up, or one of its candidates is Confirmed — the seat is then
+      // settled and the backend refuses any further proposal for it whatever slots remain.
+      // Per role, not summed: one confirmed President must not shut a still-open
+      // Vice-President sharing the same local body.
+      const openRoles = locRows.filter(
+        (p) => p.conformed_status_cnt === 0 && p.proposed_cnt < p.max_proposals
+      ).length
       // Which roles the required-positions count is made of. Deduped, in getDashboardPositions's own
       // PR.order_no order — most locations here hold one role, but a local body can have
       // several (President + Vice-President), and the bare number does not say which.
@@ -780,6 +789,7 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
         confirmed,
         status: locRows.some((p) => p.started_time) ? 'Started' : 'Not Started',
         proposedCnt,
+        openRoles,
         // The location's proposal_position rows, one per role — what the view icon's
         // candidates pop-up reads.
         rows: locRows,
@@ -857,9 +867,10 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
   const toggleSort = (key) =>
     setSort((prev) => ({ key, dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc' }))
 
-  // A location still has an open proposal slot while proposed < max_proposals — the
-  // Assign button stays enabled up to that cap and disables once it's reached.
-  const hasRoom = (l) => l.maxProposals > 0 && l.proposedCnt < l.maxProposals
+  // A location is worth an Assign button while at least one of its roles is still open —
+  // slots left *and* nobody confirmed for it yet. Per role rather than over the location's
+  // summed slots: a location whose only free slots sit on a completed position has none.
+  const hasRoom = (l) => l.openRoles > 0
 
   // The wizard reaches a local body through a mandal or a town, so a district-level body
   // (Zilla Parishath) has nothing to prefill step 3 with and Assign would hand it an
@@ -1086,7 +1097,7 @@ function ElectionTypeSection({ label, positions, assemblyId, onNavigate }) {
                             disabled={!canAssign(l)}
                             title={
                               !hasRoom(l)
-                                ? 'No open proposal slots left'
+                                ? 'Every role here is full or already confirmed'
                                 : !canAssign(l)
                                   ? 'District-level body — not reachable from the mandal/town wizard yet'
                                   : 'Assign candidates'

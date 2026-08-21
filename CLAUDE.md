@@ -137,7 +137,7 @@ Selecting anything at step *N* clears steps *N+1…6*. Arriving with a `prefill`
 
 **View Members** fans `getProposalCandidatesByProposalPositionId` over every role (`Promise.all`), renders each cadre as a `MemberCard`, and fills scores through `loadScores`. `members[id] === undefined` means the call is in flight, `[]` means it returned none; the two render differently. There is **no remove button here** — this branch is read-only.
 
-**Add Members** shows the roles as cards (each with its own reservation badge, `max_positions`, `proposed_cnt` and open count), disabled when `max_proposals - proposed_cnt <= 0`. A lone open role auto-selects.
+**Add Members** shows the roles as cards (each with its own reservation badge, `max_positions`, `proposed_cnt` and open count), disabled when `max_proposals - proposed_cnt <= 0` **or when `confirmed_cnt > 0`** — a position holding a Confirmed candidate is completed, reads "Completed" instead of an open count and takes no further proposals however many slots are unused (`assignProposalCandidate` answers `409` for one, so the card refuses before the request rather than after). A lone open role auto-selects, completed ones excluded.
 
 #### `AddMembersPanel` — search, stage, save
 
@@ -150,7 +150,7 @@ Selecting anything at step *N* clears steps *N+1…6*. Arriving with a `prefill`
 
 **A search stages a cadre, it does not assign one.** `staged` holds the rows; `scores` holds each `getCadreScores` row keyed by `membership_id`, fetched **one membership id at a time** (`loadScores`) — the endpoint is lookup-first, and one unrated cadre running two stored procedures (~1.6s) must not hold up every badge on the screen. `stagedByScore` sorts best-first with unscored last (`?? -1`), never as zeros.
 
-**The staged card's only status button is `Propose Candidate`.** `PROPOSAL_STATUSES` has one entry now; Shortlisted (2) and Confirmed (3) still exist in `STATUS_META` **to be read**, since saved rows carry them, but this screen writes neither. Every staged card is saved whether or not its button is lit — an untouched one goes in as `DEFAULT_STATUS_ID`.
+**The staged card's only status button is `Propose Candidate`.** `PROPOSAL_STATUSES` has one entry now; Confirmed (**2**, not 3 — see the status note below) still exists in `STATUS_META` **to be read**, since saved rows carry it, but this screen never writes it. Every staged card is saved whether or not its button is lit — an untouched one goes in as `DEFAULT_STATUS_ID`.
 
 `assignStaged` calls `assignProposalCandidate` **sequentially, in score order** — the proposal slots are exactly what the staged candidates compete for and the server re-checks the count on every write, so it has to see them one at a time. A batch can partly succeed: whoever went in is dropped from `staged` and named in the success line, the rest stay staged with the endpoint's own `{detail}` text. A success bumps `positionsKey` so the overview re-reads.
 
@@ -166,7 +166,7 @@ Candidates use the **backend cadre shape** everywhere (`member_name`, `membershi
 
 ### `Candidates`
 
-**One endpoint, all the filtering in the browser.** `getProposalPositionsWithCandidates` returns every `proposal_position` with at least one active candidate — the join is inner, so a position nobody was proposed for never appears — carrying election type, assembly, mandal/town, local body, role, reservation, slot counts and the per-status breakdown (`proposed_status_cnt` / `shortlisted_status_cnt` / `conformed_status_cnt`). It takes no query parameters on purpose: the five filters (Election Type, Assembly, Role, Status, Reservation) get their options from the *unfiltered* rows, so filtering server-side would empty the dropdowns the filter was picked from. Status filters positions holding at least one candidate of it, not the cards inside; `STATUS_FILTERS` here offers Proposed and Confirmed only — a position whose candidates are all Shortlisted shows `—` in that column rather than a pill.
+**One endpoint, all the filtering in the browser.** `getProposalPositionsWithCandidates` returns every `proposal_position` with at least one active candidate — the join is inner, so a position nobody was proposed for never appears — carrying election type, assembly, mandal/town, local body, role, reservation, slot counts and the per-status breakdown (`proposed_status_cnt` / `conformed_status_cnt` — there is no `shortlisted_status_cnt` any more). It takes no query parameters on purpose: the five filters (Election Type, Assembly, Role, Status, Reservation) get their options from the *unfiltered* rows, so filtering server-side would empty the dropdowns the filter was picked from. Status filters positions holding at least one candidate of it, not the cards inside; `STATUS_FILTERS` here is the whole `proposal_status` table, Proposed and Confirmed.
 
 Rendered through the shared `DataTable` (`components/committee/DataTable.jsx`) with `hideToolbar`, because this screen owns its own search box and CSV button and hands the table rows already searched — `searchRows` and `exportCsv` are exported from there for exactly that.
 
@@ -221,7 +221,11 @@ Both `get` and `post` route a `401` through `checkUnauthorized` before throwing:
 
 **Scores come from a second, optional database.** `getCadreScores` reads `report_ratings` — `cadre_performace_report` (the table's name really is spelt that way) for the per-category points and `leader_feedback` for the per-question ones. **Total Score is half of each**: `(Σ the 11 POINTS columns ÷ 2) + (Σ the feedback answer points ÷ 2)`, and it is `null` — never `0` — when a cadre has neither, so unrated does not sort as worst. It is *lookup-first*: an existing report row is served from the table, and the `cadre_performance_update` / `cadre_performance_report` procedures (seconds per id) run only for the rest — which is exactly why `loadScores` calls it one id at a time.
 
-**`conformed_status_cnt` is a SQL alias, not a spelling mistake to fix.** It kept its old name when the status was renamed to Confirmed. Same for `proposal_consituency_id` (one `t`) in the step-4 rows, and `STATUS_META[3].cls === 'conform'`, which is a CSS class and not a label.
+**`proposal_status` is two rows: 1 Proposed, 2 Confirmed.** Shortlisted was dropped from the table and Confirmed moved down from 3 to 2 with it, so **any id 3 in this repo is stale** — `STATUS_META`, `Candidates`'s `STATUS_FILTERS` and `Dashboard`'s `CONFIRMED_STATUS_ID` all read 2, and the backend's `CONFIRMED_STATUS_ID` is the same 2. A candidate row that is Confirmed **completes its position**: no further candidate can be proposed for it, which is what the wizard's role cards and the Dashboard's Assign button (`openRoles`, per role rather than over a location's summed slots) refuse on.
+
+**`conformed_status_cnt` is a SQL alias, not a spelling mistake to fix.** It kept its old name when the status was renamed to Confirmed. Same for `proposal_consituency_id` (one `t`) in the step-4 rows, and `STATUS_META[2].cls === 'conform'`, which is a CSS class and not a label.
+
+**`proposal_position.is_active` scopes every list.** The backend filters each `proposal_position` read on `is_active = 'Y'`, so a deactivated position disappears from the Dashboard, the Candidates table and the wizard's role list, and `assignProposalCandidate` answers `404` for it. Nothing in the browser has to filter it — but a position that vanished without anyone removing candidates is that flag, not a bug here.
 
 **`NewPositionModal` is neither new-position nor a modal.** The name, the `leap-modal-*` class prefix, and its own heading all date from when it was a creation wizard that handed a position back to `Leap.jsx`. It now proposes candidates against positions that already exist and creates nothing. Renaming it means touching the class names too, so it has been left alone — just don't read the name as a description.
 

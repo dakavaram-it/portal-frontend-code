@@ -6,13 +6,13 @@ import {
 import { MemberCard, PhotoViewer, STATUS_META, loadScores } from './NewPositionModal.jsx'
 import DataTable, { exportCsv, searchRows } from './committee/DataTable.jsx'
 
-// The proposal_status rows the filter offers. Their ids are what getPositionsWithCandidates counts per
-// position and what STATUS_META names on the card, so the filter, the pills and the cards agree.
-// Shortlisted is deliberately excluded — the workflow no longer offers it as a status.
+// The proposal_status rows the filter offers — the whole table, which now holds these two
+// alone. Their ids are what getPositionsWithCandidates counts per position and what
+// STATUS_META names on the card, so the filter, the pills and the cards agree.
 const STATUS_FILTERS = [
   { id: 1, label: 'Proposed', countKey: 'proposed_status_cnt' },
   // The getPositionsWithCandidates count key still reads `conformed_` — it is the SQL alias, not a label.
-  { id: 3, label: 'Confirmed', countKey: 'conformed_status_cnt' },
+  { id: 2, label: 'Confirmed', countKey: 'conformed_status_cnt' },
 ]
 
 // A reservation reads 'BC-GENERAL', 'SC-WOMEN', … — the category in front is what the
@@ -219,8 +219,8 @@ export default function Candidates({ initialFilter } = {}) {
             .join(' · '),
         render: (r) => {
           const pills = STATUS_FILTERS.filter((s) => r[s.countKey] > 0)
-          // Every candidate on this position is Shortlisted — a status the filter no
-          // longer offers, so it has no pill and the cell would otherwise be blank.
+          // Both live statuses have a pill, so this only catches a row carrying some
+          // status this list does not know about — a new proposal_status row.
           if (pills.length === 0) return '—'
           return (
             <span className="leap-cand-card-pills">

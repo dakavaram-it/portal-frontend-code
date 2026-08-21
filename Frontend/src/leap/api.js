@@ -145,8 +145,9 @@ export const getPositionsOverview = (proposalConstituencyId) =>
   get(`/getProposalPositionsOverviewByProposalConstituencyId?proposal_constituency_id=${proposalConstituencyId}`)
 export const checkPositionAvailability = (proposalPositionId) =>
   get(`/checkProposalPositionAvailability?proposal_position_id=${proposalPositionId}`)
-// proposal_status_id is proposal_status's own id — 1 Proposed, 2 Shortlisted. The backend
-// defaults it to Proposed, so a caller that does not care may leave it out.
+// proposal_status_id is proposal_status's own id — 1 Proposed, 2 Confirmed. The backend
+// defaults it to Proposed, so a caller that does not care may leave it out; it also refuses
+// the write outright once the position holds a confirmed candidate.
 export const assignCandidate = (proposalPositionId, tdpCadreId, proposalStatusId) =>
   post('/assignProposalCandidate', {
     proposal_position_id: proposalPositionId,
@@ -158,7 +159,7 @@ export const searchCadre = (proposalPositionId, searchType, searchValue) =>
     `/cadreSearch?proposal_position_id=${proposalPositionId}` +
       `&search_type=${searchType}&search_value=${encodeURIComponent(searchValue)}`
   )
-// Moves an assigned candidate between Proposed / Shortlisted / Confirmed. The only write
+// Moves an assigned candidate between Proposed and Confirmed. The only write
 // that edits a proposal_candidate row in place — it changes the status alone, so the slot
 // it occupies and getPositionsOverview's proposed_cnt do not move.
 export const updateProposalCandidateStatus = (proposalCandidateId, proposalStatusId) =>
