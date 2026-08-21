@@ -10,6 +10,7 @@ import {
 import { Dropdown, PhotoViewer, initials } from './NewPositionModal.jsx'
 import { PositionCandidatesModal, reservationClass } from './Candidates.jsx'
 import { Highlight } from './committee/DataTable.jsx'
+import { ELECTION_TREE, cardMatches } from '../electionTree.js'
 
 // proposal_status's own ids — the lookup now holds exactly these two, and the Dashboard's
 // stat tiles drill into both. Shortlisted was dropped from the table and Confirmed moved
@@ -118,85 +119,25 @@ const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
 // NewPositionModal) the wizard's election type chip.
 const tierTone = (id) => (id === 'panchayat-raj' ? 'tone-blue' : 'tone-red')
 
-const ELECTION_TIERS = [
-  {
-    id: 'panchayat-raj',
-    label: 'Panchayat Raj Elections',
-    sub: 'Mandal & District tier',
-    bodies: [
-      {
-        label: 'Mandal Parishad',
-        sub: 'per Mandal',
-        icon: <IconLayers />,
-        accent: '#2563eb',
-        cards: [
-          { label: 'MPTC', roleIds: [4] },
-          { label: 'MPP', roleIds: [6] },
-          { label: 'Vice-MPP', roleIds: [7] },
-        ],
-      },
-      {
-        label: 'Zilla Parishad',
-        sub: 'per District',
-        icon: <IconPin />,
-        accent: '#7c3aed',
-        cards: [
-          { label: 'ZPTC', roleIds: [3] },
-          { label: 'ZP Chairman', roleIds: [12] },
-          { label: 'Vice-Chairman', roleIds: [13] },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'local-body',
-    label: 'Local Body Elections',
-    sub: 'Panchayat / Municipality / Corporation',
-    bodies: [
-      {
-        label: 'Municipality',
-        sub: 'Town',
-        icon: <IconLayers />,
-        accent: '#d97706',
-        cards: [
-          { label: 'Chairperson', roleIds: [8] },
-          { label: 'Vice-Chairperson', roleIds: [9] },
-          // No proposal_role of its own: municipal-ward seats are filed under role 5
-          // Corporator, which the Corporator card below claims.
-          { label: 'Ward Councillor', roleIds: [] },
-        ],
-      },
-      {
-        label: 'Municipal Corporation',
-        sub: 'City',
-        icon: <IconPin />,
-        accent: '#0891b2',
-        cards: [
-          { label: 'Corporator', roleIds: [5] },
-          { label: 'Mayor', roleIds: [10] },
-          { label: 'Deputy Mayor', roleIds: [11] },
-        ],
-      },
-      {
-        label: 'Gram Panchayat',
-        sub: 'Village',
-        icon: <IconSeats />,
-        accent: '#059669',
-        cards: [
-          { label: 'Sarpanch', roleIds: [1] },
-          { label: 'Upa Sarpanch', roleIds: [2] },
-          // No proposal_role exists for a panchayat ward seat either, so this card is
-          // static by definition — not a mapping guess that could be hiding rows.
-          { label: 'Ward Member', roleIds: [] },
-        ],
-      },
-    ],
-  },
-]
+// The tree itself now lives in ../electionTree.js, shared with Dashboard 2 so the two
+// screens cannot disagree about the shape of the election. Read that file before changing
+// any card or role id — it carries the reasoning that used to sit here.
+//
+// The icons stay behind: they are this screen's own JSX, and the shared module has to be
+// importable by anything, renderer included or not. They are attached by body label rather
+// than stored in the tree, so a body added there simply renders without one.
+const BODY_ICONS = {
+  'Mandal Parishad': <IconLayers />,
+  'Zilla Parishad': <IconPin />,
+  Municipality: <IconLayers />,
+  'Municipal Corporation': <IconPin />,
+  'Gram Panchayat': <IconSeats />,
+}
+const ELECTION_TIERS = ELECTION_TREE.map((tier) => ({
+  ...tier,
+  bodies: tier.bodies.map((body) => ({ ...body, icon: BODY_ICONS[body.label] })),
+}))
 
-// A row belongs to a card when its own proposal_role_id is one the card claims.
-// See the note above ELECTION_TIERS for why the role id alone, and not the election type.
-const cardMatches = (card, row) => card.roleIds.includes(Number(row.proposal_role_id))
 
 const NOMINATION_CLASS = {
   'Not Started': 'not-started',

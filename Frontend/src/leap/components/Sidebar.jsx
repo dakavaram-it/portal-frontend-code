@@ -111,8 +111,8 @@ function IconClipboard() {
 // Assign entry itself is inserted, nothing else on this list.
 const BASE_NAV = [
   { view: 'dashboard', label: 'Dashboard', icon: <IconGauge /> },
-  // Static mock-data preview of an alternate dashboard layout (Dashboard2.jsx)
-  // — a design reference, not wired to /leapapi.
+  // An alternate layout over the same election (Dashboard2.jsx), served read-only by
+  // its own backend on /dash2api rather than by /leapapi.
   { view: 'dashboard2', label: 'Dashboard 2', icon: <IconGauge /> },
   { view: 'newPosition', label: 'Assign Members', icon: <IconBallot /> },
   { view: 'candidates', label: 'View Members', icon: <IconPeople /> },

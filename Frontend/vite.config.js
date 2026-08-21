@@ -19,12 +19,16 @@ export default defineConfig({
   // call, which isn't subject to browser CORS.
   // The PC-Meetings module (src/pcm) is a second backend on the same gateway,
   // mounted at /pc-meetings — same swap, its own prefix.
+  // Dashboard 2 (src/leap/dashboard2Api.js) is a third: same gateway, mounted at
+  // /portal-frontend-code-2. It is a separate backend from /leapapi, not a route on
+  // it — read-only, unauthenticated, and it takes its scope as query parameters.
   server: {
     port: 9001,
     host: '0.0.0.0',
     proxy: {
       '/leapapi': { target: 'http://127.0.0.1:6644', rewrite: (p) => p.replace(/^\/leapapi/, '/portal-frontend-code') },
       '/pcmapi': { target: 'http://127.0.0.1:6644', rewrite: (p) => p.replace(/^\/pcmapi/, '/pc-meetings') },
+      '/dash2api': { target: 'http://127.0.0.1:6644', rewrite: (p) => p.replace(/^\/dash2api/, '/portal-frontend-code-2') },
       '/partyAnalystApi': {
         target: 'https://www.mypartydashboard.com',
         changeOrigin: true,
@@ -39,6 +43,7 @@ export default defineConfig({
     proxy: {
       '/leapapi': { target: 'http://127.0.0.1:6644', rewrite: (p) => p.replace(/^\/leapapi/, '/portal-frontend-code') },
       '/pcmapi': { target: 'http://127.0.0.1:6644', rewrite: (p) => p.replace(/^\/pcmapi/, '/pc-meetings') },
+      '/dash2api': { target: 'http://127.0.0.1:6644', rewrite: (p) => p.replace(/^\/dash2api/, '/portal-frontend-code-2') },
       '/partyAnalystApi': {
         target: 'https://www.mypartydashboard.com',
         changeOrigin: true,

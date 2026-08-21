@@ -1,11 +1,25 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { getGeoBreakdown, getLocations, getPositionSummary, getReservationSummary } from '../dashboard2Api.js'
+import { CLAIMED_ROLE_IDS, ELECTION_TREE, cardMatches } from '../electionTree.js'
 
-// Dashboard 2 — a static, mock-data preview of an alternate dashboard layout.
-// Ported directly from a standalone design mockup (fixed sample data, no
-// /leapapi calls). It intentionally keeps the mockup's own visual language
-// (fonts, colors, spacing) rather than Leap.css's `leap-` classes, so it
-// looks distinct from the rest of the app — this is a design reference, not
-// a production screen wired to the backend.
+// Dashboard 2 — an alternate dashboard layout over the same local-body election data,
+// served by its own backend (PSA-Backend-code/portal-frontend-code-2) through the
+// `/dash2api` proxy. It keeps the original design mockup's visual language (fonts, colors,
+// spacing) rather than Leap.css's `leap-` classes, so it looks distinct from the rest of
+// the app — but the numbers are live.
+//
+// READ-ONLY. That backend serves GETs and nothing else; the writes (propose, confirm,
+// upload nomination) live in the /leapapi backend behind Assign Members. Every action
+// button here says so rather than pretending to work.
+//
+// THREE OF THE SEVEN STAGES HAVE NO DATA. Door to Door, Door to Door - 2 and Result have
+// no source table in dakavara_pa, so the backend returns 0 for them and names them in each
+// response's `stagesUnavailable`. They are still drawn — the pipeline is the plan, and
+// hiding half of it would misrepresent where the work stands — but they read 0 until those
+// tables exist. Do not "fix" the zeros here.
+//
+// SCOPE. The top-level calls send no scope pair at all, which the backend reads as STATE
+// access. Only the location list scopes down, to the assembly the user drilled into.
 
 // ---- inline "CSS text" -> React style object, so the JSX below can keep
 // the mockup's original style strings almost verbatim. ----
@@ -36,39 +50,17 @@ const DASH2_CSS = `
 .d2-geo-row:hover{background:#f4f8f7}
 `
 
-// ---- static mock data (verbatim from the design mockup) ----
 const T = { ink: '#1a2422', mute: '#6b7873', teal: '#0d7a6f', red: '#c0392b', amber: '#b06f0a', green: '#1c7a45', purple: '#5b4bbd', crim: '#b3123b', blue: '#1d5fbd' }
-const n = (v) => v.toLocaleString('en-IN')
+const n = (v) => Number(v || 0).toLocaleString('en-IN')
 const pc = (a, b) => (b ? Math.round((a / b) * 100) : 0)
-
-const D = [
-  ['Mandal Parishad', '#0d7a6f', [['MPP', 'Mandal Parishad President', 660, 604, 470, 388], ['MPTC', 'Territorial constituency', 9698, 8410, 6912, 5204], ['Vice MPP', 'Vice President', 660, 596, 452, 366]]],
-  ['Zilla Parishad', '#0d7a6f', [['ZP Chairman', 'District chairperson', 26, 24, 18, 15], ['ZPTC', 'Territorial constituency', 660, 612, 478, 402], ['Vice Chairman', 'District vice chairperson', 26, 23, 17, 14]]],
-  ['Gram Panchayat', '#b3123b', [['Ward Member', 'Village ward member', 129000, 112300, 88200, 71500], ['Sarpanch', 'Village head', 13326, 12010, 9180, 7420], ['Upa Sarpanch', 'Deputy village head', 13326, 11760, 8890, 7110]]],
-  ['Municipality', '#b3123b', [['Ward Councillor', 'Municipal ward', 2712, 2480, 1960, 1610], ['Chairperson', 'Municipal chairperson', 87, 82, 61, 52], ['Vice Chairperson', 'Municipal vice chairperson', 87, 80, 58, 49]]],
-  ['Municipal Corporation', '#7a5b0d', [['Mayor', 'Corporation mayor', 17, 16, 12, 10], ['Corporator', 'Corporation division', 812, 742, 588, 470], ['Deputy Mayor', 'Corporation deputy mayor', 17, 15, 11, 9]]],
-]
-const ROWS = D.map(([body, accent, rs]) => ({
-  body,
-  accent,
-  rows: rs.map(([name, sub, total, proposed, confirmed, noms]) => {
-    const houses = total * 180, visited = Math.round(houses * 0.62)
-    const vloc = Math.round(noms * (visited / houses))
-    const visited2 = Math.round(houses * 0.48), vloc2 = Math.round(vloc * 0.79)
-    const declared = Math.round(vloc2 * 0.88), won = Math.round(declared * 0.57)
-    return { name, sub, total, proposed, confirmed, noms, houses, visited, hPending: houses - visited, vloc, visited2, hPending2: houses - visited2, vloc2, declared, won, lost: declared - won }
-  }),
-}))
-const ALL = []
-ROWS.forEach((g) => g.rows.forEach((r) => ALL.push(Object.assign({ body: g.body }, r))))
 
 const STEPS = [
   ['Proposal', 'Which locations have names put forward, and which are still empty. Several names on one location is normal.'],
   ['Confirmation', 'Compare the names on a location side by side and confirm exactly one.'],
   ['Nomination', 'Confirmed candidates who filed their papers before the deadline.'],
-  ['Door to door', 'First round of field coverage against the voter list.'],
-  ['Door to door 2', 'Second round of visits. Same process as round 1, counted from its own field source.'],
-  ['Result', 'Declared outcomes as mandal users enter them.'],
+  ['Door to door', 'First round of field coverage against the voter list. No source table yet — reads 0.'],
+  ['Door to door 2', 'Second round of visits. No source table yet — reads 0.'],
+  ['Result', 'Declared outcomes as mandal users enter them. No source table yet — reads 0.'],
 ]
 const STAGES = ['Not started', 'Proposal received', 'Confirmed', 'Nomination filed', 'Door to Door done', 'Door to Door - 2 done', 'Result declared']
 const SS = { 'Not started': ['#fdecec', '#a52a1f'], 'Proposal received': ['#fdf3e3', '#8a5a05'], Confirmed: ['#eaf6ef', '#1c7a45'], 'Nomination filed': ['#e9f3f2', '#0a5b53'], 'Door to Door done': ['#e8f0fb', '#1d5fbd'], 'Door to Door - 2 done': ['#e4ecfa', '#164a9e'], 'Result declared': ['#f0eefc', '#4a3bb0'] }
@@ -77,109 +69,23 @@ const CHIPS = [
   ['Started', 'proposed', 1, 0, T.green, 'at least one name received'],
   ['Confirmed', 'confirmed', 2, 1, T.green, 'one name settled'],
   ['Nomination filed', 'noms', 3, 2, T.teal, 'papers submitted'],
-  ['Door to Door', 'vloc', 4, 3, T.blue, 'first round covered'],
-  ['Door to Door - 2', 'vloc2', 5, 4, '#164a9e', 'second round covered'],
-  ['Result declared', 'declared', 6, 5, T.purple, 'outcome entered'],
+  ['Door to Door', 'vloc', 4, 3, T.blue, 'no source table yet'],
+  ['Door to Door - 2', 'vloc2', 5, 4, '#164a9e', 'no source table yet'],
+  ['Result declared', 'declared', 6, 5, T.purple, 'no source table yet'],
 ]
-const PCS = [
-  ['Araku', ['Palakonda', 'Kurupam', 'Parvathipuram', 'Salur']],
-  ['Srikakulam', ['Palasa', 'Tekkali', 'Narasannapeta', 'Srikakulam']],
-  ['Vizianagaram', ['Rajam', 'Bobbili', 'Cheepurupalli', 'Gajapathinagaram']],
-  ['Visakhapatnam', ['Bheemili', 'Vizag North', 'Vizag South', 'Vizag East']],
-  ['Anakapalli', ['Chodavaram', 'Madugula', 'Anakapalli', 'Pendurthi']],
-  ['Kakinada', ['Peddapuram', 'Pithapuram', 'Kakinada City', 'Tuni']],
-  ['Rajahmundry', ['Rajanagaram', 'Rajahmundry City', 'Kovvur', 'Nidadavole']],
-  ['Eluru', ['Eluru', 'Denduluru', 'Unguturu', 'Nuzvid']],
-]
-const QUOTAS = [['All', 1, T.mute], ['SC', 0.15, T.purple], ['ST', 0.08, T.teal], ['BC', 0.33, T.amber], ['General', 0.44, '#3d4a46'], ['Women', 0.5, T.crim]]
-const LOCS = [
-  ['Kotabommali (Ward 1)', 'SC · Woman', 6], ['Naupada', 'General', 1], ['Ponduru (Ward 3)', 'BC', 3],
-  ['Burja', 'ST', 0], ['Laveru (Ward 5)', 'General · Woman', 2], ['Ranasthalam', 'BC · Woman', 5],
-  ['Etcherla (Ward 7)', 'General', 6], ['Rajam', 'SC', 4],
-  ['Santhakaviti', 'BC', 3], ['Pathapatnam (Ward 2)', 'General · Woman', 5],
-  ['Meliaputti', 'ST · Woman', 1], ['Hiramandalam', 'BC', 6],
-  ['Kotturu (Ward 4)', 'SC', 2], ['Palakonda', 'General', 4],
-  ['Veeraghattam', 'ST', 0], ['Regidi (Ward 6)', 'BC · Woman', 3],
-  ['Saravakota', 'General', 5], ['Jalumuru (Ward 8)', 'SC · Woman', 2],
-  ['Polaki', 'BC', 4], ['Gara (Ward 9)', 'General', 1],
-]
-// name, phone, gender, age, casteGroup, sub-caste, occupation, education, since, score, houses, past, cases, proposedBy
-const POOL = [
-  ['K. Ramesh Babu', '+91 94000 73405', 'Male', 49, 'SC', 'Mala', 'Business', 'Intermediate', 2019, 65, 186, '1 win · 1 loss', 'None', 'Mandal in-charge'],
-  ['P. Lakshmi Devi', '+91 93910 82210', 'Female', 41, 'BC', 'Gouda', 'Teacher', 'Degree', 2016, 72, 154, '1 win', 'None', 'AC president'],
-  ['M. Srinivas Rao', '+91 98480 66874', 'Male', 53, 'General', '—', 'Agriculture', 'SSC', 2014, 58, 97, '2 losses', '1 civil', 'District committee'],
-  ['T. Sujatha', '+91 90140 55219', 'Female', 38, 'ST', 'Savara', 'Anganwadi worker', 'Intermediate', 2018, 69, 203, 'First time', 'None', 'Mandal in-charge'],
-  ['B. Anil Kumar', '+91 97010 34882', 'Male', 45, 'BC', 'Yadava', 'Contractor', 'Degree', 2015, 61, 142, '1 loss', 'None', 'Mandal in-charge'],
-  ['S. Padma Sri', '+91 99590 71160', 'Female', 36, 'SC', 'Madiga', 'Self-employed', 'Degree', 2017, 74, 168, 'First time', 'None', 'AC president'],
-  ['G. Venkata Rao', '+91 91770 22945', 'Male', 57, 'General', '—', 'Retired teacher', 'PG', 2011, 66, 88, '2 wins', 'None', 'District committee'],
-  ['N. Kavitha', '+91 96520 60731', 'Female', 33, 'BC', 'Setti Balija', 'Shop owner', 'Intermediate', 2020, 55, 121, 'First time', 'None', 'Mandal in-charge'],
-  ['D. Prasad Reddy', '+91 93470 18604', 'Male', 47, 'General', '—', 'Agriculture', 'Degree', 2013, 70, 133, '1 win · 1 loss', 'None', 'AC president'],
-  ['V. Sirisha', '+91 98663 90512', 'Female', 39, 'BC', 'Turpu Kapu', 'Tailoring unit', 'SSC', 2019, 63, 175, 'First time', 'None', 'Mandal in-charge'],
-  ['R. Chandra Sekhar', '+91 94910 44127', 'Male', 51, 'SC', 'Mala', 'Transport', 'Intermediate', 2012, 68, 110, '1 win', '1 criminal', 'District committee'],
-  ['A. Vijaya Lakshmi', '+91 90000 61338', 'Female', 44, 'ST', 'Konda Dora', 'Farming', 'SSC', 2020, 60, 192, 'First time', 'None', 'Mandal in-charge'],
-  ['J. Satyanarayana', '+91 94409 15772', 'Male', 46, 'BC', 'Gouda', 'Rice mill', 'Degree', 2016, 64, 129, '1 loss', 'None', 'Mandal in-charge'],
-  ['Ch. Annapurna', '+91 90523 44810', 'Female', 42, 'SC', 'Madiga', 'Tailoring unit', 'Intermediate', 2018, 67, 181, 'First time', 'None', 'AC president'],
-  ['K. Bhaskar Rao', '+91 97045 33261', 'Male', 55, 'General', '—', 'Contractor', 'Degree', 2010, 62, 104, '1 win · 2 losses', 'None', 'District committee'],
-  ['M. Suvarna', '+91 96401 78539', 'Female', 35, 'ST', 'Savara', 'Dairy unit', 'SSC', 2021, 58, 166, 'First time', 'None', 'Mandal in-charge'],
-  ['Y. Nageswara Rao', '+91 93912 60417', 'Male', 50, 'BC', 'Turpu Kapu', 'Agriculture', 'Intermediate', 2013, 71, 147, '1 win', 'None', 'AC president'],
-  ['L. Rajeswari', '+91 98857 20936', 'Female', 37, 'General', '—', 'Medical shop', 'PG', 2019, 69, 158, 'First time', 'None', 'District committee'],
-  ['P. Ravi Kumar', '+91 94931 55208', 'Male', 43, 'BC', 'Gouda', 'Poultry farm', 'Degree', 2017, 66, 138, 'First time', 'None', 'Mandal in-charge'],
-  ['S. Manjula', '+91 90107 66413', 'Female', 40, 'SC', 'Mala', 'Teacher', 'PG', 2015, 73, 174, '1 win', 'None', 'AC president'],
-  ['V. Ramana Murthy', '+91 98494 30852', 'Male', 52, 'General', '—', 'Advocate', 'LLB', 2009, 70, 112, '1 win · 1 loss', 'None', 'District committee'],
-  ['K. Sarojini', '+91 93924 71065', 'Female', 34, 'ST', 'Konda Dora', 'Self-help group', 'Intermediate', 2020, 61, 189, 'First time', 'None', 'Mandal in-charge'],
-  ['B. Srinivasulu', '+91 97046 28317', 'Male', 48, 'BC', 'Turpu Kapu', 'Hardware shop', 'SSC', 2014, 63, 126, '1 loss', 'None', 'Mandal in-charge'],
-  ['N. Aruna Kumari', '+91 96183 40729', 'Female', 39, 'SC', 'Madiga', 'Anganwadi worker', 'Intermediate', 2018, 68, 183, 'First time', 'None', 'AC president'],
-  ['G. Prakash Rao', '+91 94408 91574', 'Male', 56, 'General', '—', 'Retired bank staff', 'PG', 2008, 64, 95, '2 wins', 'None', 'District committee'],
-  ['T. Lalitha', '+91 90005 27846', 'Female', 36, 'BC', 'Setti Balija', 'Kirana store', 'Degree', 2019, 67, 161, 'First time', 'None', 'Mandal in-charge'],
-  ['M. Bhaskar', '+91 98661 13490', 'Male', 44, 'ST', 'Savara', 'Agriculture', 'SSC', 2016, 59, 151, 'First time', 'None', 'Mandal in-charge'],
-  ['D. Swarna Latha', '+91 93481 60275', 'Female', 42, 'General', '—', 'Private school', 'PG', 2013, 71, 143, '1 win', 'None', 'AC president'],
-  ['R. Naga Raju', '+91 97014 85632', 'Male', 47, 'SC', 'Mala', 'Auto union', 'Intermediate', 2012, 65, 167, '1 loss', '1 civil', 'District committee'],
-  ['Ch. Padmavathi', '+91 90523 91408', 'Female', 38, 'BC', 'Yadava', 'Dairy unit', 'SSC', 2021, 62, 178, 'First time', 'None', 'Mandal in-charge'],
-  ['A. Suresh Babu', '+91 94900 34718', 'Male', 45, 'BC', 'Gouda', 'Fertiliser shop', 'Degree', 2016, 64, 132, '1 loss', 'None', 'Mandal in-charge'],
-  ['K. Vijaya Kumari', '+91 93915 82640', 'Female', 41, 'SC', 'Madiga', 'Government teacher', 'PG', 2014, 72, 171, '1 win', 'None', 'AC president'],
-  ['S. Gopala Krishna', '+91 98485 27093', 'Male', 50, 'General', '—', 'Civil contractor', 'Degree', 2011, 67, 118, '1 win', 'None', 'District committee'],
-  ['T. Kanaka Durga', '+91 90144 61385', 'Female', 37, 'ST', 'Savara', 'Self-help group', 'Intermediate', 2019, 63, 186, 'First time', 'None', 'Mandal in-charge'],
-  ['M. Venkatesh', '+91 97018 49250', 'Male', 46, 'BC', 'Turpu Kapu', 'Transport', 'SSC', 2015, 65, 141, 'First time', 'None', 'Mandal in-charge'],
-  ['P. Sridevi', '+91 99598 13476', 'Female', 35, 'SC', 'Mala', 'Tailoring unit', 'Degree', 2020, 69, 179, 'First time', 'None', 'AC president'],
-  ['B. Ranga Rao', '+91 91773 50829', 'Male', 54, 'General', '—', 'Retired officer', 'PG', 2010, 66, 101, '2 wins', 'None', 'District committee'],
-  ['V. Hymavathi', '+91 96524 07138', 'Female', 39, 'BC', 'Setti Balija', 'Medical shop', 'Degree', 2018, 70, 164, 'First time', 'None', 'Mandal in-charge'],
-  ['N. Ramakrishna', '+91 93472 91560', 'Male', 48, 'ST', 'Konda Dora', 'Agriculture', 'Intermediate', 2013, 60, 148, '1 loss', 'None', 'AC president'],
-  ['G. Sunitha', '+91 98668 42017', 'Female', 43, 'General', '—', 'Private college', 'PG', 2012, 71, 139, '1 win', 'None', 'District committee'],
-  ['Y. Satish Kumar', '+91 94916 73084', 'Male', 42, 'SC', 'Madiga', 'Electrical works', 'SSC', 2017, 62, 159, 'First time', 'None', 'Mandal in-charge'],
-  ['L. Bhavani', '+91 90006 25791', 'Female', 36, 'BC', 'Yadava', 'Dairy unit', 'Intermediate', 2021, 64, 182, 'First time', 'None', 'Mandal in-charge'],
-  ['J. Harinath', '+91 94402 68135', 'Male', 51, 'General', '—', 'Rice trader', 'Degree', 2009, 68, 107, '1 win · 1 loss', '1 civil', 'District committee'],
-  ['Ch. Sridhar', '+91 90528 71943', 'Male', 44, 'BC', 'Gouda', 'Cement dealer', 'SSC', 2015, 61, 124, 'First time', 'None', 'Mandal in-charge'],
-  ['R. Padmaja', '+91 97012 34860', 'Female', 38, 'ST', 'Savara', 'Anganwadi worker', 'Intermediate', 2018, 66, 192, 'First time', 'None', 'AC president'],
-  ['D. Kishore Babu', '+91 93918 40572', 'Male', 49, 'SC', 'Mala', 'Auto union', 'Intermediate', 2011, 63, 155, '1 loss', 'None', 'Mandal in-charge'],
-  ['S. Gowri Devi', '+91 94933 71508', 'Female', 36, 'ST', 'Savara', 'Self-help group', 'Intermediate', 2020, 65, 177, 'First time', 'None', 'Mandal in-charge'],
-  ['K. Ramulu Dora', '+91 90142 63819', 'Male', 47, 'ST', 'Konda Dora', 'Agriculture', 'SSC', 2014, 62, 143, 'First time', 'None', 'AC president'],
-  ['M. Jayanthi', '+91 97046 91352', 'Female', 33, 'ST', 'Savara', 'Anganwadi worker', 'Intermediate', 2021, 64, 195, 'First time', 'None', 'Mandal in-charge'],
-  ['T. Bhadraiah', '+91 98487 20614', 'Male', 51, 'ST', 'Konda Dora', 'Forest produce trade', 'SSC', 2012, 60, 131, '1 loss', 'None', 'District committee'],
-  ['V. Ratnamala', '+91 93476 85029', 'Female', 38, 'ST', 'Savara', 'Dairy unit', 'SSC', 2018, 66, 169, 'First time', 'None', 'AC president'],
-  ['G. Chinna Rao', '+91 96181 47530', 'Male', 44, 'ST', 'Konda Dora', 'Farming', 'Intermediate', 2016, 61, 154, 'First time', 'None', 'Mandal in-charge'],
-  ['B. Kumari Devi', '+91 90527 39418', 'Female', 35, 'ST', 'Savara', 'Tailoring unit', 'Degree', 2019, 68, 188, 'First time', 'None', 'Mandal in-charge'],
-  ['N. Simhachalam', '+91 97015 62873', 'Male', 49, 'ST', 'Konda Dora', 'Transport', 'SSC', 2013, 59, 127, '1 loss', 'None', 'AC president'],
-]
+// Every counter the screen names, and the field the backend returns it as. One map, so a
+// chip, a geo column and a step bar can never read a different number for the same thing.
+const API_FIELD = {
+  total: 'total_locations', proposed: 'started', confirmed: 'confirmed', noms: 'nominated',
+  vloc: 'door_to_door', vloc2: 'door_to_door_2', declared: 'declared',
+}
 const DOCS = [
   ['Form-1 · Nomination paper', 'Signed by candidate and proposer', true],
   ['Form-26 · Affidavit', 'Assets, liabilities and cases', true],
   ['Caste certificate', 'Needed for reserved seats only', false],
   ['Security deposit receipt', "Paid at the returning officer's counter", true],
 ]
-const WORKERS = [['B. Anil Kumar', '2 hrs ago', 186], ['S. Padma', 'today', 154], ['T. Naresh', 'yesterday', 97]]
-const NEXT = [['Add a name', true], ['Review & confirm', true], ['Upload nomination', true], ['Update Door to Door', true], ['Add win / loss', true], ['Add win / loss', true], ['View result', false]]
 const nm = (k) => k + (k === 1 ? ' name' : ' names')
-const lc = (k) => k + (k === 1 ? ' location' : ' locations')
-// Each location carries the date its stage last moved, so "updated" reads as real activity.
-const TODAY = new Date('2026-08-20T00:00:00')
-const pad2 = (k) => (k < 10 ? '0' : '') + k
-const iso = (d) => d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate())
-const addDays = (d, k) => new Date(d.getTime() + k * 86400000)
-const fmtDate = (s) => {
-  const d = new Date(s + 'T00:00:00')
-  return d.getDate() + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()] + ' ' + d.getFullYear()
-}
-const LOC_DATE = (i) => iso(addDays(TODAY, -((i * 7 + (i % 5) * 3) % 74)))
 // Each pending column names its own baseline, since the baseline stage itself isn't shown.
 const PENDING_LABEL = ['', 'Not started', 'Started, not confirmed', 'Confirmed, not filed', 'Door to Door pending', 'Door to Door - 2 pending', 'Visited, result pending']
 // The location-list filter speaks the stage's own language: done here / still pending here.
@@ -192,173 +98,187 @@ const FILTER_WORDS = [
   ['All locations', 'Door to Door - 2 done', 'Door to Door - 2 pending'],
   ['All locations', 'Result declared', 'Result pending'],
 ]
-// Who may put a name forward depends on the body and the tier of the post.
-// Ward / member posts are proposed one level below the seat; chief and deputy posts at the seat's own level.
-const WARD_POSTS = ['MPTC', 'ZPTC', 'Ward Member', 'Ward Councillor', 'Corporator']
-const PROPOSERS = {
-  'Gram Panchayat': { ward: ['Ward in-charge', 'Village committee president'], chief: ['Village committee president', 'Mandal president'] },
-  'Mandal Parishad': { ward: ['Village committee president', 'Mandal president'], chief: ['Mandal president', 'Constituency in-charge'] },
-  'Zilla Parishad': { ward: ['Mandal president', 'Constituency in-charge'], chief: ['District president', 'State committee'] },
-  Municipality: { ward: ['Ward in-charge', 'Town president'], chief: ['Town president', 'Constituency in-charge'] },
-  'Municipal Corporation': { ward: ['Division in-charge', 'City president'], chief: ['City president', 'District president'] },
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const fmtDate = (value) => {
+  if (!value) return null
+  const d = new Date(String(value).replace(' ', 'T'))
+  return Number.isNaN(d.getTime()) ? null : `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`
 }
-const proposerFor = (body, position, seed) => {
-  const set = PROPOSERS[body] || PROPOSERS['Mandal Parishad']
-  const pair = WARD_POSTS.indexOf(position) >= 0 ? set.ward : set.chief
-  return pair[seed % 2]
+
+// The layout comes from ../electionTree.js, shared with the Dashboard screen — the two must
+// draw the same tree. Only the palette is this screen's own: the tree's `accent` is the
+// other dashboard's colour scheme, so it is deliberately ignored here and the tone is
+// looked up by body label instead. A body the tree adds and this map does not name still
+// renders, in the default tone.
+const BODY_ACCENT = {
+  'Mandal Parishad': T.teal, 'Zilla Parishad': T.teal,
+  Municipality: T.crim, 'Municipal Corporation': '#7a5b0d', 'Gram Panchayat': T.crim,
+  Other: T.mute,
 }
-// The proposer belongs to the NAME, not the location: seeded once per (location, candidate)
-// so the list and the comparison table always read the same value.
-const propSeed = (li, c) => (li + POOL.indexOf(c)) % 2
-// Exact integer partition — parts always sum back to the total, so PC and AC
-// summaries never drift from the position total they were derived from.
-const splitInt = (total, weights) => {
-  const sum = weights.reduce((a, b) => a + b, 0)
-  const raw = weights.map((w) => (total * w) / sum)
-  const out = raw.map(Math.floor)
-  let left = total - out.reduce((a, b) => a + b, 0)
-  raw.map((v, i) => [v - out[i], i]).sort((a, b) => b[0] - a[0]).forEach(([, i]) => { if (left > 0) { out[i] += 1; left -= 1 } })
-  return out
-}
-const PC_W = [9, 14, 11, 16, 12, 13, 12, 13]
-const AC_W = [27, 24, 26, 23]
-const fitsQ = (c, quota) => {
-  const grp = quota.split(' · ')[0], woman = quota.indexOf('Woman') >= 0
-  return (grp === 'General' || c[4] === grp) && (!woman || c[2] === 'Female')
-}
-// Names are allocated exclusively: one aspirant belongs to exactly one location.
-const SEATS = (() => {
-  const claimed = [], out = LOCS.map(() => [])
-  const active = []
-  LOCS.forEach((l, i) => { if (l[2] > 0) active.push(i) })
-  const take = (i) => {
-    const c = POOL.filter((x) => claimed.indexOf(x) < 0 && fitsQ(x, LOCS[i][1])).sort((a, b) => b[9] - a[9])[0]
-    if (c) { claimed.push(c); out[i].push(c) }
-    return !!c
-  }
-  const bad = POOL.filter((c) => !fitsQ(c, LOCS[2][1]))[0]
-  if (bad && LOCS[2][2] > 0) { claimed.push(bad); out[2].push(bad) }
-  active.slice()
-    .sort((a, b) => POOL.filter((c) => fitsQ(c, LOCS[a][1])).length - POOL.filter((c) => fitsQ(c, LOCS[b][1])).length)
-    .forEach(take)
-  active.forEach((i) => { if (out[i].filter((c) => fitsQ(c, LOCS[i][1])).length < 2) take(i) })
-  active.forEach((i) => { if (out[i].length < 3) take(i) })
-  return out.map((cands, i) => cands.sort((a, b) => (fitsQ(b, LOCS[i][1]) ? 1 : 0) - (fitsQ(a, LOCS[i][1]) ? 1 : 0) || b[9] - a[9]))
-})()
+const TIER_STYLE = [
+  { title: 'A · Panchayat Raj elections', accent: T.teal, border: '#d3e5e2', headBorder: '#bcdcd7', bg: '#f6fbfa' },
+  { title: 'B · Local body elections', accent: T.crim, border: '#eed6dc', headBorder: '#e8c6ce', bg: '#fdf7f8' },
+]
+// The counters a card sums out of the rows it claims. Listed rather than derived so a new
+// field on a row has to be added here deliberately — a silently-missing counter would read
+// as a real zero.
+const CARD_COUNTERS = [
+  'total', 'proposed', 'confirmed', 'noms', 'names',
+  'houses', 'visited', 'hPending', 'vloc', 'visited2', 'hPending2', 'vloc2',
+  'declared', 'won', 'lost',
+]
+// Reservation cards keep the reservation's own name; the tone is picked off its caste half.
+const RES_TONE = { GENERAL: '#3d4a46', SC: T.purple, ST: T.teal, BC: T.amber }
+const resTone = (label) => RES_TONE[String(label || '').split(/[-\s]/)[0]] || T.mute
 
 const ACCENT = T.teal
 
+// One backend position row -> the shape every derived block below reads. The three ids are
+// carried through because they are the post's identity: role 5 (Corporator) serves both
+// Municipal Ward and Corporation Ward, so the drill-downs need all three, not the role.
+const toRow = (p) => ({
+  proposal_role_id: p.proposal_role_id,
+  mainElectionTypeId: p.main_election_type_id,
+  proposalElectionTypeId: p.proposal_election_type_id,
+  electionType: p.election_type,
+  roleName: p.role_name,
+  total: p.total_locations, proposed: p.started, confirmed: p.confirmed, noms: p.nominated,
+  names: p.proposed_names,
+  houses: p.total_houses, visited: p.houses_visited, hPending: p.houses_pending,
+  vloc: p.door_to_door, visited2: p.houses_visited_2, hPending2: p.houses_pending_2,
+  vloc2: p.door_to_door_2, declared: p.declared, won: p.won, lost: p.lost,
+})
+
+const toCand = (c) => ({
+  name: [c.member_name, c.last_name].filter(Boolean).join(' ').trim() || '—',
+  phone: c.mobile_no || '—',
+  gender: c.gender === 'F' ? 'Female' : c.gender === 'M' ? 'Male' : '—',
+  age: c.age == null ? '—' : String(c.age),
+  casteGroup: c.category_name || '—',
+  subCaste: c.caste_name || '—',
+  occupation: c.occupation || '—',
+  education: c.education || '—',
+  since: c.party_member_since ? String(c.party_member_since) : '—',
+  membershipId: c.membership_id ? String(c.membership_id) : '—',
+  status: c.proposal_status || 'Proposed',
+  isConfirmed: c.proposal_status_id === 2,
+  isNominated: c.is_nominated === 'Y',
+})
+
+const READ_ONLY_NOTE = 'Dashboard 2 is read-only — use Assign Members to propose or confirm a name.'
+
 export default function Dashboard2() {
   const [state, setStateRaw] = useState({
-    step: 0, detail: null, chip: 1, pc: 1, ac: 0, quota: 'All',
-    drawer: null, compare: null, pick: null, chosen: {}, stages: {}, toast: null,
-    extra: {}, docs: {}, results: {}, dates: {},
+    step: 0, detail: null, chip: 1, pc: null, ac: null, quota: 'All locations',
+    drawer: null, compare: null, toast: null, docs: {}, lfilter: 'all',
   })
   const setState = (patch) => setStateRaw((prev) => ({ ...prev, ...(typeof patch === 'function' ? patch(prev) : patch) }))
 
-  const sum = (k) => ALL.reduce((s, r) => s + r[k], 0)
-  const flash = (msg) => {
-    setState({ toast: msg })
-    setTimeout(() => setState({ toast: null }), 3000)
-  }
-  const openDetail = (r, body, chip) => setState({ detail: { r, body }, chip, step: CHIPS[chip][3], drawer: null, compare: null })
-  const setStep = (i) => {
-    const c = CHIPS.filter((x) => x[3] === i && x[2] > 0)[0]
-    setState({ step: i, chip: c ? c[2] : 1, drawer: null, compare: null })
-  }
-  const key = (li) => state.pc + '-' + state.ac + '-' + li
-  const stageOf = (li) => { const k = key(li); return state.stages[k] === undefined ? LOCS[li][2] : state.stages[k] }
-  const candsFor = (li) => (SEATS[li] || []).concat(state.extra[key(li)] || [])
-  // Any action stamps the location's "updated" date, so the range picker never hides fresh work.
-  const dateOf = (li) => state.dates[key(li)] || LOC_DATE(li)
-  const stamp = (k) => {
-    const dates = Object.assign({}, state.dates)
-    dates[k] = iso(TODAY)
-    return dates
-  }
-  // Single source for a location's outcome: what the user recorded, else the seeded value.
-  const resultOf = (li) => {
-    const v = state.results[key(li)]
-    if (v) return v
-    return stageOf(li) >= 6 ? (li % 3 === 2 ? 'lost' : 'won') : null
-  }
-
-  const advance = (li, to, msg) => {
-    const k = key(li)
-    setState((prev) => {
-      const stages = Object.assign({}, prev.stages)
-      stages[k] = to
-      const dates = Object.assign({}, prev.dates)
-      dates[k] = iso(TODAY)
-      return { stages, dates, drawer: null }
-    })
-    flash(msg + ' — ' + LOCS[li][0])
-  }
-
-  const proposeNames = (li) => {
-    const k = key(li), quota = LOCS[li][1]
-    const used = [].concat.apply([], Object.keys(state.extra).map((x) => state.extra[x]))
-    const pickArr = POOL.filter((c) => used.indexOf(c) < 0 && SEATS.every((s) => s.indexOf(c) < 0) && fitsQ(c, quota))
-      .sort((a, b) => b[9] - a[9]).slice(0, 2)
-    if (!pickArr.length) {
-      setState({ drawer: null })
-      flash('No unassigned ' + quota + ' aspirant left — add one to the pool first')
-      return
-    }
-    const extra = Object.assign({}, state.extra)
-    extra[k] = (extra[k] || []).concat(pickArr)
-    const stages = Object.assign({}, state.stages)
-    stages[k] = 1
-    setState({ extra, stages, dates: stamp(k), drawer: null })
-    flash(nm(pickArr.length) + ' sent for review — ' + LOCS[li][0])
-  }
-
-  const docState = (li) => {
-    const saved = state.docs[key(li)]
-    if (saved) return saved
-    return DOCS.map((d) => (stageOf(li) >= 3 ? true : d[2]))
-  }
-  const toggleDoc = (li, i) => {
-    const k = key(li), cur = docState(li).slice()
-    cur[i] = !cur[i]
-    const docs = Object.assign({}, state.docs)
-    docs[k] = cur
-    setState({ docs })
-  }
-  const setResult = (li, win) => {
-    const results = Object.assign({}, state.results)
-    results[key(li)] = win ? 'won' : 'lost'
-    setState({ results })
-  }
-  const chosenIdx = (li) => {
-    const v = state.chosen[key(li)]
-    if (v !== undefined) return v
-    return stageOf(li) >= 2 && candsFor(li).length ? 0 : null
-  }
-  const leadOf = (li) => {
-    const cands = candsFor(li), quota = LOCS[li][1], chosen = chosenIdx(li)
-    if (!cands.length) return { c: null, tag: 'Empty', eligible: false }
-    if (chosen !== null) return { c: cands[chosen], tag: 'Confirmed', eligible: fitsQ(cands[chosen], quota) }
-    const el = cands.filter((c) => fitsQ(c, quota))
-    if (el.length) return { c: el[0], tag: 'Top eligible · ' + el[0][9], eligible: true }
-    return { c: cands[0], tag: 'No eligible name', eligible: false }
-  }
-  const confirmPick = () => {
-    const li = state.compare, ci = state.pick
-    if (li === null || ci === null) return
-    const k = key(li), stage = Math.max(stageOf(li), 2)
-    const chosen = Object.assign({}, state.chosen); chosen[k] = ci
-    const stages = Object.assign({}, state.stages); stages[k] = stage
-    setState({ chosen, stages, dates: stamp(k), compare: null, pick: null })
-    flash(candsFor(li)[ci][0] + ' confirmed for ' + LOCS[li][0])
-  }
-  const closeDetail = () => setState({ detail: null, drawer: null, compare: null })
-  const closeCompare = () => setState({ compare: null, pick: null })
-  const closeDrawer = () => setState({ drawer: null })
+  const [summary, setSummary] = useState(null)
+  const [loadError, setLoadError] = useState(null)
+  const [geo, setGeo] = useState(null)
+  const [reservations, setReservations] = useState(null)
+  const [locs, setLocs] = useState(null)
 
   const st = state
   const step = st.step
   const accent = ACCENT
+  const detail = st.detail
+
+  const flash = (msg) => {
+    setState({ toast: msg })
+    setTimeout(() => setState({ toast: null }), 3000)
+  }
+
+  // 1. The whole main table, state-wide, once.
+  useEffect(() => {
+    let live = true
+    getPositionSummary()
+      .then((body) => { if (live) setSummary(body) })
+      .catch((err) => { if (live) setLoadError(err.message) })
+    return () => { live = false }
+  }, [])
+
+  // 2. One open post's geo split and reservation split. Keyed on the post's own triple, not
+  //    on the detail object, which the render rebuilds every pass.
+  const posKey = detail ? detail.key : null
+  useEffect(() => {
+    if (!posKey) return undefined
+    let live = true
+    setGeo(null)
+    setReservations(null)
+    Promise.all([getGeoBreakdown(detail), getReservationSummary(detail)])
+      .then(([g, r]) => {
+        if (!live) return
+        setGeo(g)
+        setReservations(r)
+        // Land on the first assembly that holds locations for this post, so the list below
+        // is never empty on arrival.
+        const firstAc = (g.assemblies || [])[0]
+        setState({ pc: firstAc ? firstAc.parliament_id : null, ac: firstAc ? firstAc.assembly_id : null })
+      })
+      .catch((err) => { if (live) flash(err.message) })
+    return () => { live = false }
+  }, [posKey])
+
+  // 3. The locations inside the selected assembly. This is the one call that sends a scope
+  //    pair: state-wide would be 12,451 rows for MPTC.
+  useEffect(() => {
+    if (!posKey || !st.ac) { setLocs(null); return undefined }
+    let live = true
+    setLocs(null)
+    getLocations(detail, st.ac)
+      .then((body) => { if (live) setLocs(body) })
+      .catch((err) => { if (live) flash(err.message) })
+    return () => { live = false }
+  }, [posKey, st.ac])
+
+  const openDetail = (r, chip) => setState({ detail: r, chip, step: CHIPS[chip][3], drawer: null, compare: null, lfilter: 'all', quota: 'All locations' })
+  const setStep = (i) => {
+    const c = CHIPS.filter((x) => x[3] === i && x[2] > 0)[0]
+    setState({ step: i, chip: c ? c[2] : 1, drawer: null, compare: null, lfilter: 'all' })
+  }
+  const closeDetail = () => setState({ detail: null, drawer: null, compare: null })
+  const closeCompare = () => setState({ compare: null })
+  const closeDrawer = () => setState({ drawer: null })
+
+  const docState = (id, stage) => state.docs[id] || DOCS.map((doc) => (stage >= 3 ? true : doc[2]))
+  const toggleDoc = (id, stage, i) => {
+    const cur = docState(id, stage).slice()
+    cur[i] = !cur[i]
+    setState({ docs: { ...state.docs, [id]: cur } })
+  }
+
+  if (loadError) {
+    return (
+      <div className="leap-dash2">
+        <style>{DASH2_CSS}</style>
+        <div style={sx('padding:60px 40px;max-width:820px')}>
+          <h1 style={sx(`margin:0 0 10px;font:700 24px/1.2 'Bitter',Georgia,serif`)}>Dashboard 2 could not load</h1>
+          <div style={sx(`font:400 14px/1.6 'IBM Plex Sans';color:#6b7873`)}>
+            {loadError}
+            <br />Its backend is <code>portal-frontend-code-2</code>, mounted on the gateway at{' '}
+            <code>/portal-frontend-code-2</code>. Check that the gateway is running on port 6644.
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!summary) {
+    return (
+      <div className="leap-dash2">
+        <style>{DASH2_CSS}</style>
+        <div style={sx('padding:60px 40px')}>
+          <div style={sx(`font:600 13px/1 'IBM Plex Sans';letter-spacing:.14em;text-transform:uppercase;color:#8a9793`)}>Loading election data…</div>
+        </div>
+      </div>
+    )
+  }
+
+  const ALL = summary.positions.map(toRow)
+  const totals = summary.totals
+  const sum = (k) => totals[API_FIELD[k]] || 0
 
   const PROG = [['proposed', 'total'], ['confirmed', 'proposed'], ['noms', 'confirmed'], ['vloc', 'noms'], ['vloc2', 'vloc'], ['declared', 'vloc2']]
 
@@ -376,7 +296,7 @@ export default function Dashboard2() {
   })
 
   const colDefs = [
-    [['Locations', 'total', T.ink, 0], ['Started', 'proposed', T.green, 1], ['Not started', '_np', T.red, 0], ['Proposal (names)', '_prop', T.amber, 1]],
+    [['Locations', 'total', T.ink, 0], ['Started', 'proposed', T.green, 1], ['Not started', '_np', T.red, 0], ['Proposal (names)', 'names', T.amber, 1]],
     [['Started', 'proposed', T.amber, 1], ['Confirmed', 'confirmed', T.green, 2], ['Pending', '_cp', T.purple, 2]],
     [['Confirmed', 'confirmed', T.green, 2], ['Nomination filed', 'noms', T.teal, 3], ['Pending', '_fp', T.red, 3]],
     [['Total houses', 'houses', T.ink, 4], ['Visits', 'visited', T.blue, 4], ['Pending', 'hPending', T.red, 4]],
@@ -385,23 +305,87 @@ export default function Dashboard2() {
   ][step]
 
   const val = (r, k) => (k === '_np' ? r.total - r.proposed : k === '_cp' ? r.proposed - r.confirmed : k === '_fp' ? r.confirmed - r.noms : r[k])
-  const show = (r, k) => (k === '_prop' ? n(Math.round(r.proposed * 2.4)) : n(val(r, k)))
-  const mkRow = (r, body) => ({
+  const mkRow = (r) => ({
     name: r.name, sub: r.sub,
-    open: () => openDetail(r, body, CHIPS.filter((c) => c[3] === step && c[2] > 0)[0][2]),
+    // A card with no rows behind it is a post nobody has configured a proposal constituency
+    // for. It still gets its place — the tree is the plan — but there is nothing to open.
+    open: () => (r.configured ? openDetail(r, CHIPS.filter((c) => c[3] === step && c[2] > 0)[0][2]) : flash(r.name + ' has no positions configured yet')),
     cells: colDefs.map(([label, k, tone, chip]) => ({
-      v: show(r, k), tone,
-      line: chip > 0 ? 'underline' : 'none', hint: 'Open ' + r.name + ' · ' + label,
-      go: () => openDetail(r, body, chip || 1),
+      v: r.configured ? n(val(r, k)) : '—', tone: r.configured ? tone : '#c9d2cf',
+      line: r.configured && chip > 0 ? 'underline' : 'none',
+      hint: r.configured ? 'Open ' + r.name + ' · ' + label : r.name + ' — not configured',
+      go: () => (r.configured ? openDetail(r, chip || 1) : flash(r.name + ' has no positions configured yet')),
     })),
   })
-  const groups = ROWS.map((g) => ({ title: g.body, accent: g.accent, firstCol: 'Position', meta: g.rows.length + ' positions', rows: g.rows.map((r) => mkRow(r, g.body)) }))
-  const cnt = (names) => { let s = 0; ALL.forEach((r) => { if (names.indexOf(r.body) >= 0) s += r.proposed }); return n(s) }
-  const PR = ['Mandal Parishad', 'Zilla Parishad'], LB = ['Gram Panchayat', 'Municipality', 'Municipal Corporation']
-  const sections = [
-    { title: 'A · Panchayat Raj elections', sub: 'Mandal & district tier', accent: T.teal, border: '#d3e5e2', headBorder: '#bcdcd7', bg: '#f6fbfa', count: cnt(PR), countLabel: 'candidates proposed', groups: groups.filter((g) => PR.indexOf(g.title) >= 0) },
-    { title: 'B · Local body elections', sub: 'Panchayat / municipality / corporation', accent: T.crim, border: '#eed6dc', headBorder: '#e8c6ce', bg: '#fdf7f8', count: cnt(LB), countLabel: 'candidates proposed', groups: groups.filter((g) => LB.indexOf(g.title) >= 0) },
-  ]
+
+  // Pour the summary rows into the shared tree. A card claims by proposal_role_id and
+  // nothing else, so one card can span several election types — Corporator claims role 5
+  // under Municipal Ward, Corporation Ward and a stray MPTC constituency, and counts all
+  // three together, exactly as the Dashboard screen does.
+  const foldCard = (card, tier, body) => {
+    const claimed = ALL.filter((r) => cardMatches(card, r))
+    const folded = {
+      key: tier.id + '/' + card.label, name: card.label, body: body.label,
+      roleIds: card.roleIds, configured: claimed.length > 0,
+    }
+    // Counted over everything the card claims — a Municipal Ward seat is still a Corporator
+    // seat, and the Dashboard screen counts it the same way.
+    CARD_COUNTERS.forEach((k) => { folded[k] = claimed.reduce((s, r) => s + (r[k] || 0), 0) })
+    // Named after this body's own slice of them, so the Corporator card under Municipal
+    // Corporation reads "Corporation Ward" rather than listing all three types its role
+    // spans. Falls back to the whole set when nothing matches, so a card whose rows all sit
+    // outside its body still says what they are instead of going blank.
+    const inBody = claimed.filter((r) => r.mainElectionTypeId === body.mainElectionTypeId)
+    const named = inBody.length ? inBody : claimed
+    const types = []
+    named.forEach((r) => { if (types.indexOf(r.electionType) < 0) types.push(r.electionType) })
+    // A card with no rows of its own (Ward Councillor, Ward Member) has nothing to derive
+    // from, so the tree names its election type by id and the name is read off any row that
+    // carries it — still never a hardcoded type name. Its counters stay "—", which is what
+    // says the post is unconfigured; the label only says which election it belongs to.
+    const byId = ALL.filter((r) => r.proposalElectionTypeId === card.electionTypeId)[0]
+    folded.sub = claimed.length ? types.join(' · ') : byId ? byId.electionType : 'Not configured'
+    return folded
+  }
+  const sections = ELECTION_TREE.map((tier, ti) => {
+    const style = TIER_STYLE[ti] || TIER_STYLE[TIER_STYLE.length - 1]
+    const bodies = tier.bodies.map((body) => {
+      const rows = body.cards.map((card) => foldCard(card, tier, body))
+      const live = rows.filter((r) => r.configured).length
+      return {
+        title: body.label, accent: BODY_ACCENT[body.label] || T.mute, firstCol: 'Position',
+        meta: live + ' of ' + rows.length + ' configured',
+        rows: rows.map(mkRow), _rows: rows,
+      }
+    })
+    return {
+      title: style.title, sub: tier.sub, accent: style.accent, border: style.border,
+      headBorder: style.headBorder, bg: style.bg,
+      count: n(bodies.reduce((s, b) => s + b._rows.reduce((x, r) => x + r.proposed, 0), 0)),
+      countLabel: 'locations started', groups: bodies,
+    }
+  })
+
+  // Anything the tree does not claim is still shown, grouped by (election type, role) into
+  // an "Other" body on the last tier. The tree is a guess about which roles exist; a wrong
+  // guess must never hide live data. If a row lands here, a new proposal_role was added and
+  // ../electionTree.js has not been told about it.
+  const unclaimed = ALL.filter((r) => !CLAIMED_ROLE_IDS.has(Number(r.proposal_role_id)))
+  if (unclaimed.length) {
+    const byKey = new Map()
+    unclaimed.forEach((r) => {
+      const key = 'other/' + r.proposalElectionTypeId + '/' + r.roleName
+      if (!byKey.has(key)) byKey.set(key, { key, name: r.electionType + ' — ' + r.roleName, body: 'Other', roleIds: [Number(r.proposal_role_id)], configured: true, sub: r.electionType })
+      const folded = byKey.get(key)
+      CARD_COUNTERS.forEach((k) => { folded[k] = (folded[k] || 0) + (r[k] || 0) })
+    })
+    const rows = [...byKey.values()]
+    sections[sections.length - 1].groups.push({
+      title: 'Other', accent: BODY_ACCENT.Other, firstCol: 'Position',
+      meta: 'configured in the database, outside the standard tree',
+      rows: rows.map(mkRow), _rows: rows,
+    })
+  }
 
   // ---- detail-view derived state ----
   let chips = [], resCards = [], geoCols = [], pcRows = [], acRows = [], rows = []
@@ -413,233 +397,212 @@ export default function Dashboard2() {
   let d2d = { houses: '0', visited: '0', pct: 0, barW: '0%', workers: [] }
   let pcTotal = '', acTotal = '', geoNote = '', geoFoot = ''
 
-  const d = st.detail
+  const d = detail
   if (d) {
-    const r = d.r, pcName = PCS[st.pc][0], acName = PCS[st.pc][1][st.ac], chipDef = CHIPS[st.chip]
+    const chipDef = CHIPS[st.chip]
+    const allLocations = locs ? locs.locations : []
+    const locById = (id) => allLocations.filter((x) => x.proposal_position_id === id)[0]
+    const pcRow = geo ? (geo.parliaments || []).filter((x) => x.parliament_id === st.pc)[0] : null
+    const acRow = geo ? (geo.assemblies || []).filter((x) => x.assembly_id === st.ac)[0] : null
+    const pcName = pcRow ? pcRow.parliament_name : '—'
+    const acName = acRow ? acRow.assembly_name : '—'
 
     chips = CHIPS.map(([label, k, , si, tone, note], i) => {
-      const on = i === st.chip, isVisit = k === 'vloc' || k === 'vloc2'
+      const on = i === st.chip
       return {
-        label, tone,
-        value: n(r[k] === undefined ? r.total : r[k]),
-        note: isVisit ? pc(k === 'vloc2' ? r.visited2 : r.visited, r.houses) + '% of houses covered' : note,
+        label, tone, value: n(d[k]), note,
         border: on ? accent : '#e9edeb', bg: on ? '#f4faf9' : '#fff', labelFg: on ? accent : '#8a9793',
         arrow: i === CHIPS.length - 1 ? '' : '›', arrowFg: i < st.chip ? accent : '#cfd8d5',
-        go: () => setState({ chip: i, step: si, drawer: null, compare: null }),
+        go: () => setState({ chip: i, step: si, drawer: null, compare: null, lfilter: 'all' }),
       }
     })
 
-    resCards = QUOTAS.map(([label, share, tone]) => {
-      const total = label === 'All' ? r.total : Math.max(1, Math.round(r.total * share))
-      const isAll = label === 'All'
-      const confirmed = label === 'All' ? r.confirmed : Math.round(total * 0.71)
-      const on = st.quota === label
-      return {
-        label: isAll ? 'All locations' : label, tone, total: n(total),
-        confirmed: n(confirmed), pending: n(total - confirmed),
-        share: label === 'All' ? '100%' : Math.round(share * 100) + '%',
-        barW: pc(confirmed, total) + '%',
-        border: on ? accent : '#e9edeb', bg: on ? '#f4faf9' : '#fff',
-        go: () => setState({ quota: label, drawer: null, compare: null }),
-      }
-    })
+    // The reservation cards, straight off /reservationSummary — the reservations actually
+    // configured on this post's positions, never a fixed SC/ST/BC/General list. A post with
+    // none (every Gram Panchayat position today) gets the "not configured" card instead.
+    const resRows = reservations ? reservations.reservations : []
+    resCards = [{ label: 'All locations', tone: T.mute, total: d.total, confirmed: d.confirmed, share: '100%' }]
+      .concat(resRows.map((r) => ({
+        label: r.reservation_type || 'No reservation set',
+        tone: r.reservation_type ? resTone(r.reservation_type) : T.red,
+        total: r.total_locations, confirmed: r.confirmed,
+        share: pc(r.total_locations, d.total) + '%',
+      })))
+      .map((c) => {
+        const on = st.quota === c.label
+        return {
+          label: c.label, tone: c.tone, total: n(c.total),
+          confirmed: n(c.confirmed), pending: n(c.total - c.confirmed), share: c.share,
+          barW: pc(c.confirmed, c.total) + '%',
+          border: on ? accent : '#e9edeb', bg: on ? '#f4faf9' : '#fff',
+          go: () => setState({ quota: c.label, drawer: null, compare: null }),
+        }
+      })
 
-    const KEYS = CHIPS.map((c) => c[1])
-    const SPL = {}
-    KEYS.forEach((k) => { SPL[k] = splitInt(r[k] === undefined ? r.total : r[k], PC_W) })
     // Total, plus the stage being viewed — intermediate stages are noise here.
     const keepIdx = st.chip === 0 ? [0] : [0, st.chip]
-    const visitStep = st.chip === 4 || st.chip === 5
-    // Visit steps count houses, not locations, so the split is re-run on the house totals.
-    if (visitStep) {
-      SPL.total = splitInt(r.houses, PC_W)
-      SPL[KEYS[st.chip]] = splitInt(st.chip === 4 ? r.visited : r.visited2, PC_W)
-    }
-    geoCols = keepIdx.map((i) => ({ label: i === 0 && visitStep ? 'Total houses' : CHIPS[i][0], fg: i === st.chip ? accent : '#8a9793' }))
-      .concat(st.chip > 0 ? [{ label: visitStep ? 'Houses pending' : PENDING_LABEL[st.chip], fg: T.red }] : [])
-    const geoCells = (spl, i) => {
-      const cells = keepIdx.map((ki) => ({ v: n(spl[KEYS[ki]][i]), fg: ki === st.chip ? accent : T.ink, w: ki === st.chip ? '700' : '600' }))
-      if (st.chip > 0) cells.push({ v: n(spl[KEYS[visitStep ? 0 : st.chip - 1]][i] - spl[KEYS[st.chip]][i]), fg: T.red, w: '600' })
+    geoCols = keepIdx.map((i) => ({ label: CHIPS[i][0], fg: i === st.chip ? accent : '#8a9793' }))
+      .concat(st.chip > 0 ? [{ label: PENDING_LABEL[st.chip], fg: T.red }] : [])
+    const geoCells = (g) => {
+      const cells = keepIdx.map((ki) => ({ v: n(g[API_FIELD[CHIPS[ki][1]]]), fg: ki === st.chip ? accent : T.ink, w: ki === st.chip ? '700' : '600' }))
+      if (st.chip > 0) cells.push({ v: n(g[API_FIELD[CHIPS[st.chip - 1][1]]] - g[API_FIELD[CHIPS[st.chip][1]]]), fg: T.red, w: '600' })
       return cells
     }
-    pcRows = PCS.map(([name, acs], i) => {
-      const on = i === st.pc
+    pcRows = (geo ? geo.parliaments : []).map((g) => {
+      const on = g.parliament_id === st.pc
+      const acs = (geo.assemblies || []).filter((a) => a.parliament_id === g.parliament_id)
       return {
-        name: 'PC · ' + name, sub: acs.length + ' assembly segments',
+        name: 'PC · ' + g.parliament_name, sub: acs.length + ' assembly segments',
         bg: on ? '#f4faf9' : '#fff', nameFg: on ? accent : T.ink,
-        mark: on ? '▸' : '', cells: geoCells(SPL, i),
-        go: () => setState({ pc: i, ac: 0, drawer: null, compare: null }),
+        mark: on ? '▸' : '', cells: geoCells(g),
+        go: () => setState({ pc: g.parliament_id, ac: acs.length ? acs[0].assembly_id : null, drawer: null, compare: null }),
       }
     })
-    const acSpl = {}
-    KEYS.forEach((k) => { acSpl[k] = splitInt(SPL[k][st.pc], AC_W) })
-    acRows = PCS[st.pc][1].map((an, j) => {
-      const on = j === st.ac
+    acRows = (geo ? geo.assemblies : []).filter((a) => a.parliament_id === st.pc).map((a) => {
+      const on = a.assembly_id === st.ac
       return {
-        name: 'AC · ' + an, sub: 'in PC · ' + PCS[st.pc][0],
+        name: 'AC · ' + a.assembly_name, sub: 'in PC · ' + (a.parliament_name || '—'),
         bg: on ? '#f4faf9' : '#fff', nameFg: on ? accent : T.ink,
-        mark: on ? '▸' : '', cells: geoCells(acSpl, j),
-        go: () => setState({ ac: j, drawer: null, compare: null }),
+        mark: on ? '▸' : '', cells: geoCells(a),
+        go: () => setState({ ac: a.assembly_id, drawer: null, compare: null }),
       }
     })
     geoNote = 'Highlighted column = ' + chipDef[0]
-    geoFoot = visitStep
-      ? 'House counts come from the field app; Total houses = visits + pending.'
-      : 'Each column adds up down the eight rows to the position total.'
-    const unit = visitStep ? ' houses' : ' locations'
-    pcTotal = n(visitStep ? r.houses : r.total) + unit + ' across 8 parliament constituencies'
-    acTotal = n(SPL.total[st.pc]) + unit + ' in PC · ' + PCS[st.pc][0]
+    geoFoot = 'Each column adds up down the rows to the position total — every location is counted under exactly one assembly.'
+    pcTotal = n(d.total) + ' locations across ' + pcRows.length + ' parliament constituencies'
+    acTotal = pcRow ? n(pcRow.total_locations) + ' locations in PC · ' + pcName : 'Pick a parliament constituency'
 
     const level = chipDef[2]
     const lf = st.lfilter || 'all'
-    const idxs = []
-    LOCS.forEach((l, i) => {
-      const q = st.quota === 'All' || l[1].indexOf(st.quota) >= 0
-      if (!q) return
-      const s = stageOf(i)
-      // Scoped to the stage being viewed: nothing already past it.
-      if (level > 0 && s > level) return
-      // "pending" = waiting AT this stage (its immediate predecessor), not the whole backlog.
-      if (lf === 'done' && s < level) return
-      if (lf === 'pending' && s !== level - 1) return
-      if (lf === 'behind' && s >= level - 1) return
-      idxs.push(i)
-    })
-    const words = FILTER_WORDS[level]
+    const quotaOf = (l) => l.reservation_type || 'No reservation set'
+    const inQuota = (l) => st.quota === 'All locations' || quotaOf(l) === st.quota
+    const scoped = allLocations.filter(inQuota)
     const tally = { all: 0, done: 0, pending: 0, behind: 0 }
-    LOCS.forEach((l, i) => {
-      if (st.quota !== 'All' && l[1].indexOf(st.quota) < 0) return
-      const s = stageOf(i)
-      if (level > 0 && s > level) return
+    scoped.forEach((l) => {
+      if (level > 0 && l.stage > level) return
       tally.all += 1
-      if (s >= level) tally.done += 1
-      else if (s === level - 1) tally.pending += 1
+      if (l.stage >= level) tally.done += 1
+      else if (l.stage === level - 1) tally.pending += 1
       else tally.behind += 1
     })
-    const cur = lf
+    const shown = scoped.filter((l) => {
+      // Scoped to the stage being viewed: nothing already past it.
+      if (level > 0 && l.stage > level) return false
+      if (lf === 'done') return l.stage >= level
+      if (lf === 'pending') return l.stage === level - 1
+      if (lf === 'behind') return l.stage < level - 1
+      return true
+    })
+    const words = FILTER_WORDS[level]
     const chipDefs = level === 0
       ? [['all', words[0]]]
       : [['all', words[0]], ['done', words[1]], ['pending', words[2]]].concat(level > 1 && tally.behind ? [['behind', 'Not yet at this stage']] : [])
     lfilters = chipDefs.map(([fkey, label]) => ({
       label: label + ' (' + tally[fkey] + ')',
       go: () => setState({ lfilter: fkey, drawer: null, compare: null }),
-      border: cur === fkey ? accent : '#dfe4e2',
-      bg: cur === fkey ? '#f1f7f6' : '#fff',
-      fg: cur === fkey ? accent : T.mute,
+      border: lf === fkey ? accent : '#dfe4e2',
+      bg: lf === fkey ? '#f1f7f6' : '#fff',
+      fg: lf === fkey ? accent : T.mute,
     }))
-    const terminal = level === CHIPS.length - 1
 
-    rows = idxs.map((i) => {
-      const l = LOCS[i], stage = stageOf(i), sty = SS[STAGES[stage]], cands = candsFor(i), nx = NEXT[stage]
-      const chosen = chosenIdx(i), ld = leadOf(i), lead = ld.c
-      const named = !!lead, warn = named && !ld.eligible, rr = resultOf(i)
-      const houses = 1180 + i * 140, part = Math.round(houses * (0.52 + (i % 4) * 0.08))
-      const v1 = stage >= 4 ? houses : stage === 3 ? part : 0
-      const v2 = stage >= 5 ? houses : stage === 4 ? Math.round(houses * 0.48) : 0
+    const candsOf = (l) => (l.candidates || []).map(toCand)
+    const leadOf = (l) => {
+      const cands = candsOf(l)
+      if (!cands.length) return { c: null, tag: 'Empty' }
+      const conf = cands.filter((c) => c.isConfirmed)[0]
+      if (conf) return { c: conf, tag: 'Confirmed' }
+      return { c: cands[0], tag: nm(cands.length) + ' proposed' }
+    }
+
+    rows = shown.map((l) => {
+      const sty = SS[STAGES[l.stage]], cands = candsOf(l), ld = leadOf(l)
+      const started = fmtDate(l.started_time)
       return {
-        name: l[0], sub: 'Mandal · ' + l[0].split(' (')[0] + ' · updated ' + fmtDate(dateOf(i)), quota: l[1],
-        namesLabel: !named ? 'No name yet' : chosen !== null ? nm(cands.length) + ' · 1 confirmed' : nm(cands.length),
-        idleDays: Math.round((TODAY - new Date(dateOf(i) + 'T00:00:00')) / 86400000) + ' days idle',
-        owner: proposerFor(d.body, r.name, propSeed(i, POOL[i % POOL.length])),
+        name: l.local_body_name,
+        sub: (l.mandal_town_name || l.assembly_name || '') + (started ? ' · started ' + started : ''),
+        quota: quotaOf(l),
+        namesLabel: !cands.length ? 'No name yet' : l.confirmed_names ? nm(cands.length) + ' · 1 confirmed' : nm(cands.length),
         leadTag: ld.tag,
-        leadBg: chosen !== null ? SS.Confirmed[0] : warn ? SS['Not started'][0] : stage === 0 ? SS['Not started'][0] : '#f1f4f3',
-        leadFg: chosen !== null ? SS.Confirmed[1] : warn ? SS['Not started'][1] : stage === 0 ? SS['Not started'][1] : T.mute,
-        leadName: !named ? 'Assign a name to start' : (chosen !== null ? 'Confirmed candidate: ' : 'Leading: ') + lead[0] + ' · ' + lead[4] + ' · ' + lead[2],
-        stage: STAGES[stage], pillBg: sty[0], pillFg: sty[1],
-        metric: step === 3 || step === 4
-          ? n(step === 4 ? v2 : v1) + ' / ' + n(houses)
-          : step === 5 ? (rr ? (rr === 'won' ? 'WON · +' : 'LOSS · −') + n(640 + i * 55) : '—')
-          : named ? String(cands.length) : '—',
-        metricTone: step === 5 && rr ? (rr === 'won' ? T.green : T.crim) : T.mute,
-        // Viewing the optional second-visit step offers that action directly from the list.
-        btn: stage === 0 ? '—' : (step === 4 && stage === 4 ? 'Update Door to Door - 2' : nx[0]),
-        btnBorder: stage === 0 ? 'transparent' : nx[1] ? accent : '#dfe4e2',
-        btnBg: stage === 0 ? 'transparent' : nx[1] ? accent : '#fff',
-        btnFg: stage === 0 ? '#c9d2cf' : nx[1] ? '#fff' : T.mute,
-        compare: () => (cands.length ? setState({ compare: i, pick: chosenIdx(i) }) : setState({ drawer: i })),
-        go: () => (stage === 1 && cands.length
-          ? setState({ compare: i, pick: chosenIdx(i) })
-          : (step === 4 && stage === 4 ? advance(i, 5, 'Door to Door - 2 marked complete') : setState({ drawer: i }))),
+        leadBg: ld.c ? (l.confirmed_names ? SS.Confirmed[0] : '#f1f4f3') : SS['Not started'][0],
+        leadFg: ld.c ? (l.confirmed_names ? SS.Confirmed[1] : T.mute) : SS['Not started'][1],
+        leadName: !ld.c ? 'No name proposed yet' : (l.confirmed_names ? 'Confirmed candidate: ' : 'Leading: ') + ld.c.name + ' · ' + ld.c.casteGroup + ' · ' + ld.c.gender,
+        stage: STAGES[l.stage], pillBg: sty[0], pillFg: sty[1],
+        metric: step === 3 || step === 4 ? '0 / 0' : step === 5 ? '—' : cands.length ? String(cands.length) : '—',
+        metricTone: T.mute,
+        btn: cands.length ? 'View names' : '—',
+        btnBorder: cands.length ? accent : 'transparent',
+        btnBg: cands.length ? accent : 'transparent',
+        btnFg: cands.length ? '#fff' : '#c9d2cf',
+        compare: () => setState(cands.length ? { compare: l.proposal_position_id } : { drawer: l.proposal_position_id }),
+        go: () => setState(cands.length ? { compare: l.proposal_position_id } : { drawer: l.proposal_position_id }),
       }
     })
 
     const ci = st.compare
-    if (ci !== null && ci !== undefined) {
-      const l = LOCS[ci], cands = candsFor(ci), stage = stageOf(ci), chosen = chosenIdx(ci)
-      const elig = cands.filter((c) => fitsQ(c, l[1]))
-      const many = elig.length > 1
-      const best = (k) => Math.max.apply(null, elig.map((c) => c[k]))
-      const oldest = (k) => Math.min.apply(null, elig.map((c) => c[k]))
-      const top = (c, k) => fitsQ(c, l[1]) && c[k] === best(k)
-      const cell = (v, tone, isBest) => ({ v, tone: tone || T.ink, best: many && isBest ? 'BEST' : '' })
-      const locked = stage >= 2
+    if (ci) {
+      const l = locById(ci)
+      const cands = l ? candsOf(l) : []
+      const quota = l ? quotaOf(l) : '—'
+      const cell = (v, tone) => ({ v, tone: tone || T.ink, best: '' })
       cmp = {
-        crumb: r.name + ' · ' + d.body + ' · AC ' + acName,
-        title: l[0] + ' — ' + nm(cands.length) + ' proposed',
-        help: locked
-          ? 'Location reserved for ' + l[1] + '. A candidate is already confirmed — this comparison is read-only.'
-          : 'Location reserved for ' + l[1] + '. Pick one name; the others stay on record as not selected.',
-        cands: cands.map((c, j) => {
-          const on = (st.pick === j && !locked) || (locked && chosen === j), fit = fitsQ(c, l[1])
-          return {
-            name: c[0], phone: c[1], score: c[9],
-            border: on ? accent : '#e9edeb', bg: on ? '#f4faf9' : '#fff',
-            dotRing: on ? accent : '#cfd8d5', dotFill: on ? accent : '#fff',
-            fit: fit ? 'Eligible for ' + l[1] : 'Does not fit ' + l[1],
-            fitBg: fit ? SS.Confirmed[0] : SS['Not started'][0], fitFg: fit ? SS.Confirmed[1] : SS['Not started'][1],
-            state: chosen === j ? 'Currently confirmed' : chosen === null ? 'Proposed' : 'Not selected',
-            stateBg: chosen === j ? '#e9f3f2' : '#f1f4f3', stateFg: chosen === j ? '#0a5b53' : T.mute,
-            pick: () => { if (!locked) setState({ pick: j }) },
-          }
-        }),
+        crumb: d.name + ' · ' + d.body + ' · AC ' + acName,
+        title: (l ? l.local_body_name : '') + ' — ' + nm(cands.length) + ' proposed',
+        // Deliberately not a verdict. Whether a name may be assigned to this seat is decided
+        // by eligibility_flag() in the /leapapi backend, on the write — restating that rule
+        // here would be a second copy free to drift from it.
+        help: 'Location reserved for ' + quota + '. Read-only: confirm a name in Assign Members.',
+        cands: cands.map((c) => ({
+          name: c.name, phone: c.phone, score: '—',
+          border: c.isConfirmed ? accent : '#e9edeb', bg: c.isConfirmed ? '#f4faf9' : '#fff',
+          dotRing: c.isConfirmed ? accent : '#cfd8d5', dotFill: c.isConfirmed ? accent : '#fff',
+          fit: c.casteGroup + ' · ' + c.gender,
+          fitBg: '#f1f4f3', fitFg: T.mute,
+          state: c.isConfirmed ? 'Confirmed' : c.status,
+          stateBg: c.isConfirmed ? '#e9f3f2' : '#f1f4f3', stateFg: c.isConfirmed ? '#0a5b53' : T.mute,
+          pick: () => flash(READ_ONLY_NOTE),
+        })),
         attrs: [
-          { label: 'Reservation fit', cells: cands.map((c) => cell(fitsQ(c, l[1]) ? '✓ Eligible' : '✕ Not eligible', fitsQ(c, l[1]) ? T.green : T.red, false)) },
-          { label: 'Party score', cells: cands.map((c) => cell(String(c[9]), T.ink, top(c, 9))) },
-          { label: 'Caste / sub-caste', cells: cands.map((c) => cell(c[4] + ' · ' + c[5])) },
-          { label: 'Gender · age', cells: cands.map((c) => cell(c[2] + ' · ' + c[3])) },
-          { label: 'Occupation', cells: cands.map((c) => cell(c[6])) },
-          { label: 'Education', cells: cands.map((c) => cell(c[7])) },
-          { label: 'Member since', cells: cands.map((c) => cell(String(c[8]), T.ink, fitsQ(c, l[1]) && c[8] === oldest(8))) },
-          { label: 'Booth work (houses)', cells: cands.map((c) => cell(n(c[10]), T.ink, top(c, 10))) },
-          { label: 'Past contests', cells: cands.map((c) => cell(c[11])) },
-          { label: 'Pending cases', cells: cands.map((c) => cell(c[12], c[12] === 'None' ? T.green : T.red)) },
+          { label: 'Status', cells: cands.map((c) => cell(c.isNominated ? 'Nomination filed' : c.status, c.isConfirmed ? T.green : T.ink)) },
+          { label: 'Membership ID', cells: cands.map((c) => cell(c.membershipId)) },
+          { label: 'Caste category · caste', cells: cands.map((c) => cell(c.casteGroup + ' · ' + c.subCaste)) },
+          { label: 'Gender · age', cells: cands.map((c) => cell(c.gender + ' · ' + c.age)) },
+          { label: 'Occupation', cells: cands.map((c) => cell(c.occupation)) },
+          { label: 'Education', cells: cands.map((c) => cell(c.education)) },
+          { label: 'Member since', cells: cands.map((c) => cell(c.since)) },
+          { label: 'Mobile', cells: cands.map((c) => cell(c.phone)) },
         ].map((a, i2) => Object.assign(a, { rowBg: i2 % 2 ? '#fbfcfc' : '#fff' })),
-        foot: locked
-          ? cands[chosen][0] + ' is confirmed for this location. Changing the candidate needs a district approval request.'
-          : st.pick === null || st.pick === undefined
-            ? 'Select one name above to enable confirmation.'
-            : (fitsQ(cands[st.pick], l[1]) ? '' : '⚠ ') + cands[st.pick][0] + (fitsQ(cands[st.pick], l[1]) ? ' will be confirmed for this location.' : " does not match this location's reservation — confirming needs district approval."),
-        btnLabel: locked ? 'Already confirmed' : 'Confirm candidate',
-        btnBg: locked || st.pick === null || st.pick === undefined ? '#e6ebe9' : accent,
-        btnFg: locked || st.pick === null || st.pick === undefined ? '#7d8a86' : '#fff',
-        btnCursor: locked || st.pick === null || st.pick === undefined ? 'default' : 'pointer',
-        confirmGo: () => { if (!locked) confirmPick() },
+        foot: 'Seat reserved for ' + quota + '. Confirming happens in Assign Members, which re-checks the reservation on the write.',
+        btnLabel: 'Read-only',
+        btnBg: '#e6ebe9', btnFg: '#7d8a86', btnCursor: 'default',
+        confirmGo: () => flash(READ_ONLY_NOTE),
       }
     }
-    hasCompare = ci !== null && ci !== undefined
+    hasCompare = !!ci
 
     const di = st.drawer
-    const li = di === null || di === undefined ? null : di
-    if (li !== null) {
-      const l = LOCS[li], stage = stageOf(li), cands = candsFor(li), chosen = chosenIdx(li)
-      const c = leadOf(li).c || ['—', '—', '—', '—', '—', '—', '—', '—', '—', 0, 0, '—', '—']
+    if (di) {
+      const l = locById(di)
+      const stage = l ? l.stage : 0
+      const cands = l ? candsOf(l) : []
+      const c = l ? leadOf(l).c : null
       const ACTS = [
-        ['Add a name for this location', 'No name has gone up for this location yet. Add aspirants, then compare them.', 'Send name for review', 'Name sent for review — '],
-        ['Review the names and confirm one', 'More than one name is on this location. Compare them side by side before confirming.', 'Compare the names', 'Comparison opened — '],
-        ['Upload the nomination papers', 'Candidate is confirmed. Upload the filed papers so the district office can verify before the deadline.', 'Save as nomination filed', 'Nomination marked as filed — '],
-        ['Update Door to Door progress', 'Papers are filed. Door to Door visits are the live work on this location now.', 'Mark Door to Door complete', 'Door to Door marked complete — '],
-        ['Add the win or loss', 'Visits are covered. Record the outcome, or run the optional second visit first.', 'Save win / loss', 'Result saved — '],
-        ['Add the win or loss', 'Visits are covered. Record the declared outcome — mandal-level users only.', 'Save win / loss', 'Result saved — '],
-        ['Everything is complete', 'Result is declared for this location. Nothing further to do here.', 'View result sheet', 'Result sheet opened — '],
+        ['No name for this location yet', 'Nothing has gone up for this seat. Names are added in Assign Members.'],
+        ['Names are waiting to be compared', 'More than one name may be on this seat. Compare them, then confirm one in Assign Members.'],
+        ['Candidate confirmed', 'The seat is settled. Nomination papers are filed against this candidate.'],
+        ['Nomination filed', 'Papers are on record for this location.'],
+        ['Door to Door', 'No source table for field visits yet — this stage reads 0 everywhere.'],
+        ['Door to Door - 2', 'No source table for the second round yet — this stage reads 0 everywhere.'],
+        ['Result declared', 'No source table for declared results yet — this stage reads 0 everywhere.'],
       ]
       const act = ACTS[stage]
-      const note = stage > step + 1 ? 'This location is already past step ' + (step + 1) + '. ' : stage < step ? 'This location has not reached step ' + (step + 1) + ' yet. ' : ''
       dw = {
-        loc: l[0] + ' · AC ' + acName, name: stage === 0 ? 'No candidate yet' : c[0],
-        role: r.name + ' · ' + d.body + ' · location reserved for ' + l[1], phone: stage === 0 ? '—' : c[1],
+        loc: (l ? l.local_body_name : '') + ' · AC ' + acName,
+        name: c ? c.name : 'No candidate yet',
+        role: d.name + ' · ' + d.body + ' · seat reserved for ' + (l ? quotaOf(l) : '—'),
+        phone: c ? c.phone : '—',
         stage: STAGES[stage], pillBg: SS[STAGES[stage]][0], pillFg: SS[STAGES[stage]][1],
         compareLabel: cands.length ? (cands.length === 1 ? 'View the 1 name on this location' : 'Compare all ' + cands.length + ' names on this location') : 'No names on this location yet',
-        compareGo: () => { if (cands.length) setState({ compare: li, pick: chosen, drawer: null }) },
+        compareGo: () => { if (cands.length) setState({ compare: di, drawer: null }) },
         timeline: STAGES.slice(1).map((label, i) => {
           const done = i < stage - 1, cur = i === stage - 1
           return {
@@ -649,71 +612,54 @@ export default function Dashboard2() {
             note: done ? 'Done' : cur ? 'Current stage' : 'Not reached yet',
           }
         }),
-        facts: [['Profile', c[2] + ' · ' + c[3] + ' · ' + c[4]], ['Occupation', c[6]], ['Education', c[7]], ['Member since', String(c[8])], ['Reserved for', l[1]], ['Names on location', String(cands.length)]].map(([k, v]) => ({ k, v })),
-        actionStep: stage === 6 ? 'Complete' : 'Next · step ' + (stage + 1),
-        actionTitle: act[0], actionHelp: note + act[1],
-        isDocs: stage === 2, isD2d: stage === 3 || stage === 4, isResult: stage >= 5,
-        primary: act[2], primaryBg: stage === 6 ? '#e6ebe9' : accent, primaryFg: stage === 6 ? '#7d8a86' : '#fff',
-        primaryGo: () => {
-          if (stage === 0) { proposeNames(li); return }
-          if (stage === 1) { setState({ compare: li, pick: chosen, drawer: null }); return }
-          if (stage === 2) {
-            if (docState(li).indexOf(false) >= 0) { flash('Upload the pending papers first — ' + l[0]); return }
-            advance(li, 3, 'Nomination marked as filed'); return
-          }
-          if (stage === 3) { advance(li, 4, 'Door to Door marked complete'); return }
-          if (stage === 4 || stage === 5) {
-            const rr = state.results[key(li)]
-            if (!rr) { flash('Pick won or lost first — ' + l[0]); return }
-            advance(li, 6, rr === 'won' ? 'Recorded as WON' : 'Recorded as LOSS'); return
-          }
-          setState({ drawer: null }); flash(act[3] + l[0])
-        },
+        facts: [
+          ['Profile', c ? c.gender + ' · ' + c.age + ' · ' + c.casteGroup : '—'],
+          ['Occupation', c ? c.occupation : '—'],
+          ['Education', c ? c.education : '—'],
+          ['Member since', c ? c.since : '—'],
+          ['Reserved for', l ? quotaOf(l) : '—'],
+          ['Names on location', String(cands.length)],
+        ].map(([k, v]) => ({ k, v })),
+        actionStep: 'Stage ' + stage,
+        actionTitle: act[0], actionHelp: act[1],
+        isDocs: stage >= 2, isD2d: false, isResult: false,
+        primary: 'Read-only', primaryBg: '#e6ebe9', primaryFg: '#7d8a86',
+        primaryGo: () => flash(READ_ONLY_NOTE),
+      }
+      // The papers checklist is a local scratchpad — there is no per-document endpoint.
+      // Only the location's Nomination filed stage is real.
+      docsList = DOCS.map(([name, note], i) => {
+        const ok = docState(di, stage)[i]
+        return { name, note, mark: ok ? '✓' : '!', state: ok ? 'Ticked (local only)' : 'Not ticked', tone: ok ? T.green : T.red, go: () => toggleDoc(di, stage, i) }
+      })
+      resObj = {
+        won: { border: '#e2e7e5', bg: '#fff', fg: '#9aa5a1', w: '1px' },
+        lost: { border: '#e2e7e5', bg: '#fff', fg: '#9aa5a1', w: '1px' },
+        note: 'No source table for declared results yet.',
+        wonGo: () => flash(READ_ONLY_NOTE),
+        lostGo: () => flash(READ_ONLY_NOTE),
       }
     }
-    hasDrawer = li !== null
+    hasDrawer = !!di
 
-    const dStage = li === null ? 0 : stageOf(li)
-    const dRound = dStage >= 4 ? 2 : 1
-    const houses2 = 1180 + (li || 0) * 140
-    const visited2v = dRound === 2 ? (dStage >= 5 ? houses2 : Math.round(houses2 * 0.48)) : (dStage >= 4 ? houses2 : Math.round(houses2 * 0.62))
-
-    dName = r.name; dBody = d.body; dPc = pcName; dAc = acName; chipName = chipDef[0]
-    listTitle = r.name + ' · PC ' + pcName + ' · AC ' + acName
-    listFoot = (level === 0
-      ? 'Every location in this position, whatever stage it has reached.'
-      : cur === 'done'
-        ? (terminal
-            ? 'Locations whose result is already declared — nothing further to do on these.'
-            : 'Locations that have completed “' + CHIPS[level][0] + '”.')
-        : cur === 'pending'
-          ? (level === 5
-              ? 'Locations pending the second visit round. Counts come from a separate field source, so they differ from round 1.'
-              : 'Locations waiting at this stage — next action “' + NEXT[level - 1][0] + '”.')
-          : cur === 'behind'
-            ? 'Locations still short of this stage, each with its own next action.'
-            : 'Every location up to this stage, with its own next action. Locations already past it are hidden.')
+    dName = d.name; dBody = d.body; dPc = pcName; dAc = acName; chipName = chipDef[0]
+    listTitle = d.name + ' · PC ' + pcName + ' · AC ' + acName
+    listFoot = (!locs
+      ? 'Loading this assembly’s locations…'
+      : level === 0
+        ? 'Every location in this position, whatever stage it has reached.'
+        : lf === 'done'
+          ? 'Locations that have completed “' + CHIPS[level][0] + '”.'
+          : lf === 'pending'
+            ? 'Locations waiting at this stage.'
+            : lf === 'behind'
+              ? 'Locations still short of this stage.'
+              : 'Every location up to this stage. Locations already past it are hidden.')
       + ' AC · ' + acName + ', reservation ' + st.quota + '.'
+      + (locs && locs.total > locs.locations.length ? ' Showing ' + locs.locations.length + ' of ' + locs.total + '.' : '')
     listEmpty = rows.length === 0
     showMetric = step >= 3
     metricCol = step === 3 || step === 4 ? 'Visits / total houses' : 'Margin'
-    docsList = li === null ? [] : DOCS.map(([name, note], i) => {
-      const ok = docState(li)[i]
-      return { name, note, mark: ok ? '✓' : '!', state: ok ? 'Uploaded' : 'Upload', tone: ok ? T.green : T.red, go: () => toggleDoc(li, i) }
-    })
-    resObj = li === null ? {} : (() => {
-      const rr = resultOf(li), locked = stageOf(li) >= 6
-      const on = (k, c) => ({ border: rr === k ? c : '#e2e7e5', bg: rr === k ? (k === 'won' ? '#f3faf5' : '#fdf3f5') : '#fff', fg: rr === k ? c : '#9aa5a1', w: rr === k ? '1.5px' : '1px' })
-      return {
-        won: on('won', '#1c7a45'), lost: on('lost', '#b3123b'),
-        note: locked
-          ? (rr === 'won' ? 'Recorded as WON — declared result, read-only.' : 'Recorded as LOSS — declared result, read-only.')
-          : 'Pick one, then save.',
-        wonGo: () => { if (!locked) setResult(li, true) },
-        lostGo: () => { if (!locked) setResult(li, false) },
-      }
-    })()
-    d2d = { houses: n(houses2), visited: n(visited2v), pct: pc(visited2v, houses2), barW: pc(visited2v, houses2) + '%', workers: WORKERS.map(([wn, last, hh]) => ({ name: wn, last, houses: n(hh) })) }
   }
 
   return (

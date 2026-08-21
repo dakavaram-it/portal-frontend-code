@@ -105,9 +105,9 @@ export default function Leap({ user, onLogout }) {
           whole console, not a panel), so the main column drops both for it. */}
       <main className={`leap-main${PCM_VIEWS[view.name] ? ' pcm-active' : ''}`}>
         {screen('dashboard', <Dashboard user={user} onNavigate={navigate} />)}
-        {/* Static mock-data preview of an alternate dashboard layout — see
-            Dashboard2.jsx. No backend calls, no shared state with the real
-            Dashboard above. */}
+        {/* An alternate layout over the same election, on its own read-only backend
+            (/dash2api). It draws the tree from the same ../electionTree.js the Dashboard
+            above does, so the two cannot disagree about the shape of the election. */}
         {screen('dashboard2', <Dashboard2 />)}
         {/* The key still remounts the wizard, but only when the Dashboard hands over a
             *different* prefill — a bare sidebar click reuses the stored one. */}
