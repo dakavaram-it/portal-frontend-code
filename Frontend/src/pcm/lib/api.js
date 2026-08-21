@@ -49,6 +49,37 @@ export const api = {
   programLeaders: (roleId, activityId, year, month) =>
     request(`/api/programs/leaders?role_id=${seg(roleId)}&activity_id=${seg(activityId)}&year=${year}&month=${month}`),
 
+  /* Calendar Meetings' Update modal: one row per real meeting this leader
+     was invited to in the month, off `mytdp` — not `leader_program_activity`,
+     which Calendar Meetings never writes to. `leaderId` is the same `mid`
+     `programLeaders` returns for a calendar-variant row. */
+  programLeaderMeetings: (leaderId, year, month) =>
+    request(`/api/programs/leaders/${seg(leaderId)}/meetings?year=${year}&month=${month}`),
+
+  /* Saves one meeting's remarks for one leader, into `leader_meeting_attendance`
+     — accepted whether or not the leader attended, unlike the Meetings screen's
+     own remarks (`saveRemarks` below), which are absent-only. */
+  saveLeaderMeetingRemarks: (leaderId, meetingId, remarks) =>
+    request(`/api/programs/leaders/${seg(leaderId)}/meetings/${seg(meetingId)}/remarks`, {
+      method: 'PUT',
+      body: JSON.stringify({ remarks })
+    }),
+
+  /* Every other programme's Update modal: a leader's own hand-added
+     date/remarks log for one programme/month, off `party_track.leader_meetings`
+     — not `leader_meeting_attendance`, which only Calendar Meetings writes to. */
+  programLeaderLogEntries: (leaderId, programId, year, month) =>
+    request(`/api/programs/leaders/${seg(leaderId)}/log-entries?program_id=${seg(programId)}&year=${year}&month=${month}`),
+
+  addLeaderLogEntry: (leaderId, programId, date, remarks) =>
+    request(`/api/programs/leaders/${seg(leaderId)}/log-entries`, {
+      method: 'POST',
+      body: JSON.stringify({ programId, date, remarks })
+    }),
+
+  deleteLeaderLogEntry: (leaderId, entryId) =>
+    request(`/api/programs/leaders/${seg(leaderId)}/log-entries/${seg(entryId)}`, { method: 'DELETE' }),
+
   /* The first call for a meeting pulls its whole invitee list upstream — six
      figures of rows for a Unit-level meeting — so it can take minutes. Later
      calls are served from the service's own copy. */

@@ -25,6 +25,8 @@
 .pcm-root .entries-table-card .empty-title { font-size: 13px; }
 .pcm-root .entries-table-card .empty-hint { font-size: 12px; }
 
+.pcm-root .field-error { color: var(--bad); font-size: 12px; margin-top: 8px; }
+
 .pcm-root .modal-head .drill-close { flex: none; }
 .pcm-root .field .dd { width: 100%; position: relative; z-index: 1; }
 .pcm-root .field .dd-trigger { width: 100%; min-width: 0; }

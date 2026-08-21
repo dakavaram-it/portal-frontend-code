@@ -61,15 +61,26 @@ function FilePreviewModal({ file, onClose }) {
 
 export default function LeaderActivityEntriesModal({
   member,
-  entries = [],
+  entries,
+  adding: saving,
+  addError,
   onClose,
-  onChange
+  onAdd,
+  onDelete
 }) {
   const [adding, setAdding] = useState(false);
   const [preview, setPreview] = useState(null);
+  // Session-only, same posture as `LeaderMeetingEntriesModal`'s own file map:
+  // there is no upload endpoint yet, so a picked file lives here for this
+  // visit — keyed by the real row id the server just handed back — and is
+  // never sent anywhere.
+  const [filesById, setFilesById] = useState({});
   const openerRef = useRef(document.activeElement);
   const backdropRef = useRef(null);
   const panelRef = useRef(null);
+
+  const loading = entries === null;
+  const rows = entries || [];
 
   useLayoutEffect(() => {
     if (prefersReduced()) return;
@@ -105,10 +116,24 @@ export default function LeaderActivityEntriesModal({
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose, adding, preview]);
 
-  const removeRow = (id) => {
-    const row = entries.find((e) => e.id === id);
-    if (row?.file?.url) URL.revokeObjectURL(row.file.url);
-    onChange(entries.filter((e) => e.id !== id));
+  const [deletingId, setDeletingId] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
+
+  const removeRow = async (id) => {
+    setDeletingId(id);
+    setDeleteError(null);
+    try {
+      await onDelete(id);
+      setFilesById((cur) => {
+        const { [id]: gone, ...rest } = cur;
+        if (gone?.url) URL.revokeObjectURL(gone.url);
+        return rest;
+      });
+    } catch (err) {
+      setDeleteError(err.message);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -157,42 +182,50 @@ export default function LeaderActivityEntriesModal({
                     </tr>
                   </thead>
                   <tbody>
-                    {entries.map((row) => (
-                      <tr key={row.id}>
-                        <td>{row.date ? fmtDate(row.date) : ''}</td>
-                        <td className="action-cell">
-                          <button
-                            className="icon-btn"
-                            type="button"
-                            disabled={!row.file}
-                            title={row.file ? 'View file' : 'No file'}
-                            aria-label="View file"
-                            onClick={() => row.file && setPreview(row.file)}
-                          >
-                            <Icon name="eye" sm />
-                          </button>
-                        </td>
-                        <td className="entries-remarks">{row.remarks || ''}</td>
-                        <td className="action-cell">
-                          <button
-                            className="icon-btn"
-                            type="button"
-                            title="Delete row"
-                            aria-label="Delete row"
-                            onClick={() => removeRow(row.id)}
-                          >
-                            <Icon name="trash" sm />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {rows.map((row) => {
+                      const file = filesById[row.id];
+                      return (
+                        <tr key={row.id}>
+                          <td>{row.date ? fmtDate(row.date) : ''}</td>
+                          <td className="action-cell">
+                            <button
+                              className="icon-btn"
+                              type="button"
+                              disabled={!file}
+                              title={file ? 'View file' : 'No file'}
+                              aria-label="View file"
+                              onClick={() => file && setPreview(file)}
+                            >
+                              <Icon name="eye" sm />
+                            </button>
+                          </td>
+                          <td className="entries-remarks">{row.remarks || ''}</td>
+                          <td className="action-cell">
+                            <button
+                              className="icon-btn"
+                              type="button"
+                              disabled={deletingId === row.id}
+                              title="Delete row"
+                              aria-label="Delete row"
+                              onClick={() => removeRow(row.id)}
+                            >
+                              <Icon name="trash" sm />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
-              <div className="empty" hidden={entries.length > 0}>
+              <div className="empty" hidden={!loading}>
+                <div className="empty-title">Loading…</div>
+              </div>
+              <div className="empty" hidden={loading || rows.length > 0}>
                 <div className="empty-title">No entries yet</div>
                 <div className="empty-hint">Use Add to create an entry.</div>
               </div>
+              {deleteError && <div className="field-error">{deleteError}</div>}
             </div>
           </div>
 
@@ -204,9 +237,13 @@ export default function LeaderActivityEntriesModal({
 
       {adding && (
         <AddActivityEntryModal
+          saving={saving}
+          error={addError}
           onClose={() => setAdding(false)}
-          onSave={(row) => {
-            onChange([...entries, row]);
+          onSave={async ({ date, remarks, file }) => {
+            const saved = await onAdd(date, remarks);
+            if (!saved) return; // onAdd surfaces the error itself; leave the form open
+            if (file) setFilesById((cur) => ({ ...cur, [saved.id]: file }));
             setAdding(false);
           }}
         />

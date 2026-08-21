@@ -27,8 +27,11 @@ const SORT_KEYS = {
   role: (r) => blank(r.role).toLowerCase(),
   mobile: (r) => blank(r.mobile),
   cadreId: (r) => blank(r.cadreId),
-  participated: (r) => r.participated || 0,
-  completed: (r) => r.completed || 0
+  // Calendar Meetings only: `completed` is a real count of meetings this
+  // leader was marked attended at (see program_leaders' docstring), so
+  // "attended" is just whether that count is above zero — not a separate
+  // stored flag. Not shown as its own column for any other variant.
+  attended: (r) => (r.completed > 0 ? 1 : 0)
 };
 
 export default function MemberActivityCard({
@@ -36,8 +39,6 @@ export default function MemberActivityCard({
   members,
   variant = 'default',
   uploadsByMid = {},
-  onChangeParticipated,
-  onChangeCompleted,
   onUpdate,
   onUpdateRemarks,
   onViewRemarks,
@@ -47,6 +48,11 @@ export default function MemberActivityCard({
   const loading = members === null;
   const rows = members || [];
   const entriesOnly = variant === 'calendar' || variant === 'log';
+  // Calendar Meetings' participated/completed are real invited/attended
+  // counts off `meeting_invitee`/`meeting_attendance`, not something to hand-
+  // edit — so this variant shows one read-only Attended/Not attended pill
+  // instead of the two editable count inputs the other variants keep.
+  const calendarVariant = variant === 'calendar';
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
   const onSort = (key) => {
@@ -81,8 +87,9 @@ export default function MemberActivityCard({
               <SortHead label="Role" sortKey="role" active={sortKey === 'role'} dir={sortDir} onSort={onSort} />
               <SortHead label="Mobile" sortKey="mobile" active={sortKey === 'mobile'} dir={sortDir} onSort={onSort} />
               <SortHead label="Cadre ID" sortKey="cadreId" active={sortKey === 'cadreId'} dir={sortDir} onSort={onSort} />
-              <SortHead label="Activities participated" sortKey="participated" active={sortKey === 'participated'} dir={sortDir} onSort={onSort} className="n" />
-              <SortHead label="Completed" sortKey="completed" active={sortKey === 'completed'} dir={sortDir} onSort={onSort} className="n" />
+              {calendarVariant && (
+                <SortHead label="Attended" sortKey="attended" active={sortKey === 'attended'} dir={sortDir} onSort={onSort} />
+              )}
               {!entriesOnly && <th scope="col" className="action-cell">Upload</th>}
               {!entriesOnly && <th scope="col" className="action-cell">Attended status</th>}
               <th scope="col" className="action-cell">Update</th>
@@ -101,24 +108,13 @@ export default function MemberActivityCard({
                   <td>{blank(m.role)}</td>
                   <td>{blank(m.mobile)}</td>
                   <td>{blank(m.cadreId)}</td>
-                  <td className="n">
-                    <input
-                      type="number" min="0" step="1" inputMode="numeric"
-                      className="count-input"
-                      value={m.participated || 0}
-                      onChange={(e) => onChangeParticipated(m.mid, e.target.value)}
-                      aria-label={'Activities participated for ' + m.name}
-                    />
-                  </td>
-                  <td className="n">
-                    <input
-                      type="number" min="0" step="1" inputMode="numeric"
-                      className="count-input count-input-ok"
-                      value={m.completed || 0}
-                      onChange={(e) => onChangeCompleted(m.mid, e.target.value)}
-                      aria-label={'Completed for ' + m.name}
-                    />
-                  </td>
+                  {calendarVariant && (
+                    <td>
+                      {m.completed > 0
+                        ? <span className="pill pill-present"><i className="dot" />Attended</span>
+                        : <span className="pill pill-absent"><i className="dot" />Not attended</span>}
+                    </td>
+                  )}
                   {!entriesOnly && (
                     <td className="action-cell">
                       <button
