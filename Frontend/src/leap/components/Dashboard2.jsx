@@ -66,19 +66,19 @@ const STEPS = [
   ['Proposal', 'Which locations have names put forward, and which are still empty. Several names on one location is normal.'],
   ['Confirmation', 'Compare the names on a location side by side and confirm exactly one.'],
   ['Nomination', 'Confirmed candidates who filed their papers before the deadline.'],
-  ['Door to door', 'First round of field coverage against the voter list, location by location.'],
-  ['Door to door 2', 'Second round of house visits — the repeat pass before polling day.'],
+  ['Door to door', 'First round of field coverage against the voter list.'],
+  ['Door to door 2', 'Second round of visits. Same process as round 1, counted from its own field source.'],
   ['Result', 'Declared outcomes as mandal users enter them.'],
 ]
-const STAGES = ['Not started', 'Proposal received', 'Confirmed', 'Nomination filed', 'Round 1 visits done', 'Round 2 visits done', 'Result declared']
-const SS = { 'Not started': ['#fdecec', '#a52a1f'], 'Proposal received': ['#fdf3e3', '#8a5a05'], Confirmed: ['#eaf6ef', '#1c7a45'], 'Nomination filed': ['#e9f3f2', '#0a5b53'], 'Round 1 visits done': ['#e8f0fb', '#1d5fbd'], 'Round 2 visits done': ['#e4ecfa', '#164a9e'], 'Result declared': ['#f0eefc', '#4a3bb0'] }
+const STAGES = ['Not started', 'Proposal received', 'Confirmed', 'Nomination filed', 'Door to Door done', 'Door to Door - 2 done', 'Result declared']
+const SS = { 'Not started': ['#fdecec', '#a52a1f'], 'Proposal received': ['#fdf3e3', '#8a5a05'], Confirmed: ['#eaf6ef', '#1c7a45'], 'Nomination filed': ['#e9f3f2', '#0a5b53'], 'Door to Door done': ['#e8f0fb', '#1d5fbd'], 'Door to Door - 2 done': ['#e4ecfa', '#164a9e'], 'Result declared': ['#f0eefc', '#4a3bb0'] }
 const CHIPS = [
   ['Total locations', 'total', 0, 0, T.ink, 'every location in this position'],
   ['Started', 'proposed', 1, 0, T.green, 'at least one name received'],
   ['Confirmed', 'confirmed', 2, 1, T.green, 'one name settled'],
   ['Nomination filed', 'noms', 3, 2, T.teal, 'papers submitted'],
-  ['Round 1 visits', 'vloc', 4, 3, T.blue, 'first pass covered'],
-  ['Round 2 visits', 'vloc2', 5, 4, '#164a9e', 'repeat pass covered'],
+  ['Door to Door', 'vloc', 4, 3, T.blue, 'first round covered'],
+  ['Door to Door - 2', 'vloc2', 5, 4, '#164a9e', 'second round covered'],
   ['Result declared', 'declared', 6, 5, T.purple, 'outcome entered'],
 ]
 const PCS = [
@@ -103,28 +103,62 @@ const LOCS = [
   ['Saravakota', 'General', 5], ['Jalumuru (Ward 8)', 'SC · Woman', 2],
   ['Polaki', 'BC', 4], ['Gara (Ward 9)', 'General', 1],
 ]
-// name, phone, gender, age, casteGroup, sub-caste, occupation, education, since, score, houses, past, cases
+// name, phone, gender, age, casteGroup, sub-caste, occupation, education, since, score, houses, past, cases, proposedBy
 const POOL = [
-  ['K. Ramesh Babu', '+91 94000 73405', 'Male', 49, 'SC', 'Mala', 'Business', 'Intermediate', 2019, 65, 186, '1 win · 1 loss', 'None'],
-  ['P. Lakshmi Devi', '+91 93910 82210', 'Female', 41, 'BC', 'Gouda', 'Teacher', 'Degree', 2016, 72, 154, '1 win', 'None'],
-  ['M. Srinivas Rao', '+91 98480 66874', 'Male', 53, 'General', '—', 'Agriculture', 'SSC', 2014, 58, 97, '2 losses', '1 civil'],
-  ['T. Sujatha', '+91 90140 55219', 'Female', 38, 'ST', 'Savara', 'Anganwadi worker', 'Intermediate', 2018, 69, 203, 'First time', 'None'],
-  ['B. Anil Kumar', '+91 97010 34882', 'Male', 45, 'BC', 'Yadava', 'Contractor', 'Degree', 2015, 61, 142, '1 loss', 'None'],
-  ['S. Padma Sri', '+91 99590 71160', 'Female', 36, 'SC', 'Madiga', 'Self-employed', 'Degree', 2017, 74, 168, 'First time', 'None'],
-  ['G. Venkata Rao', '+91 91770 22945', 'Male', 57, 'General', '—', 'Retired teacher', 'PG', 2011, 66, 88, '2 wins', 'None'],
-  ['N. Kavitha', '+91 96520 60731', 'Female', 33, 'BC', 'Setti Balija', 'Shop owner', 'Intermediate', 2020, 55, 121, 'First time', 'None'],
-  ['D. Prasad Reddy', '+91 93470 18604', 'Male', 47, 'General', '—', 'Agriculture', 'Degree', 2013, 70, 133, '1 win · 1 loss', 'None'],
-  ['V. Sirisha', '+91 98663 90512', 'Female', 39, 'BC', 'Turpu Kapu', 'Tailoring unit', 'SSC', 2019, 63, 175, 'First time', 'None'],
-  ['R. Chandra Sekhar', '+91 94910 44127', 'Male', 51, 'SC', 'Mala', 'Transport', 'Intermediate', 2012, 68, 110, '1 win', '1 criminal'],
-  ['A. Vijaya Lakshmi', '+91 90000 61338', 'Female', 44, 'ST', 'Konda Dora', 'Farming', 'SSC', 2020, 60, 192, 'First time', 'None'],
-  ['J. Satyanarayana', '+91 94409 15772', 'Male', 46, 'BC', 'Gouda', 'Rice mill', 'Degree', 2016, 64, 129, '1 loss', 'None'],
-  ['Ch. Annapurna', '+91 90523 44810', 'Female', 42, 'SC', 'Madiga', 'Tailoring unit', 'Intermediate', 2018, 67, 181, 'First time', 'None'],
-  ['K. Bhaskar Rao', '+91 97045 33261', 'Male', 55, 'General', '—', 'Contractor', 'Degree', 2010, 62, 104, '1 win · 2 losses', 'None'],
-  ['M. Suvarna', '+91 96401 78539', 'Female', 35, 'ST', 'Savara', 'Dairy unit', 'SSC', 2021, 58, 166, 'First time', 'None'],
-  ['Y. Nageswara Rao', '+91 93912 60417', 'Male', 50, 'BC', 'Turpu Kapu', 'Agriculture', 'Intermediate', 2013, 71, 147, '1 win', 'None'],
-  ['L. Rajeswari', '+91 98857 20936', 'Female', 37, 'General', '—', 'Medical shop', 'PG', 2019, 69, 158, 'First time', 'None'],
-  ['P. Ravi Kumar', '+91 94931 55208', 'Male', 43, 'BC', 'Gouda', 'Poultry farm', 'Degree', 2017, 66, 138, 'First time', 'None'],
-  ['S. Manjula', '+91 90107 66413', 'Female', 40, 'SC', 'Mala', 'Teacher', 'PG', 2015, 73, 174, '1 win', 'None'],
+  ['K. Ramesh Babu', '+91 94000 73405', 'Male', 49, 'SC', 'Mala', 'Business', 'Intermediate', 2019, 65, 186, '1 win · 1 loss', 'None', 'Mandal in-charge'],
+  ['P. Lakshmi Devi', '+91 93910 82210', 'Female', 41, 'BC', 'Gouda', 'Teacher', 'Degree', 2016, 72, 154, '1 win', 'None', 'AC president'],
+  ['M. Srinivas Rao', '+91 98480 66874', 'Male', 53, 'General', '—', 'Agriculture', 'SSC', 2014, 58, 97, '2 losses', '1 civil', 'District committee'],
+  ['T. Sujatha', '+91 90140 55219', 'Female', 38, 'ST', 'Savara', 'Anganwadi worker', 'Intermediate', 2018, 69, 203, 'First time', 'None', 'Mandal in-charge'],
+  ['B. Anil Kumar', '+91 97010 34882', 'Male', 45, 'BC', 'Yadava', 'Contractor', 'Degree', 2015, 61, 142, '1 loss', 'None', 'Mandal in-charge'],
+  ['S. Padma Sri', '+91 99590 71160', 'Female', 36, 'SC', 'Madiga', 'Self-employed', 'Degree', 2017, 74, 168, 'First time', 'None', 'AC president'],
+  ['G. Venkata Rao', '+91 91770 22945', 'Male', 57, 'General', '—', 'Retired teacher', 'PG', 2011, 66, 88, '2 wins', 'None', 'District committee'],
+  ['N. Kavitha', '+91 96520 60731', 'Female', 33, 'BC', 'Setti Balija', 'Shop owner', 'Intermediate', 2020, 55, 121, 'First time', 'None', 'Mandal in-charge'],
+  ['D. Prasad Reddy', '+91 93470 18604', 'Male', 47, 'General', '—', 'Agriculture', 'Degree', 2013, 70, 133, '1 win · 1 loss', 'None', 'AC president'],
+  ['V. Sirisha', '+91 98663 90512', 'Female', 39, 'BC', 'Turpu Kapu', 'Tailoring unit', 'SSC', 2019, 63, 175, 'First time', 'None', 'Mandal in-charge'],
+  ['R. Chandra Sekhar', '+91 94910 44127', 'Male', 51, 'SC', 'Mala', 'Transport', 'Intermediate', 2012, 68, 110, '1 win', '1 criminal', 'District committee'],
+  ['A. Vijaya Lakshmi', '+91 90000 61338', 'Female', 44, 'ST', 'Konda Dora', 'Farming', 'SSC', 2020, 60, 192, 'First time', 'None', 'Mandal in-charge'],
+  ['J. Satyanarayana', '+91 94409 15772', 'Male', 46, 'BC', 'Gouda', 'Rice mill', 'Degree', 2016, 64, 129, '1 loss', 'None', 'Mandal in-charge'],
+  ['Ch. Annapurna', '+91 90523 44810', 'Female', 42, 'SC', 'Madiga', 'Tailoring unit', 'Intermediate', 2018, 67, 181, 'First time', 'None', 'AC president'],
+  ['K. Bhaskar Rao', '+91 97045 33261', 'Male', 55, 'General', '—', 'Contractor', 'Degree', 2010, 62, 104, '1 win · 2 losses', 'None', 'District committee'],
+  ['M. Suvarna', '+91 96401 78539', 'Female', 35, 'ST', 'Savara', 'Dairy unit', 'SSC', 2021, 58, 166, 'First time', 'None', 'Mandal in-charge'],
+  ['Y. Nageswara Rao', '+91 93912 60417', 'Male', 50, 'BC', 'Turpu Kapu', 'Agriculture', 'Intermediate', 2013, 71, 147, '1 win', 'None', 'AC president'],
+  ['L. Rajeswari', '+91 98857 20936', 'Female', 37, 'General', '—', 'Medical shop', 'PG', 2019, 69, 158, 'First time', 'None', 'District committee'],
+  ['P. Ravi Kumar', '+91 94931 55208', 'Male', 43, 'BC', 'Gouda', 'Poultry farm', 'Degree', 2017, 66, 138, 'First time', 'None', 'Mandal in-charge'],
+  ['S. Manjula', '+91 90107 66413', 'Female', 40, 'SC', 'Mala', 'Teacher', 'PG', 2015, 73, 174, '1 win', 'None', 'AC president'],
+  ['V. Ramana Murthy', '+91 98494 30852', 'Male', 52, 'General', '—', 'Advocate', 'LLB', 2009, 70, 112, '1 win · 1 loss', 'None', 'District committee'],
+  ['K. Sarojini', '+91 93924 71065', 'Female', 34, 'ST', 'Konda Dora', 'Self-help group', 'Intermediate', 2020, 61, 189, 'First time', 'None', 'Mandal in-charge'],
+  ['B. Srinivasulu', '+91 97046 28317', 'Male', 48, 'BC', 'Turpu Kapu', 'Hardware shop', 'SSC', 2014, 63, 126, '1 loss', 'None', 'Mandal in-charge'],
+  ['N. Aruna Kumari', '+91 96183 40729', 'Female', 39, 'SC', 'Madiga', 'Anganwadi worker', 'Intermediate', 2018, 68, 183, 'First time', 'None', 'AC president'],
+  ['G. Prakash Rao', '+91 94408 91574', 'Male', 56, 'General', '—', 'Retired bank staff', 'PG', 2008, 64, 95, '2 wins', 'None', 'District committee'],
+  ['T. Lalitha', '+91 90005 27846', 'Female', 36, 'BC', 'Setti Balija', 'Kirana store', 'Degree', 2019, 67, 161, 'First time', 'None', 'Mandal in-charge'],
+  ['M. Bhaskar', '+91 98661 13490', 'Male', 44, 'ST', 'Savara', 'Agriculture', 'SSC', 2016, 59, 151, 'First time', 'None', 'Mandal in-charge'],
+  ['D. Swarna Latha', '+91 93481 60275', 'Female', 42, 'General', '—', 'Private school', 'PG', 2013, 71, 143, '1 win', 'None', 'AC president'],
+  ['R. Naga Raju', '+91 97014 85632', 'Male', 47, 'SC', 'Mala', 'Auto union', 'Intermediate', 2012, 65, 167, '1 loss', '1 civil', 'District committee'],
+  ['Ch. Padmavathi', '+91 90523 91408', 'Female', 38, 'BC', 'Yadava', 'Dairy unit', 'SSC', 2021, 62, 178, 'First time', 'None', 'Mandal in-charge'],
+  ['A. Suresh Babu', '+91 94900 34718', 'Male', 45, 'BC', 'Gouda', 'Fertiliser shop', 'Degree', 2016, 64, 132, '1 loss', 'None', 'Mandal in-charge'],
+  ['K. Vijaya Kumari', '+91 93915 82640', 'Female', 41, 'SC', 'Madiga', 'Government teacher', 'PG', 2014, 72, 171, '1 win', 'None', 'AC president'],
+  ['S. Gopala Krishna', '+91 98485 27093', 'Male', 50, 'General', '—', 'Civil contractor', 'Degree', 2011, 67, 118, '1 win', 'None', 'District committee'],
+  ['T. Kanaka Durga', '+91 90144 61385', 'Female', 37, 'ST', 'Savara', 'Self-help group', 'Intermediate', 2019, 63, 186, 'First time', 'None', 'Mandal in-charge'],
+  ['M. Venkatesh', '+91 97018 49250', 'Male', 46, 'BC', 'Turpu Kapu', 'Transport', 'SSC', 2015, 65, 141, 'First time', 'None', 'Mandal in-charge'],
+  ['P. Sridevi', '+91 99598 13476', 'Female', 35, 'SC', 'Mala', 'Tailoring unit', 'Degree', 2020, 69, 179, 'First time', 'None', 'AC president'],
+  ['B. Ranga Rao', '+91 91773 50829', 'Male', 54, 'General', '—', 'Retired officer', 'PG', 2010, 66, 101, '2 wins', 'None', 'District committee'],
+  ['V. Hymavathi', '+91 96524 07138', 'Female', 39, 'BC', 'Setti Balija', 'Medical shop', 'Degree', 2018, 70, 164, 'First time', 'None', 'Mandal in-charge'],
+  ['N. Ramakrishna', '+91 93472 91560', 'Male', 48, 'ST', 'Konda Dora', 'Agriculture', 'Intermediate', 2013, 60, 148, '1 loss', 'None', 'AC president'],
+  ['G. Sunitha', '+91 98668 42017', 'Female', 43, 'General', '—', 'Private college', 'PG', 2012, 71, 139, '1 win', 'None', 'District committee'],
+  ['Y. Satish Kumar', '+91 94916 73084', 'Male', 42, 'SC', 'Madiga', 'Electrical works', 'SSC', 2017, 62, 159, 'First time', 'None', 'Mandal in-charge'],
+  ['L. Bhavani', '+91 90006 25791', 'Female', 36, 'BC', 'Yadava', 'Dairy unit', 'Intermediate', 2021, 64, 182, 'First time', 'None', 'Mandal in-charge'],
+  ['J. Harinath', '+91 94402 68135', 'Male', 51, 'General', '—', 'Rice trader', 'Degree', 2009, 68, 107, '1 win · 1 loss', '1 civil', 'District committee'],
+  ['Ch. Sridhar', '+91 90528 71943', 'Male', 44, 'BC', 'Gouda', 'Cement dealer', 'SSC', 2015, 61, 124, 'First time', 'None', 'Mandal in-charge'],
+  ['R. Padmaja', '+91 97012 34860', 'Female', 38, 'ST', 'Savara', 'Anganwadi worker', 'Intermediate', 2018, 66, 192, 'First time', 'None', 'AC president'],
+  ['D. Kishore Babu', '+91 93918 40572', 'Male', 49, 'SC', 'Mala', 'Auto union', 'Intermediate', 2011, 63, 155, '1 loss', 'None', 'Mandal in-charge'],
+  ['S. Gowri Devi', '+91 94933 71508', 'Female', 36, 'ST', 'Savara', 'Self-help group', 'Intermediate', 2020, 65, 177, 'First time', 'None', 'Mandal in-charge'],
+  ['K. Ramulu Dora', '+91 90142 63819', 'Male', 47, 'ST', 'Konda Dora', 'Agriculture', 'SSC', 2014, 62, 143, 'First time', 'None', 'AC president'],
+  ['M. Jayanthi', '+91 97046 91352', 'Female', 33, 'ST', 'Savara', 'Anganwadi worker', 'Intermediate', 2021, 64, 195, 'First time', 'None', 'Mandal in-charge'],
+  ['T. Bhadraiah', '+91 98487 20614', 'Male', 51, 'ST', 'Konda Dora', 'Forest produce trade', 'SSC', 2012, 60, 131, '1 loss', 'None', 'District committee'],
+  ['V. Ratnamala', '+91 93476 85029', 'Female', 38, 'ST', 'Savara', 'Dairy unit', 'SSC', 2018, 66, 169, 'First time', 'None', 'AC president'],
+  ['G. Chinna Rao', '+91 96181 47530', 'Male', 44, 'ST', 'Konda Dora', 'Farming', 'Intermediate', 2016, 61, 154, 'First time', 'None', 'Mandal in-charge'],
+  ['B. Kumari Devi', '+91 90527 39418', 'Female', 35, 'ST', 'Savara', 'Tailoring unit', 'Degree', 2019, 68, 188, 'First time', 'None', 'Mandal in-charge'],
+  ['N. Simhachalam', '+91 97015 62873', 'Male', 49, 'ST', 'Konda Dora', 'Transport', 'SSC', 2013, 59, 127, '1 loss', 'None', 'AC president'],
 ]
 const DOCS = [
   ['Form-1 · Nomination paper', 'Signed by candidate and proposer', true],
@@ -133,9 +167,49 @@ const DOCS = [
   ['Security deposit receipt', "Paid at the returning officer's counter", true],
 ]
 const WORKERS = [['B. Anil Kumar', '2 hrs ago', 186], ['S. Padma', 'today', 154], ['T. Naresh', 'yesterday', 97]]
-const NEXT = [['Add a name', true], ['Review & confirm', true], ['Upload nomination', true], ['Update round 1 visits', true], ['Update round 2 visits', true], ['Add win / loss', true], ['View result', false]]
+const NEXT = [['Add a name', true], ['Review & confirm', true], ['Upload nomination', true], ['Update Door to Door', true], ['Add win / loss', true], ['Add win / loss', true], ['View result', false]]
 const nm = (k) => k + (k === 1 ? ' name' : ' names')
 const lc = (k) => k + (k === 1 ? ' location' : ' locations')
+// Each location carries the date its stage last moved, so "updated" reads as real activity.
+const TODAY = new Date('2026-08-20T00:00:00')
+const pad2 = (k) => (k < 10 ? '0' : '') + k
+const iso = (d) => d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate())
+const addDays = (d, k) => new Date(d.getTime() + k * 86400000)
+const fmtDate = (s) => {
+  const d = new Date(s + 'T00:00:00')
+  return d.getDate() + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()] + ' ' + d.getFullYear()
+}
+const LOC_DATE = (i) => iso(addDays(TODAY, -((i * 7 + (i % 5) * 3) % 74)))
+// Each pending column names its own baseline, since the baseline stage itself isn't shown.
+const PENDING_LABEL = ['', 'Not started', 'Started, not confirmed', 'Confirmed, not filed', 'Door to Door pending', 'Door to Door - 2 pending', 'Visited, result pending']
+// The location-list filter speaks the stage's own language: done here / still pending here.
+const FILTER_WORDS = [
+  ['All locations', '', ''],
+  ['All locations', 'Name received', 'Not started'],
+  ['All locations', 'Confirmed', 'Awaiting confirmation'],
+  ['All locations', 'Nomination filed', 'Papers pending'],
+  ['All locations', 'Door to Door done', 'Door to Door pending'],
+  ['All locations', 'Door to Door - 2 done', 'Door to Door - 2 pending'],
+  ['All locations', 'Result declared', 'Result pending'],
+]
+// Who may put a name forward depends on the body and the tier of the post.
+// Ward / member posts are proposed one level below the seat; chief and deputy posts at the seat's own level.
+const WARD_POSTS = ['MPTC', 'ZPTC', 'Ward Member', 'Ward Councillor', 'Corporator']
+const PROPOSERS = {
+  'Gram Panchayat': { ward: ['Ward in-charge', 'Village committee president'], chief: ['Village committee president', 'Mandal president'] },
+  'Mandal Parishad': { ward: ['Village committee president', 'Mandal president'], chief: ['Mandal president', 'Constituency in-charge'] },
+  'Zilla Parishad': { ward: ['Mandal president', 'Constituency in-charge'], chief: ['District president', 'State committee'] },
+  Municipality: { ward: ['Ward in-charge', 'Town president'], chief: ['Town president', 'Constituency in-charge'] },
+  'Municipal Corporation': { ward: ['Division in-charge', 'City president'], chief: ['City president', 'District president'] },
+}
+const proposerFor = (body, position, seed) => {
+  const set = PROPOSERS[body] || PROPOSERS['Mandal Parishad']
+  const pair = WARD_POSTS.indexOf(position) >= 0 ? set.ward : set.chief
+  return pair[seed % 2]
+}
+// The proposer belongs to the NAME, not the location: seeded once per (location, candidate)
+// so the list and the comparison table always read the same value.
+const propSeed = (li, c) => (li + POOL.indexOf(c)) % 2
 // Exact integer partition — parts always sum back to the total, so PC and AC
 // summaries never drift from the position total they were derived from.
 const splitInt = (total, weights) => {
@@ -178,7 +252,7 @@ export default function Dashboard2() {
   const [state, setStateRaw] = useState({
     step: 0, detail: null, chip: 1, pc: 1, ac: 0, quota: 'All',
     drawer: null, compare: null, pick: null, chosen: {}, stages: {}, toast: null,
-    extra: {}, docs: {}, results: {},
+    extra: {}, docs: {}, results: {}, dates: {},
   })
   const setState = (patch) => setStateRaw((prev) => ({ ...prev, ...(typeof patch === 'function' ? patch(prev) : patch) }))
 
@@ -195,12 +269,28 @@ export default function Dashboard2() {
   const key = (li) => state.pc + '-' + state.ac + '-' + li
   const stageOf = (li) => { const k = key(li); return state.stages[k] === undefined ? LOCS[li][2] : state.stages[k] }
   const candsFor = (li) => (SEATS[li] || []).concat(state.extra[key(li)] || [])
+  // Any action stamps the location's "updated" date, so the range picker never hides fresh work.
+  const dateOf = (li) => state.dates[key(li)] || LOC_DATE(li)
+  const stamp = (k) => {
+    const dates = Object.assign({}, state.dates)
+    dates[k] = iso(TODAY)
+    return dates
+  }
+  // Single source for a location's outcome: what the user recorded, else the seeded value.
+  const resultOf = (li) => {
+    const v = state.results[key(li)]
+    if (v) return v
+    return stageOf(li) >= 6 ? (li % 3 === 2 ? 'lost' : 'won') : null
+  }
 
   const advance = (li, to, msg) => {
+    const k = key(li)
     setState((prev) => {
       const stages = Object.assign({}, prev.stages)
-      stages[key(li)] = to
-      return { stages, drawer: null }
+      stages[k] = to
+      const dates = Object.assign({}, prev.dates)
+      dates[k] = iso(TODAY)
+      return { stages, dates, drawer: null }
     })
     flash(msg + ' — ' + LOCS[li][0])
   }
@@ -210,12 +300,17 @@ export default function Dashboard2() {
     const used = [].concat.apply([], Object.keys(state.extra).map((x) => state.extra[x]))
     const pickArr = POOL.filter((c) => used.indexOf(c) < 0 && SEATS.every((s) => s.indexOf(c) < 0) && fitsQ(c, quota))
       .sort((a, b) => b[9] - a[9]).slice(0, 2)
+    if (!pickArr.length) {
+      setState({ drawer: null })
+      flash('No unassigned ' + quota + ' aspirant left — add one to the pool first')
+      return
+    }
     const extra = Object.assign({}, state.extra)
-    extra[k] = (extra[k] || []).concat(pickArr.length ? pickArr : POOL.filter((c) => fitsQ(c, quota)).slice(0, 2))
+    extra[k] = (extra[k] || []).concat(pickArr)
     const stages = Object.assign({}, state.stages)
     stages[k] = 1
-    setState({ extra, stages, drawer: null })
-    flash('Names sent for review — ' + LOCS[li][0])
+    setState({ extra, stages, dates: stamp(k), drawer: null })
+    flash(nm(pickArr.length) + ' sent for review — ' + LOCS[li][0])
   }
 
   const docState = (li) => {
@@ -238,10 +333,10 @@ export default function Dashboard2() {
   const chosenIdx = (li) => {
     const v = state.chosen[key(li)]
     if (v !== undefined) return v
-    return stageOf(li) >= 2 && (SEATS[li] || []).length ? 0 : null
+    return stageOf(li) >= 2 && candsFor(li).length ? 0 : null
   }
   const leadOf = (li) => {
-    const cands = SEATS[li] || [], quota = LOCS[li][1], chosen = chosenIdx(li)
+    const cands = candsFor(li), quota = LOCS[li][1], chosen = chosenIdx(li)
     if (!cands.length) return { c: null, tag: 'Empty', eligible: false }
     if (chosen !== null) return { c: cands[chosen], tag: 'Confirmed', eligible: fitsQ(cands[chosen], quota) }
     const el = cands.filter((c) => fitsQ(c, quota))
@@ -254,8 +349,8 @@ export default function Dashboard2() {
     const k = key(li), stage = Math.max(stageOf(li), 2)
     const chosen = Object.assign({}, state.chosen); chosen[k] = ci
     const stages = Object.assign({}, state.stages); stages[k] = stage
-    setState({ chosen, stages, compare: null, pick: null })
-    flash(SEATS[li][ci][0] + ' confirmed for ' + LOCS[li][0])
+    setState({ chosen, stages, dates: stamp(k), compare: null, pick: null })
+    flash(candsFor(li)[ci][0] + ' confirmed for ' + LOCS[li][0])
   }
   const closeDetail = () => setState({ detail: null, drawer: null, compare: null })
   const closeCompare = () => setState({ compare: null, pick: null })
@@ -284,8 +379,8 @@ export default function Dashboard2() {
     [['Locations', 'total', T.ink, 0], ['Started', 'proposed', T.green, 1], ['Not started', '_np', T.red, 0], ['Proposal (names)', '_prop', T.amber, 1]],
     [['Started', 'proposed', T.amber, 1], ['Confirmed', 'confirmed', T.green, 2], ['Pending', '_cp', T.purple, 2]],
     [['Confirmed', 'confirmed', T.green, 2], ['Nomination filed', 'noms', T.teal, 3], ['Pending', '_fp', T.red, 3]],
-    [['Total houses', 'houses', T.ink, 4], ['Visited (R1)', 'visited', T.blue, 4], ['Pending', 'hPending', T.red, 4]],
-    [['Total houses', 'houses', T.ink, 5], ['Visited (R2)', 'visited2', '#164a9e', 5], ['Pending', 'hPending2', T.red, 5]],
+    [['Total houses', 'houses', T.ink, 4], ['Visits', 'visited', T.blue, 4], ['Pending', 'hPending', T.red, 4]],
+    [['Total houses', 'houses', T.ink, 5], ['Visits', 'visited2', '#164a9e', 5], ['Pending', 'hPending2', T.red, 5]],
     [['Declared', 'declared', T.purple, 6], ['Won', 'won', T.green, 6], ['Lost', 'lost', T.crim, 6]],
   ][step]
 
@@ -313,10 +408,10 @@ export default function Dashboard2() {
   let cmp = { cands: [], attrs: [] }
   let dw = { timeline: [], facts: [] }
   let hasDrawer = false, hasCompare = false, listEmpty = false
-  let dName = '', dBody = '', dPc = '', dAc = '', chipName = '', listTitle = '', listMeta = '', listFoot = ''
-  let showMetric = false, metricCol = '', docsList = [], resObj = {}
+  let dName = '', dBody = '', dPc = '', dAc = '', chipName = '', listTitle = '', listFoot = ''
+  let showMetric = false, metricCol = '', docsList = [], resObj = {}, lfilters = []
   let d2d = { houses: '0', visited: '0', pct: 0, barW: '0%', workers: [] }
-  let pcTotal = '', acTotal = '', geoNote = ''
+  let pcTotal = '', acTotal = '', geoNote = '', geoFoot = ''
 
   const d = st.detail
   if (d) {
@@ -352,12 +447,19 @@ export default function Dashboard2() {
     const KEYS = CHIPS.map((c) => c[1])
     const SPL = {}
     KEYS.forEach((k) => { SPL[k] = splitInt(r[k] === undefined ? r.total : r[k], PC_W) })
-    const shown = KEYS.slice(0, st.chip + 1)
-    geoCols = CHIPS.slice(0, st.chip + 1).map(([label], i) => ({ label, fg: i === st.chip ? accent : '#8a9793' }))
-      .concat(st.chip > 0 ? [{ label: st.chip === 1 ? 'Not started' : 'Pending here', fg: T.red }] : [])
+    // Total, plus the stage being viewed — intermediate stages are noise here.
+    const keepIdx = st.chip === 0 ? [0] : [0, st.chip]
+    const visitStep = st.chip === 4 || st.chip === 5
+    // Visit steps count houses, not locations, so the split is re-run on the house totals.
+    if (visitStep) {
+      SPL.total = splitInt(r.houses, PC_W)
+      SPL[KEYS[st.chip]] = splitInt(st.chip === 4 ? r.visited : r.visited2, PC_W)
+    }
+    geoCols = keepIdx.map((i) => ({ label: i === 0 && visitStep ? 'Total houses' : CHIPS[i][0], fg: i === st.chip ? accent : '#8a9793' }))
+      .concat(st.chip > 0 ? [{ label: visitStep ? 'Houses pending' : PENDING_LABEL[st.chip], fg: T.red }] : [])
     const geoCells = (spl, i) => {
-      const cells = shown.map((k, ci2) => ({ v: n(spl[k][i]), fg: ci2 === st.chip ? accent : T.ink, w: ci2 === st.chip ? '700' : '600' }))
-      if (st.chip > 0) cells.push({ v: n(spl[KEYS[st.chip - 1]][i] - spl[KEYS[st.chip]][i]), fg: T.red, w: '600' })
+      const cells = keepIdx.map((ki) => ({ v: n(spl[KEYS[ki]][i]), fg: ki === st.chip ? accent : T.ink, w: ki === st.chip ? '700' : '600' }))
+      if (st.chip > 0) cells.push({ v: n(spl[KEYS[visitStep ? 0 : st.chip - 1]][i] - spl[KEYS[st.chip]][i]), fg: T.red, w: '600' })
       return cells
     }
     pcRows = PCS.map(([name, acs], i) => {
@@ -381,28 +483,64 @@ export default function Dashboard2() {
       }
     })
     geoNote = 'Highlighted column = ' + chipDef[0]
-    pcTotal = n(r.total) + ' locations across 8 parliament constituencies'
-    acTotal = n(SPL.total[st.pc]) + ' locations in PC · ' + PCS[st.pc][0]
+    geoFoot = visitStep
+      ? 'House counts come from the field app; Total houses = visits + pending.'
+      : 'Each column adds up down the eight rows to the position total.'
+    const unit = visitStep ? ' houses' : ' locations'
+    pcTotal = n(visitStep ? r.houses : r.total) + unit + ' across 8 parliament constituencies'
+    acTotal = n(SPL.total[st.pc]) + unit + ' in PC · ' + PCS[st.pc][0]
 
-    const level = chipDef[2], atOnly = level > 0
+    const level = chipDef[2]
+    const lf = st.lfilter || 'all'
     const idxs = []
     LOCS.forEach((l, i) => {
-      const q = st.quota === 'All' || l[1].indexOf(st.quota) >= 0, s = stageOf(i)
+      const q = st.quota === 'All' || l[1].indexOf(st.quota) >= 0
       if (!q) return
-      if (level === 0 || (atOnly ? s === level : s >= level)) idxs.push(i)
+      const s = stageOf(i)
+      // Scoped to the stage being viewed: nothing already past it.
+      if (level > 0 && s > level) return
+      // "pending" = waiting AT this stage (its immediate predecessor), not the whole backlog.
+      if (lf === 'done' && s < level) return
+      if (lf === 'pending' && s !== level - 1) return
+      if (lf === 'behind' && s >= level - 1) return
+      idxs.push(i)
     })
+    const words = FILTER_WORDS[level]
+    const tally = { all: 0, done: 0, pending: 0, behind: 0 }
+    LOCS.forEach((l, i) => {
+      if (st.quota !== 'All' && l[1].indexOf(st.quota) < 0) return
+      const s = stageOf(i)
+      if (level > 0 && s > level) return
+      tally.all += 1
+      if (s >= level) tally.done += 1
+      else if (s === level - 1) tally.pending += 1
+      else tally.behind += 1
+    })
+    const cur = lf
+    const chipDefs = level === 0
+      ? [['all', words[0]]]
+      : [['all', words[0]], ['done', words[1]], ['pending', words[2]]].concat(level > 1 && tally.behind ? [['behind', 'Not yet at this stage']] : [])
+    lfilters = chipDefs.map(([fkey, label]) => ({
+      label: label + ' (' + tally[fkey] + ')',
+      go: () => setState({ lfilter: fkey, drawer: null, compare: null }),
+      border: cur === fkey ? accent : '#dfe4e2',
+      bg: cur === fkey ? '#f1f7f6' : '#fff',
+      fg: cur === fkey ? accent : T.mute,
+    }))
     const terminal = level === CHIPS.length - 1
 
     rows = idxs.map((i) => {
       const l = LOCS[i], stage = stageOf(i), sty = SS[STAGES[stage]], cands = candsFor(i), nx = NEXT[stage]
       const chosen = chosenIdx(i), ld = leadOf(i), lead = ld.c
-      const named = !!lead, warn = named && !ld.eligible
+      const named = !!lead, warn = named && !ld.eligible, rr = resultOf(i)
       const houses = 1180 + i * 140, part = Math.round(houses * (0.52 + (i % 4) * 0.08))
       const v1 = stage >= 4 ? houses : stage === 3 ? part : 0
       const v2 = stage >= 5 ? houses : stage === 4 ? Math.round(houses * 0.48) : 0
       return {
-        name: l[0], sub: 'Mandal · ' + l[0].split(' (')[0] + ' · AC ' + acName, quota: l[1],
+        name: l[0], sub: 'Mandal · ' + l[0].split(' (')[0] + ' · updated ' + fmtDate(dateOf(i)), quota: l[1],
         namesLabel: !named ? 'No name yet' : chosen !== null ? nm(cands.length) + ' · 1 confirmed' : nm(cands.length),
+        idleDays: Math.round((TODAY - new Date(dateOf(i) + 'T00:00:00')) / 86400000) + ' days idle',
+        owner: proposerFor(d.body, r.name, propSeed(i, POOL[i % POOL.length])),
         leadTag: ld.tag,
         leadBg: chosen !== null ? SS.Confirmed[0] : warn ? SS['Not started'][0] : stage === 0 ? SS['Not started'][0] : '#f1f4f3',
         leadFg: chosen !== null ? SS.Confirmed[1] : warn ? SS['Not started'][1] : stage === 0 ? SS['Not started'][1] : T.mute,
@@ -410,12 +548,18 @@ export default function Dashboard2() {
         stage: STAGES[stage], pillBg: sty[0], pillFg: sty[1],
         metric: step === 3 || step === 4
           ? n(step === 4 ? v2 : v1) + ' / ' + n(houses)
-          : step === 5 ? (stage >= 6 ? '+' + n(640 + i * 55) : '—')
+          : step === 5 ? (rr ? (rr === 'won' ? 'WON · +' : 'LOSS · −') + n(640 + i * 55) : '—')
           : named ? String(cands.length) : '—',
-        metricTone: step === 5 && stage >= 6 ? T.green : T.mute,
-        btn: nx[0], btnBorder: nx[1] ? accent : '#dfe4e2', btnBg: nx[1] ? accent : '#fff', btnFg: nx[1] ? '#fff' : T.mute,
+        metricTone: step === 5 && rr ? (rr === 'won' ? T.green : T.crim) : T.mute,
+        // Viewing the optional second-visit step offers that action directly from the list.
+        btn: stage === 0 ? '—' : (step === 4 && stage === 4 ? 'Update Door to Door - 2' : nx[0]),
+        btnBorder: stage === 0 ? 'transparent' : nx[1] ? accent : '#dfe4e2',
+        btnBg: stage === 0 ? 'transparent' : nx[1] ? accent : '#fff',
+        btnFg: stage === 0 ? '#c9d2cf' : nx[1] ? '#fff' : T.mute,
         compare: () => (cands.length ? setState({ compare: i, pick: chosenIdx(i) }) : setState({ drawer: i })),
-        go: () => (stage === 1 && cands.length ? setState({ compare: i, pick: chosenIdx(i) }) : setState({ drawer: i })),
+        go: () => (stage === 1 && cands.length
+          ? setState({ compare: i, pick: chosenIdx(i) })
+          : (step === 4 && stage === 4 ? advance(i, 5, 'Door to Door - 2 marked complete') : setState({ drawer: i }))),
       }
     })
 
@@ -483,9 +627,9 @@ export default function Dashboard2() {
         ['Add a name for this location', 'No name has gone up for this location yet. Add aspirants, then compare them.', 'Send name for review', 'Name sent for review — '],
         ['Review the names and confirm one', 'More than one name is on this location. Compare them side by side before confirming.', 'Compare the names', 'Comparison opened — '],
         ['Upload the nomination papers', 'Candidate is confirmed. Upload the filed papers so the district office can verify before the deadline.', 'Save as nomination filed', 'Nomination marked as filed — '],
-        ['Update round 1 visit progress', 'Papers are filed. The first pass of house visits is the live work on this location now.', 'Get latest round 1 data', 'Round 1 visit data refreshed — '],
-        ['Update round 2 visit progress', 'Round 1 is complete. The repeat pass before polling day is the live work now.', 'Get latest round 2 data', 'Round 2 visit data refreshed — '],
-        ['Add the win or loss', 'Both visit rounds are done. Record the declared outcome — mandal-level users only.', 'Save win / loss', 'Result saved — '],
+        ['Update Door to Door progress', 'Papers are filed. Door to Door visits are the live work on this location now.', 'Mark Door to Door complete', 'Door to Door marked complete — '],
+        ['Add the win or loss', 'Visits are covered. Record the outcome, or run the optional second visit first.', 'Save win / loss', 'Result saved — '],
+        ['Add the win or loss', 'Visits are covered. Record the declared outcome — mandal-level users only.', 'Save win / loss', 'Result saved — '],
         ['Everything is complete', 'Result is declared for this location. Nothing further to do here.', 'View result sheet', 'Result sheet opened — '],
       ]
       const act = ACTS[stage]
@@ -508,7 +652,7 @@ export default function Dashboard2() {
         facts: [['Profile', c[2] + ' · ' + c[3] + ' · ' + c[4]], ['Occupation', c[6]], ['Education', c[7]], ['Member since', String(c[8])], ['Reserved for', l[1]], ['Names on location', String(cands.length)]].map(([k, v]) => ({ k, v })),
         actionStep: stage === 6 ? 'Complete' : 'Next · step ' + (stage + 1),
         actionTitle: act[0], actionHelp: note + act[1],
-        isDocs: stage === 2, isD2d: stage === 3 || stage === 4, isResult: stage === 5,
+        isDocs: stage === 2, isD2d: stage === 3 || stage === 4, isResult: stage >= 5,
         primary: act[2], primaryBg: stage === 6 ? '#e6ebe9' : accent, primaryFg: stage === 6 ? '#7d8a86' : '#fff',
         primaryGo: () => {
           if (stage === 0) { proposeNames(li); return }
@@ -517,9 +661,8 @@ export default function Dashboard2() {
             if (docState(li).indexOf(false) >= 0) { flash('Upload the pending papers first — ' + l[0]); return }
             advance(li, 3, 'Nomination marked as filed'); return
           }
-          if (stage === 3) { advance(li, 4, 'Round 1 visits marked complete'); return }
-          if (stage === 4) { advance(li, 5, 'Round 2 visits marked complete'); return }
-          if (stage === 5) {
+          if (stage === 3) { advance(li, 4, 'Door to Door marked complete'); return }
+          if (stage === 4 || stage === 5) {
             const rr = state.results[key(li)]
             if (!rr) { flash('Pick won or lost first — ' + l[0]); return }
             advance(li, 6, rr === 'won' ? 'Recorded as WON' : 'Recorded as LOSS'); return
@@ -536,24 +679,39 @@ export default function Dashboard2() {
     const visited2v = dRound === 2 ? (dStage >= 5 ? houses2 : Math.round(houses2 * 0.48)) : (dStage >= 4 ? houses2 : Math.round(houses2 * 0.62))
 
     dName = r.name; dBody = d.body; dPc = pcName; dAc = acName; chipName = chipDef[0]
-    listTitle = atOnly ? chipDef[0] + (terminal ? ' — completed' : ' — waiting at this stage') : chipDef[0] + ' — ' + r.name + ' locations'
-    listMeta = lc(rows.length) + ' in AC · ' + acName + (atOnly ? ' waiting here · ' : ' · ') + n(r[chipDef[1]] === undefined ? r.total : r[chipDef[1]]) + (atOnly ? ' have reached this stage or passed it, statewide' : ' in this position statewide')
-    listFoot = (atOnly
-      ? terminal
-        ? 'Locations whose result is already declared — nothing further to do on these.'
-        : 'Only locations whose next action is step ' + (step + 1) + ' (' + STEPS[step][0] + '). Locations already past it are hidden.'
-      : 'Every location in this position, whatever stage it has reached.') + ' AC · ' + acName + ', reservation ' + st.quota + '.'
+    listTitle = r.name + ' · PC ' + pcName + ' · AC ' + acName
+    listFoot = (level === 0
+      ? 'Every location in this position, whatever stage it has reached.'
+      : cur === 'done'
+        ? (terminal
+            ? 'Locations whose result is already declared — nothing further to do on these.'
+            : 'Locations that have completed “' + CHIPS[level][0] + '”.')
+        : cur === 'pending'
+          ? (level === 5
+              ? 'Locations pending the second visit round. Counts come from a separate field source, so they differ from round 1.'
+              : 'Locations waiting at this stage — next action “' + NEXT[level - 1][0] + '”.')
+          : cur === 'behind'
+            ? 'Locations still short of this stage, each with its own next action.'
+            : 'Every location up to this stage, with its own next action. Locations already past it are hidden.')
+      + ' AC · ' + acName + ', reservation ' + st.quota + '.'
     listEmpty = rows.length === 0
     showMetric = step >= 3
-    metricCol = step === 3 ? 'Houses visited (R1)' : step === 4 ? 'Houses visited (R2)' : 'Margin'
+    metricCol = step === 3 || step === 4 ? 'Visits / total houses' : 'Margin'
     docsList = li === null ? [] : DOCS.map(([name, note], i) => {
       const ok = docState(li)[i]
       return { name, note, mark: ok ? '✓' : '!', state: ok ? 'Uploaded' : 'Upload', tone: ok ? T.green : T.red, go: () => toggleDoc(li, i) }
     })
     resObj = li === null ? {} : (() => {
-      const rr = state.results[key(li)] || (stageOf(li) >= 6 ? 'won' : null)
+      const rr = resultOf(li), locked = stageOf(li) >= 6
       const on = (k, c) => ({ border: rr === k ? c : '#e2e7e5', bg: rr === k ? (k === 'won' ? '#f3faf5' : '#fdf3f5') : '#fff', fg: rr === k ? c : '#9aa5a1', w: rr === k ? '1.5px' : '1px' })
-      return { won: on('won', '#1c7a45'), lost: on('lost', '#b3123b'), wonGo: () => setResult(li, true), lostGo: () => setResult(li, false) }
+      return {
+        won: on('won', '#1c7a45'), lost: on('lost', '#b3123b'),
+        note: locked
+          ? (rr === 'won' ? 'Recorded as WON — declared result, read-only.' : 'Recorded as LOSS — declared result, read-only.')
+          : 'Pick one, then save.',
+        wonGo: () => { if (!locked) setResult(li, true) },
+        lostGo: () => { if (!locked) setResult(li, false) },
+      }
     })()
     d2d = { houses: n(houses2), visited: n(visited2v), pct: pc(visited2v, houses2), barW: pc(visited2v, houses2) + '%', workers: WORKERS.map(([wn, last, hh]) => ({ name: wn, last, houses: n(hh) })) }
   }
@@ -631,25 +789,19 @@ export default function Dashboard2() {
                         {colDefs.map(([label], ci3) => (
                           <div key={ci3} style={sx(`flex:1;text-align:right;font:600 10px/1.2 'IBM Plex Sans';letter-spacing:.1em;text-transform:uppercase;color:#8a9793`)}>{label}</div>
                         ))}
-                        <div style={sx(`flex:.8;text-align:right;font:600 10px/1.2 'IBM Plex Sans';letter-spacing:.1em;text-transform:uppercase;color:#8a9793`)}>Open</div>
                       </div>
                       {g.rows.map((r, ri) => (
-                        <div key={ri} className="d2-row" style={sx('display:flex;align-items:center;padding:12px 18px;border-bottom:1px solid #f0f3f2')}>
+                        <div key={ri} onClick={r.open} className="d2-geo-row" style={sx('display:flex;align-items:center;padding:12px 18px;border-bottom:1px solid #f0f3f2;cursor:pointer')}>
                           <div style={sx('flex:1.7;min-width:0')}>
-                            <div style={sx(`font:600 13px/1.25 'IBM Plex Sans'`)}>{r.name}</div>
+                            <div style={sx(`font:600 13px/1.25 'IBM Plex Sans';color:#0d7a6f`)}>{r.name}</div>
                             <div style={sx(`font:400 11px/1.3 'IBM Plex Sans';color:#9aa5a1;margin-top:2px`)}>{r.sub}</div>
                           </div>
                           {r.cells.map((cell, cei) => (
-                            <div key={cei} style={sx('flex:1;text-align:right')}>
-                              <button type="button" className="d2-link" onClick={cell.go} title={cell.hint} style={sx(`cursor:pointer;border:0;background:transparent;padding:0;font:700 13.5px/1.2 'IBM Plex Sans';color:${cell.tone};text-decoration:${cell.line}`)}>{cell.v}</button>
-                            </div>
+                            <div key={cei} style={sx(`flex:1;text-align:right;font:700 13.5px/1.2 'IBM Plex Sans';color:${cell.tone}`)}>{cell.v}</div>
                           ))}
-                          <div style={sx('flex:.8;text-align:right')}>
-                            <button type="button" className="d2-btn" onClick={r.open} style={sx(`cursor:pointer;white-space:nowrap;font:600 9.5px/1 'IBM Plex Sans';letter-spacing:.09em;text-transform:uppercase;padding:7px 9px;border-radius:5px;border:1px solid #dfe4e2;background:#fff;color:#6b7873`)}>Open</button>
-                          </div>
                         </div>
                       ))}
-                      <div style={sx(`padding:11px 18px;background:#fafbfb;font:400 11.5px/1.4 'IBM Plex Sans';color:#9aa5a1`)}>Click any number to open that position filtered to that status.</div>
+                      <div style={sx(`padding:11px 18px;background:#fafbfb;font:400 11.5px/1.4 'IBM Plex Sans';color:#9aa5a1`)}>Click a position name to open its locations.</div>
                     </div>
                   ))}
                 </div>
@@ -739,7 +891,7 @@ export default function Dashboard2() {
                   ))}
                 </div>
               ))}
-              <div style={sx(`padding:11px 18px;background:#fafbfb;font:400 11.5px/1.4 'IBM Plex Sans';color:#9aa5a1`)}>All eight parliament rows add up to the position total. Click one to load its assembly segments below.</div>
+              <div style={sx(`padding:11px 18px;background:#fafbfb;font:400 11.5px/1.4 'IBM Plex Sans';color:#9aa5a1`)}>{geoFoot} Click a row to load its assembly segments below.</div>
             </div>
 
             <div style={sx('background:#fff;border:1px solid #dfe4e2;border-radius:10px;overflow:hidden;margin-bottom:14px')}>
@@ -773,7 +925,7 @@ export default function Dashboard2() {
                   ))}
                 </div>
               ))}
-              <div style={sx(`padding:11px 18px;background:#fafbfb;font:400 11.5px/1.4 'IBM Plex Sans';color:#9aa5a1`)}>These four rows add up to the {dPc} row above. Click one to filter the locations list.</div>
+              <div style={sx(`padding:11px 18px;background:#fafbfb;font:400 11.5px/1.4 'IBM Plex Sans';color:#9aa5a1`)}>Each column adds up down these four rows to the {dPc} row above. Click a row to filter the locations list.</div>
             </div>
 
             <div style={sx('background:#fff;border:1px solid #dfe4e2;border-radius:10px;overflow:hidden')}>
@@ -782,7 +934,18 @@ export default function Dashboard2() {
                   <div style={sx('width:3px;height:16px;border-radius:2px;background:#0d7a6f')} />
                   <div style={sx(`font:600 13px/1 'IBM Plex Sans';letter-spacing:.05em;text-transform:uppercase`)}>{listTitle}</div>
                 </div>
-                <div style={sx(`font:500 11.5px/1 'IBM Plex Sans';color:#8a9793`)}>{listMeta}</div>
+                <div style={sx('display:flex;align-items:center;gap:6px;flex-wrap:wrap')}>
+                  {lfilters.map((f, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={f.go}
+                      style={sx(`cursor:pointer;white-space:nowrap;font:600 10.5px/1 'IBM Plex Sans';letter-spacing:.05em;padding:8px 11px;border-radius:6px;border:1px solid ${f.border};background:${f.bg};color:${f.fg}`)}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div style={sx('display:flex;padding:9px 18px;background:#f7f9f8;border-bottom:1px solid #e9edeb')}>
                 <div style={sx(`flex:1.5;font:600 10px/1.2 'IBM Plex Sans';letter-spacing:.11em;text-transform:uppercase;color:#8a9793`)}>Location</div>
@@ -982,9 +1145,12 @@ export default function Dashboard2() {
                   )}
 
                   {dw.isResult && (
-                    <div style={sx('margin-top:12px;display:flex;gap:9px')}>
-                      <div onClick={resObj.wonGo} style={sx(`flex:1;border:${resObj.won.w} solid ${resObj.won.border};border-radius:8px;padding:12px;text-align:center;background:${resObj.won.bg};cursor:pointer`)}><div style={sx(`font:700 13px/1 'IBM Plex Sans';color:${resObj.won.fg}`)}>WON</div></div>
-                      <div onClick={resObj.lostGo} style={sx(`flex:1;border:${resObj.lost.w} solid ${resObj.lost.border};border-radius:8px;padding:12px;text-align:center;background:${resObj.lost.bg};cursor:pointer`)}><div style={sx(`font:700 13px/1 'IBM Plex Sans';color:${resObj.lost.fg}`)}>LOST</div></div>
+                    <div style={sx('margin-top:12px')}>
+                      <div style={sx('display:flex;gap:9px')}>
+                        <div onClick={resObj.wonGo} style={sx(`flex:1;border:${resObj.won.w} solid ${resObj.won.border};border-radius:8px;padding:12px;text-align:center;background:${resObj.won.bg};cursor:pointer`)}><div style={sx(`font:700 13px/1 'IBM Plex Sans';color:${resObj.won.fg}`)}>WON</div></div>
+                        <div onClick={resObj.lostGo} style={sx(`flex:1;border:${resObj.lost.w} solid ${resObj.lost.border};border-radius:8px;padding:12px;text-align:center;background:${resObj.lost.bg};cursor:pointer`)}><div style={sx(`font:700 13px/1 'IBM Plex Sans';color:${resObj.lost.fg}`)}>LOST</div></div>
+                      </div>
+                      <div style={sx(`margin-top:9px;font:400 11px/1.4 'IBM Plex Sans';color:#9aa5a1`)}>{resObj.note}</div>
                     </div>
                   )}
                 </div>
