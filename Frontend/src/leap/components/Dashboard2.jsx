@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
 import { getGeoBreakdown, getLocations, getPositionSummary, getReservationSummary } from '../dashboard2Api.js'
 import { CLAIMED_ROLE_IDS, ELECTION_TREE, cardMatches } from '../electionTree.js'
+// Scores come from /leapapi, not from this screen's own backend. They live in a second,
+// optional database (report_ratings) and Total Score is a real formula — half the
+// performance points plus half the leader-feedback points, null and never 0 when a cadre
+// has neither. That logic already exists once, in api.js's getCadreScores, and every other
+// screen reads it through this same loader. A copy inside portal-frontend-code-2 would be a
+// second definition of the number, free to drift from the one the rest of the portal shows.
+import { TIER_COLOR, loadScores, scoreTier } from './NewPositionModal.jsx'
 
 // Dashboard 2 — an alternate dashboard layout over the same local-body election data,
 // served by its own backend (PSA-Backend-code/portal-frontend-code-2) through the
@@ -149,7 +156,8 @@ const toRow = (p) => ({
   vloc2: p.door_to_door_2, declared: p.declared, won: p.won, lost: p.lost,
 })
 
-const toCand = (c) => ({
+const toCand = (c, rating) => ({
+  score: rating && rating.total_score != null ? Math.round(rating.total_score * 10) / 10 : null,
   name: [c.member_name, c.last_name].filter(Boolean).join(' ').trim() || '—',
   phone: c.mobile_no || '—',
   gender: c.gender === 'F' ? 'Female' : c.gender === 'M' ? 'Male' : '—',
@@ -179,6 +187,7 @@ export default function Dashboard2() {
   const [geo, setGeo] = useState(null)
   const [reservations, setReservations] = useState(null)
   const [locs, setLocs] = useState(null)
+  const [scores, setScores] = useState({})
 
   const st = state
   const step = st.step
@@ -232,6 +241,17 @@ export default function Dashboard2() {
       .catch((err) => { if (live) flash(err.message) })
     return () => { live = false }
   }, [posKey, st.ac])
+
+  // getCadreScores is lookup-first and runs two stored procedures for a cadre nobody has
+  // rated yet, so loadScores fires one membership id at a time and the badges fill in as
+  // they land. Scoped to the location being compared: a page of 200 locations would
+  // otherwise queue a request per name on the screen.
+  useEffect(() => {
+    if (!st.compare || !locs) return
+    const loc = locs.locations.filter((x) => x.proposal_position_id === st.compare)[0]
+    if (!loc) return
+    loadScores((loc.candidates || []).map((c) => c.membership_id), setScores)
+  }, [st.compare, locs])
 
   const openDetail = (r, chip) => setState({ detail: r, chip, step: CHIPS[chip][3], drawer: null, compare: null, lfilter: 'all', quota: 'All locations' })
   const setStep = (i) => {
@@ -505,7 +525,15 @@ export default function Dashboard2() {
       fg: lf === fkey ? accent : T.mute,
     }))
 
-    const candsOf = (l) => (l.candidates || []).map(toCand)
+    // Best score first, unscored last — the same ranking the Candidates screen uses.
+    // `?? -1` and not `?? 0`: a cadre nobody has rated must sort below a real zero, never
+    // as one. Sorted here rather than in each consumer so the comparison table, the
+    // "Leading:" line on the location row and the drawer all name the same candidate.
+    // The order settles as loadScores fills the badges in, one membership id at a time.
+    const candsOf = (l) =>
+      (l.candidates || [])
+        .map((c) => toCand(c, scores[String(c.membership_id)]))
+        .sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
     const leadOf = (l) => {
       const cands = candsOf(l)
       if (!cands.length) return { c: null, tag: 'Empty' }
@@ -552,7 +580,13 @@ export default function Dashboard2() {
         // here would be a second copy free to drift from it.
         help: 'Location reserved for ' + quota + '. Read-only: confirm a name in Assign Members.',
         cands: cands.map((c) => ({
-          name: c.name, phone: c.phone, score: '—',
+          // null, not 0, while the score is still in flight or the cadre is unrated — and
+          // '—' rather than a number for both, because unrated must not read as zero.
+          name: c.name, phone: c.phone, score: c.score == null ? '—' : String(c.score),
+          // Tinted by the same scoreTier the other screens use. Unrated is its own grey
+          // tier, never the worst-candidate red — the score is null and not 0 when nobody
+          // has rated them yet, and it reads grey while the request is still in flight.
+          scoreFg: TIER_COLOR[scoreTier(c.score)],
           border: c.isConfirmed ? accent : '#e9edeb', bg: c.isConfirmed ? '#f4faf9' : '#fff',
           dotRing: c.isConfirmed ? accent : '#cfd8d5', dotFill: c.isConfirmed ? accent : '#fff',
           fit: c.casteGroup + ' · ' + c.gender,
@@ -962,7 +996,7 @@ export default function Dashboard2() {
                           <div style={sx(`margin-top:4px;font:400 11px/1.3 'IBM Plex Sans';color:#9aa5a1`)}>{c.phone}</div>
                         </div>
                         <div style={sx('flex:none;text-align:center;border:1px solid #e9edeb;border-radius:7px;padding:6px 8px;background:#fff')}>
-                          <div style={sx(`font:700 15px/1 'IBM Plex Sans';color:#0d7a6f`)}>{c.score}</div>
+                          <div style={sx(`font:700 15px/1 'IBM Plex Sans';color:${c.scoreFg}`)}>{c.score}</div>
                           <div style={sx(`margin-top:3px;font:600 8px/1 'IBM Plex Sans';letter-spacing:.1em;color:#9aa5a1`)}>SCORE</div>
                         </div>
                       </div>

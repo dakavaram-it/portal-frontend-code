@@ -279,14 +279,14 @@ const PANCHAYAT_RAJ_TYPES = new Set(['MPTC', 'ZPTC', 'MPP', 'ZP'])
 
 // A cadre with no ratings row scores null rather than 0, so 'none' is its own tier —
 // unrated must not read as the worst candidate on the list.
-function scoreTier(score) {
+export function scoreTier(score) {
   if (score === null || score === undefined) return 'none'
   if (score >= 70) return 'high'
   if (score >= 40) return 'mid'
   return 'low'
 }
 
-const TIER_COLOR = { none: '#9ca3af', high: '#059669', mid: '#d97706', low: '#dc2626' }
+export const TIER_COLOR = { none: '#9ca3af', high: '#059669', mid: '#d97706', low: '#dc2626' }
 
 // proposal_status, by id — the whole table, which now holds these two alone (Shortlisted
 // was dropped and Confirmed moved down from 3 to 2 with it). `done` is the verb a card
