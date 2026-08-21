@@ -1,4 +1,5 @@
 .pcm-root .summary-table { margin-top: 16px; }
+.pcm-root .summary-table-tools { display: flex; margin-bottom: 10px; }
 .pcm-root .summary-table .table-card table { min-width: 760px; }
 .pcm-root .summary-grid td { white-space: nowrap; }
 /* Location text runs long and varies a lot row to row — nowrap would size

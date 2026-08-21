@@ -96,7 +96,6 @@ export default function Dashboard({ meetings, remarksCategories, onToast, onSave
               key={meeting.id}
               level={picked}
               meeting={meeting}
-              onCount={openSheet}
               onSummary={(id) => setSummaryMeetingId((cur) => (cur === id ? null : id))}
               expanded={summaryMeetingId === meeting.id}
             />

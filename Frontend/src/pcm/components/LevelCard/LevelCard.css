@@ -24,11 +24,8 @@
 .pcm-root .lc-stat {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   width: 100%; padding: 11px 14px; min-width: 0;
-  background: none; border: 0; font: inherit; color: inherit; text-align: left;
-  transition: background-color var(--dur) var(--ease);
 }
 .pcm-root .lc-stat + .lc-stat { border-top: 1px solid var(--border); }
-.pcm-root .lc-stat:hover { background: var(--surface); }
 .pcm-root .lc-stat-val { font-size: 16px; font-weight: 800; letter-spacing: -.03em; color: var(--text-strong); line-height: 1.2; }
 .pcm-root .lc-stat-key {
   font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
