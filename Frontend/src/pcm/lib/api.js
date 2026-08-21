@@ -5,15 +5,32 @@
    `/api` to an unrelated service. Vite proxies this prefix to the PSA gateway
    and swaps it for `/pc-meetings`, the mount the meetings backend sits behind
    there — so the paths below stay exactly the ones the service publishes. */
+import { getToken, sessionExpired } from '../../leap/api.js';
+
 const API_BASE = '/pcmapi';
 
+/* Same bearer token the portal's own backend takes: this service verifies it
+   with the same secret, reads the user id out of it and answers with only the
+   assemblies that user is granted. Without it every route here is a 401 — the
+   figures are the whole state's otherwise, which is exactly what the scoping
+   exists to stop. */
 async function request(path, options) {
+  const token = getToken();
   const res = await fetch(API_BASE + path, {
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-    ...options
+    ...options,
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options?.headers
+    }
   });
 
   if (!res.ok) {
+    // A 401 here is the one shared session lapsing, not this screen failing:
+    // hand it to the portal's own handler so the app returns to the login
+    // screen rather than showing this module's "could not reach the service".
+    if (res.status === 401) sessionExpired();
     // FastAPI puts the reason in `detail`; fall back to the status so the
     // banner never reads "undefined".
     const body = await res.json().catch(() => null);

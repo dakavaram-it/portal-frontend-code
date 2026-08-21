@@ -24,7 +24,7 @@ Deps are `react`, `react-dom`, `gsap` (the `pcm/` module's animations, through `
 | Base | Reached how | Used by |
 |---|---|---|
 | `/leapapi/*` | Vite proxy → `http://127.0.0.1:6644`, prefix rewritten to `/portal-frontend-code` | `api.js` — the whole nomination workflow |
-| `/pcmapi/*` | same gateway, prefix rewritten to `/pc-meetings` | `pcm/lib/api.js` — every PC-Meetings screen |
+| `/pcmapi/*` | same gateway, prefix rewritten to `/pc-meetings` | `pcm/lib/api.js` — every PC-Meetings screen. **Takes the same bearer token as `/leapapi`** and answers `401` without one |
 | `https://www.mypartydashboard.com/PSA/WebService/Cadre` | called **directly** from the browser (that service answers `Access-Control-Allow-Origin: *`) | `cadreSearchApi.js`, `cadreNotesApi.js` |
 | `https://www.mypartydashboard.com/PSA/WebService/Committee` and `…/WebService/CommitteeWebService` | Committee resource direct; CommitteeWebService **proxied** as `/partyAnalystApi` (its OPTIONS preflight sends no CORS headers, so a direct call is blocked before it leaves the browser) | `committeeApi.js` |
 
@@ -53,6 +53,7 @@ Two top-level screens, switched by a boolean in `Frontend/src/App.jsx`:
 - **Both ways in go through `App.jsx`'s `signIn`**, never `setUser` directly: it clears the session picklist cache (the cached assemblies are the *previous* user's grants) and calls `prefetchSession()` so `getProposalElectionTypes` and `getUserAccessAssemblies` are already in flight by the time the Dashboard mounts.
 - Logout and the 401 handler clear the cache and call `clearToken()` — logout *after* awaiting `/logout`, since that call is behind the auth guard. `clearToken` is deliberately not folded into `clearSessionCache`: `signIn` runs the cache clear on the way *in*, which would wipe the token `login()` had just stored.
 - **The two PSA services take the same token** as `authToken` — one login, one token, two backends. That is why `getToken()` is exported from `api.js` rather than kept private.
+- **`/pcmapi` takes it too, as `Authorization: Bearer`.** The PC-Meetings backend verifies it with the same secret and algorithm the portal signs with, reads the user id out of `sub` and answers with only that user's granted assemblies — every route there is `401` without one. Its `401` calls `sessionExpired()` (exported from `api.js`), so a lapsed session ends on the login screen rather than in that module's own error banner.
 - **`committeeApi.js` is the exception, and it is a security debt.** Every Committee call sends `COMMITTEE_STATIC_TOKEN`, a hardcoded JWT, because that service has no per-user token issuance wired up yet. It expires; when it does, the whole Committees Assign screen 401s until the string is replaced. Swap it for a per-session token as soon as the backend can issue one.
 - **`uploadNominationFile` sends no `Authorization` header** (it builds its own `fetch` to get multipart right and skips `authHeader()`). If that endpoint is ever put behind the auth guard, it breaks — fix it there, not by working around it in the caller.
 
@@ -89,12 +90,24 @@ Below 1025px the sidebar is an off-canvas drawer (`navOpen`, `.leap-scrim`, `.le
 | `Candidates` | `'candidates'` — sidebar "View Members", or the Dashboard | Every position holding candidates, state-wide, in a sortable/exportable table |
 | `CadreSearchNotes` | `'cadreSearch'` — sidebar "Cadre Search" | PSA directory search; per-cadre notes behind an entitlement |
 | `CommitteesAssign` | `'committeesAssign'` — sidebar, **only with the `CADRE_COMMITTEE_MANAGEMENT` entitlement** | KSS / CUBS / Main-and-Affiliated committee management against the PSA services |
-| `PcMeetings` | `'pcmMeetings'` / `'pcmPrograms'` / `'pcmCalendar'` — the PC-MEETINGS sidebar group, **the same entitlement as Committees Assign** | The committee-meetings console (`pcm/`), one mounted module behind all three entries |
-| `Sidebar` | always | Three groups: LOCAL BODY ELECTIONS (collapsible, open by default), PC-MEETINGS (collapsible, **shut** by default, entitlement-gated) and CADRE. Footer shows `firstname lastname` falling back to `username`, and logout |
+| `PcMeetings` | `'pcmMeetings'` / `'pcmPrograms'` / `'pcmCalendar'` — the PC-MEETINGS sidebar group, **one entitlement per entry** (see below) | The committee-meetings console (`pcm/`), one mounted module behind all three entries |
+| `Sidebar` | always | Three groups: LOCAL BODY ELECTIONS (collapsible, open by default), PC-MEETINGS (collapsible, **shut** by default, entitlement-gated per entry) and CADRE. Footer shows `firstname lastname` falling back to `username`, and logout |
 | `PositionDetail` | `'detail'` | **Unreachable** — nothing sets this view |
 | `AllPositions` / `PositionCard` | `'positions'` | **Unreachable** — nothing sets this view |
 
-Entitlements come off the login response (`user.entitlements`), a list of `{ entitlement_id, entitlement_name }` rows — **never a list of names**. Gate on `hasEntitlement(user, name)` from `api.js` and not on `entitlements.includes(name)`, which reads `false` against object rows and silently hides the screen it gates. `CADRE_COMMITTEE_MANAGEMENT` gates whether the Committees Assign nav entry is inserted and whether the PC-MEETINGS group appears at all — the console reports on the meetings those committees hold, so the two are one grant rather than two — every account still lands on the Dashboard. `CADRE_PROFILE_NOTES_PUBLIC_ADD` (or `user_id === 1`) gates the Add Note button.
+Entitlements come off the login response (`user.entitlements`), a list of `{ entitlement_id, entitlement_name }` rows — **never a list of names**. Gate on `hasEntitlement(user, name)` from `api.js` and not on `entitlements.includes(name)`, which reads `false` against object rows and silently hides the screen it gates. Every account still lands on the Dashboard whatever it holds.
+
+| Grant | What it opens |
+|---|---|
+| `CADRE_COMMITTEE_MANAGEMENT` | the Committees Assign nav entry |
+| `MEETING_REMARKS_UPDATE` | PC-MEETINGS → Committee Meetings |
+| `LEADER_PROGRAMS_UPDATE` | PC-MEETINGS → Programmes |
+| either of the two above | PC-MEETINGS → Calendar, and the group heading itself |
+| `CADRE_PROFILE_NOTES_PUBLIC_ADD` (or `user_id === 1`) | the Add Note button |
+
+**The two PC-MEETINGS grants are separate on purpose** — the halves are separate features over separate data (meetings against `meetings`, Programmes against `party_track`) and accounts routinely hold one and not the other. Calendar is the meetings list drawn on a date grid and holds nothing of its own, so it rides along with either. They are no longer tied to `CADRE_COMMITTEE_MANAGEMENT`.
+
+**`user_id === 1` is the operations account** and is handed every LOCAL BODY ELECTIONS and PC-MEETINGS entry without holding the grants — **except Committees Assign, which is hidden for it outright.** That screen writes to the PSA committee service under a hardcoded token; it is deliberately outside the blanket.
 
 ### `Dashboard` (1350 lines)
 
@@ -268,6 +281,13 @@ helper — is the upstream file unchanged, so a fix belongs upstream first.
   it fetches its own role and activity summaries — and the meetings list is
   seconds of counting over half a million invitee rows. Anything added to this
   module that needs only its own data belongs above that gate too.
+- **Every call carries the portal's bearer token, and the service scopes on
+  it.** `lib/api.js` reads it through `getToken()` from `leap/api.js`; the
+  backend verifies it and answers with only the assemblies that user was
+  granted, so a one-assembly account sees the same meetings with that
+  assembly's own figures. A `401` goes to `sessionExpired()` rather than this
+  module's error banner. Nothing in these views filters by assembly — do not
+  add a client-side filter, the numbers arrive already narrowed.
 - **One mount, three nav entries.** Unlike every other screen it is not one
   `screen()` per view — it holds the meetings list, the member pages and the
   rollups it has fetched, and switching entries must not throw those away. It

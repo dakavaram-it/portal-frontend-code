@@ -120,14 +120,14 @@ const BASE_NAV = [
 
 const COMMITTEES_ASSIGN_ITEM = { view: 'committeesAssign', label: 'Committees Assign', icon: <IconCommittee /> }
 
-// PC-Meetings, the committee-meetings console. Behind the same entitlement as
-// Committees Assign: it reports on the meetings those committees hold, so the
-// two are one grant, not two.
-const PC_MEETINGS_NAV = [
-  { view: 'pcmMeetings', label: 'Committee Meetings', icon: <IconGauge /> },
-  { view: 'pcmPrograms', label: 'Programmes', icon: <IconClipboard /> },
-  { view: 'pcmCalendar', label: 'Calendar', icon: <IconCalendar /> },
-]
+// PC-Meetings, the committee-meetings console. Each entry carries its own grant — the
+// two halves are separate features against separate data (meetings against `meetings`,
+// Programmes against `party_track`), so a user is routinely given one and not the other.
+// Calendar is the meetings list drawn on a date grid and holds nothing of its own, so it
+// rides along with either grant rather than having a third.
+const PCM_MEETINGS_ITEM = { view: 'pcmMeetings', label: 'Committee Meetings', icon: <IconGauge /> }
+const PCM_PROGRAMS_ITEM = { view: 'pcmPrograms', label: 'Programmes', icon: <IconClipboard /> }
+const PCM_CALENDAR_ITEM = { view: 'pcmCalendar', label: 'Calendar', icon: <IconCalendar /> }
 const CADRE_SEARCH_ITEM = { view: 'cadreSearch', label: 'Cadre Search', icon: <IconSearch /> }
 
 export default function Sidebar({ user, onLogout, view, onNavigate, open, onClose }) {
@@ -162,8 +162,21 @@ export default function Sidebar({ user, onLogout, view, onNavigate, open, onClos
   // Most `user` rows carry no firstname/lastname, so fall back to the login name.
   const displayName = [user.firstname, user.lastname].filter(Boolean).join(' ') || user.username
   const initials = displayName.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()
-  const hasCommitteeAccess = hasEntitlement(user, 'CADRE_COMMITTEE_MANAGEMENT')
+  // user_id 1 is the operations account and is handed every screen without needing the
+  // grants (the same escape hatch CadreSearchNotes' Add Note button already has) —
+  // except Committees Assign, which is deliberately outside that blanket: it writes to
+  // the PSA committee service, so it is only ever reached through its own entitlement.
+  const isSuperUser = user?.user_id === 1
+  const hasCommitteeAccess = !isSuperUser && hasEntitlement(user, 'CADRE_COMMITTEE_MANAGEMENT')
   const electionNav = [...BASE_NAV, ...(hasCommitteeAccess ? [COMMITTEES_ASSIGN_ITEM] : [])]
+
+  const canSeeMeetings = isSuperUser || hasEntitlement(user, 'MEETING_REMARKS_UPDATE')
+  const canSeePrograms = isSuperUser || hasEntitlement(user, 'LEADER_PROGRAMS_UPDATE')
+  const meetingsNav = [
+    ...(canSeeMeetings ? [PCM_MEETINGS_ITEM] : []),
+    ...(canSeePrograms ? [PCM_PROGRAMS_ITEM] : []),
+    ...(canSeeMeetings || canSeePrograms ? [PCM_CALENDAR_ITEM] : []),
+  ]
 
   const navButton = (item) => (
     <button
@@ -208,7 +221,7 @@ export default function Sidebar({ user, onLogout, view, onNavigate, open, onClos
         </button>
         {electionsOpen && electionNav.map(navButton)}
 
-        {hasCommitteeAccess && (
+        {meetingsNav.length > 0 && (
           <>
             <button
               type="button"
@@ -219,7 +232,7 @@ export default function Sidebar({ user, onLogout, view, onNavigate, open, onClos
               <span>PC-MEETINGS</span>
               <IconChevron />
             </button>
-            {meetingsOpen && PC_MEETINGS_NAV.map(navButton)}
+            {meetingsOpen && meetingsNav.map(navButton)}
           </>
         )}
 
