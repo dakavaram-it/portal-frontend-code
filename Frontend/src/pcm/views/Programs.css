@@ -70,6 +70,7 @@
   font-size: 13px;
 }
 
+.pcm-root .role-summary thead th { color: var(--text); }
 .pcm-root .role-summary th.n,
 .pcm-root .role-summary td.n { text-align: right; }
 .pcm-root .role-summary tbody th[scope="row"],
@@ -165,6 +166,19 @@
 .pcm-root .member-detail-card .icon-btn:disabled:hover {
   background: var(--surface); color: var(--text-3);
 }
+
+/* Activities participated / Completed — editable client-side only, no save
+   endpoint exists yet for these, same as remarks/uploads on this card. */
+.pcm-root .member-detail-card .count-input {
+  width: 56px; text-align: right;
+  padding: 5px 7px; font: inherit; font-size: 13px; color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.pcm-root .member-detail-card .count-input:focus {
+  outline: none; border-color: var(--primary); box-shadow: var(--ring);
+}
+.pcm-root .member-detail-card .count-input-ok { color: var(--ok); }
 
 /* Attendance upload modal — reuse RemarksModal chrome; only the file field differs. */
 .pcm-root .upload-drop {

@@ -9,6 +9,7 @@ import LeaderMeetingEntriesModal from '../components/LeaderMeetingEntriesModal/L
 import LeaderRemarksModal from '../components/LeaderRemarksModal/LeaderRemarksModal.jsx';
 import MemberActivityCard from '../components/MemberActivityCard/MemberActivityCard.jsx';
 import Select from '../components/Select/Select.jsx';
+import SortHead from '../components/SortHead/SortHead.jsx';
 import { api } from '../lib/api.js';
 import { num } from '../lib/format.js';
 import { prefersReduced, useAnim } from '../lib/motion.js';
@@ -18,14 +19,11 @@ import { prefersReduced, useAnim } from '../lib/motion.js';
    so no attendance split here.
 
    All three cards are real, `party_track`-backed data, refetched whenever
-   `month` changes: `GET .../role-summary` and `.../activity-summary` for the
-   first two, `.../leaders` for the third once a role/activity pairing is
-   open. `null` means "still loading" (each card renders its own "Loading…"),
-   `[]` means "loaded, genuinely nothing there" — `program`/`program_role`/
-   `leader_program_activity` are freshly added and still empty in production,
-   so the second card falls back to `STATIC_ACTIVITY_SUMMARY` for UI testing
-   only; the first still shows real Total/Members from the `leader` roster,
-   and the member card still calls the live leaders endpoint.
+   `month` changes: `GET .../role-summary` (role-wise member counts) and
+   `.../activity-summary` (role × programme rows) for the first two,
+   `.../leaders` for the third once a role/activity pairing is open. `null`
+   means "still loading" (each card renders its own "Loading…"), `[]` means
+   "loaded, genuinely nothing there".
 
    `activitySummary` rows carry `roleId`/`activityId` alongside the display
    names — `roles` (from `/api/programs/roles`, `party_track.role`) filters
@@ -58,6 +56,41 @@ const roleTint = (name) => chipColor(name, 17);
 const activityTint = (name) => chipColor(name, 53);
 
 const sum = (rows, key) => rows.reduce((a, r) => a + (r[key] || 0), 0);
+
+// Shared by both tables on this view — `null` sortKey leaves rows in
+// server order, matching SummaryTable's own sort convention.
+function sortRows(rows, sortKey, sortDir, getters) {
+  if (!sortKey) return rows;
+  const get = getters[sortKey];
+  const sorted = [...rows].sort((a, b) => {
+    const av = get(a), bv = get(b);
+    return av < bv ? -1 : av > bv ? 1 : 0;
+  });
+  return sortDir === 'desc' ? sorted.reverse() : sorted;
+}
+function useSort() {
+  const [sortKey, setSortKey] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
+  const onSort = (key) => {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortKey(key); setSortDir('asc'); }
+  };
+  return { sortKey, sortDir, onSort };
+}
+
+const ROLE_SORT_KEYS = {
+  role: (r) => (r.role || '').toLowerCase(),
+  total: (r) => r.total || 0,
+  updated: (r) => r.updated || 0,
+  notUpdated: (r) => r.notUpdated || 0
+};
+const ACTIVITY_SORT_KEYS = {
+  role: (r) => (r.role || '').toLowerCase(),
+  totalMembers: (r) => r.totalMembers || 0,
+  activity: (r) => (r.activity || '').toLowerCase(),
+  updated: (r) => r.updated || 0,
+  notUpdated: (r) => r.notUpdated || 0
+};
 
 // Service returns "—" for missing place names — treat those as blank in the UI.
 const hasPlace = (v) => {
@@ -94,22 +127,6 @@ const memberCardVariant = (activity) => {
   return 'default';
 };
 
-/* UI-only fixture for "Programmes by role & activity" while program_role is
-   empty — not used for by-role summary or the leaders card. */
-const STATIC_ACTIVITY_SUMMARY = [
-  { role: 'Minister', roleId: 'static-r1', activity: 'Calendar Meetings', activityId: 'static-a0', totalMembers: 42, updated: 28, notUpdated: 14 },
-  { role: 'Minister', roleId: 'static-r1', activity: 'AC Cadre Meetings', activityId: 'static-a5', totalMembers: 42, updated: 25, notUpdated: 17 },
-  { role: 'MLA', roleId: 'static-r2', activity: 'Parliament Lunch/Dinner Meetings', activityId: 'static-a6', totalMembers: 67, updated: 40, notUpdated: 27 },
-  { role: 'MLA', roleId: 'static-r2', activity: 'Field Performance', activityId: 'static-a7', totalMembers: 67, updated: 33, notUpdated: 34 },
-  { role: 'MP', roleId: 'static-r3', activity: 'Ground AC Grievance', activityId: 'static-a8', totalMembers: 18, updated: 10, notUpdated: 8 },
-  { role: 'District President', roleId: 'static-r4', activity: 'Central Party Office Grievance', activityId: 'static-a9', totalMembers: 35, updated: 20, notUpdated: 15 },
-  { role: 'Minister', roleId: 'static-r1', activity: 'Village Outreach', activityId: 'static-a1', totalMembers: 42, updated: 28, notUpdated: 14 },
-  { role: 'Minister', roleId: 'static-r1', activity: 'Booth Coordination', activityId: 'static-a2', totalMembers: 42, updated: 19, notUpdated: 23 },
-  { role: 'MLA', roleId: 'static-r2', activity: 'Calendar Meetings', activityId: 'static-a0', totalMembers: 67, updated: 51, notUpdated: 16 },
-  { role: 'MLA', roleId: 'static-r2', activity: 'Public Meeting Drive', activityId: 'static-a3', totalMembers: 67, updated: 40, notUpdated: 27 },
-  { role: 'District President', roleId: 'static-r4', activity: 'Membership Camp', activityId: 'static-a4', totalMembers: 35, updated: 22, notUpdated: 13 }
-];
-
 export default function Programs({ roles = [], meetings = [] }) {
   const ref = useRef(null);
   const memberCardRef = useRef(null);
@@ -126,12 +143,15 @@ export default function Programs({ roles = [], meetings = [] }) {
   const [logEntriesByMid, setLogEntriesByMid] = useState({}); // date/files/remarks Update rows
   const [remarksByMid, setRemarksByMid] = useState({}); // other activities' remarks overlay
   const [uploadsByMid, setUploadsByMid] = useState({}); // other activities' attendance uploads
+  const [countsByMid, setCountsByMid] = useState({}); // manual participated/completed overrides (client-only, no save endpoint yet)
   const [selectedAc, setSelectedAc] = useState(null); // narrows the member card to one Assembly within the open role/activity
   const [updateMid, setUpdateMid] = useState(null); // entries Update modal (calendar or log)
   const [remarkMid, setRemarkMid] = useState(null);
   const [remarkMode, setRemarkMode] = useState('view');
   const [uploadMid, setUploadMid] = useState(null);
   const [uploadMode, setUploadMode] = useState('upload');
+  const roleSort = useSort();
+  const activitySort = useSort();
 
   useAnim(ref, () => {
     gsap.from('.role-summary-card, .role-select, .activity-summary-card, .member-detail-card', {
@@ -150,13 +170,12 @@ export default function Programs({ roles = [], meetings = [] }) {
       .then(([roleRows, activityRows]) => {
         if (cancelled) return;
         setRoleSummary(roleRows);
-        // Only the by role & activity card uses a static fallback for testing.
-        setActivitySummary(activityRows.length ? activityRows : STATIC_ACTIVITY_SUMMARY);
+        setActivitySummary(activityRows);
       })
       .catch(() => {
         if (cancelled) return;
         setRoleSummary([]);
-        setActivitySummary(STATIC_ACTIVITY_SUMMARY);
+        setActivitySummary([]);
       });
     return () => { cancelled = true; };
   }, [month]);
@@ -199,6 +218,15 @@ export default function Programs({ roles = [], meetings = [] }) {
     (!selectedRole || r.roleId === selectedRole) &&
     (!selectedActivity || r.activityId === selectedActivity)
   );
+  const sortedRoleRows = useMemo(
+    () => sortRows(roleRows, roleSort.sortKey, roleSort.sortDir, ROLE_SORT_KEYS),
+    [roleRows, roleSort.sortKey, roleSort.sortDir]
+  );
+  const sortedActivitySummary = useMemo(
+    () => sortRows(filteredActivitySummary, activitySort.sortKey, activitySort.sortDir, ACTIVITY_SORT_KEYS),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activityRows, selectedRole, selectedActivity, activitySort.sortKey, activitySort.sortDir]
+  );
 
   // Role filter options come from the activity card's rows when present
   // (covers the static fixture's ids); otherwise the live roles roster.
@@ -236,9 +264,23 @@ export default function Programs({ roles = [], meetings = [] }) {
   }, [activityRows, selectedRole, selectedActivity]);
 
   const mergedLeaders = useMemo(
-    () => (leaders || []).map((m) => ({ ...m, remarks: remarksByMid[m.mid] || '' })),
-    [leaders, remarksByMid]
+    () => (leaders || []).map((m) => {
+      const override = countsByMid[m.mid];
+      return {
+        ...m,
+        remarks: remarksByMid[m.mid] || '',
+        participated: override?.participated ?? m.participated,
+        completed: override?.completed ?? m.completed
+      };
+    }),
+    [leaders, remarksByMid, countsByMid]
   );
+  // No save endpoint exists yet for these counts — same client-only, resets-
+  // on-reload contract as remarks/uploads above.
+  const setCount = (mid, field, value) => {
+    const n = Math.max(0, Math.trunc(Number(value)) || 0);
+    setCountsByMid((cur) => ({ ...cur, [mid]: { ...cur[mid], [field]: n } }));
+  };
   const acOptions = useMemo(
     () => [...new Set(mergedLeaders.map((m) => m.assembly).filter(hasPlace))],
     [mergedLeaders]
@@ -268,7 +310,7 @@ export default function Programs({ roles = [], meetings = [] }) {
   };
 
   const totals = {
-    total: sum(roleRows, 'total'), members: sum(roleRows, 'members'),
+    total: sum(roleRows, 'total'),
     updated: sum(roleRows, 'updated'), notUpdated: sum(roleRows, 'notUpdated')
   };
   const activityTotals = {
@@ -312,23 +354,20 @@ export default function Programs({ roles = [], meetings = [] }) {
               <col className="col-num" />
               <col className="col-num" />
               <col className="col-num" />
-              <col className="col-num" />
             </colgroup>
             <thead>
               <tr>
-                <th scope="col">Role</th>
-                <th scope="col" className="n">Total</th>
-                <th scope="col" className="n">Members</th>
-                <th scope="col" className="n">Updated</th>
-                <th scope="col" className="n">Not updated</th>
+                <SortHead label="Role" sortKey="role" active={roleSort.sortKey === 'role'} dir={roleSort.sortDir} onSort={roleSort.onSort} />
+                <SortHead label="Total Members" sortKey="total" active={roleSort.sortKey === 'total'} dir={roleSort.sortDir} onSort={roleSort.onSort} className="n" />
+                <SortHead label="Updated" sortKey="updated" active={roleSort.sortKey === 'updated'} dir={roleSort.sortDir} onSort={roleSort.onSort} className="n" />
+                <SortHead label="Not updated" sortKey="notUpdated" active={roleSort.sortKey === 'notUpdated'} dir={roleSort.sortDir} onSort={roleSort.onSort} className="n" />
               </tr>
             </thead>
             <tbody>
-              {roleRows.map((r) => (
+              {sortedRoleRows.map((r) => (
                 <tr key={r.role}>
                   <td><span className="role-chip" style={{ '--tint': roleTint(r.role) }}>{r.role}</span></td>
                   <td className="n num">{num(r.total)}</td>
-                  <td className="n num">{num(r.members)}</td>
                   <td className="n num" style={{ color: 'var(--ok)' }}>{num(r.updated)}</td>
                   <td className="n num" style={{ color: 'var(--bad)' }}>{num(r.notUpdated)}</td>
                 </tr>
@@ -339,7 +378,6 @@ export default function Programs({ roles = [], meetings = [] }) {
                 <tr>
                   <th scope="row">Total</th>
                   <td className="n num">{num(totals.total)}</td>
-                  <td className="n num">{num(totals.members)}</td>
                   <td className="n num">{num(totals.updated)}</td>
                   <td className="n num">{num(totals.notUpdated)}</td>
                 </tr>
@@ -353,7 +391,7 @@ export default function Programs({ roles = [], meetings = [] }) {
         <div className="empty" hidden={roleSummary === null || roleRows.length > 0}>
           <Icon name="inbox" />
           <div className="empty-title">No programmes reported for {monthTitle}</div>
-          <div className="empty-hint">This view has no data source configured yet.</div>
+          <div className="empty-hint">No roles in the leader roster for this month.</div>
         </div>
       </div>
 
@@ -404,15 +442,15 @@ export default function Programs({ roles = [], meetings = [] }) {
             </colgroup>
             <thead>
               <tr>
-                <th scope="col">Role</th>
-                <th scope="col" className="n">Total members</th>
-                <th scope="col">Activity</th>
-                <th scope="col" className="n">Updated</th>
-                <th scope="col" className="n">Not updated</th>
+                <SortHead label="Role" sortKey="role" active={activitySort.sortKey === 'role'} dir={activitySort.sortDir} onSort={activitySort.onSort} />
+                <SortHead label="Total members" sortKey="totalMembers" active={activitySort.sortKey === 'totalMembers'} dir={activitySort.sortDir} onSort={activitySort.onSort} className="n" />
+                <SortHead label="Activity" sortKey="activity" active={activitySort.sortKey === 'activity'} dir={activitySort.sortDir} onSort={activitySort.onSort} />
+                <SortHead label="Updated" sortKey="updated" active={activitySort.sortKey === 'updated'} dir={activitySort.sortDir} onSort={activitySort.onSort} className="n" />
+                <SortHead label="Not updated" sortKey="notUpdated" active={activitySort.sortKey === 'notUpdated'} dir={activitySort.sortDir} onSort={activitySort.onSort} className="n" />
               </tr>
             </thead>
             <tbody>
-              {filteredActivitySummary.map((r) => (
+              {sortedActivitySummary.map((r) => (
                 <tr key={r.roleId + '_' + r.activityId}>
                   <td><span className="role-chip" style={{ '--tint': roleTint(r.role) }}>{r.role}</span></td>
                   <td className="n">
@@ -477,6 +515,8 @@ export default function Programs({ roles = [], meetings = [] }) {
               members={leaders === null ? null : visibleMembers}
               variant={cardVariant}
               uploadsByMid={uploadsByMid}
+              onChangeParticipated={(mid, v) => setCount(mid, 'participated', v)}
+              onChangeCompleted={(mid, v) => setCount(mid, 'completed', v)}
               onUpdate={setUpdateMid}
               onUpdateRemarks={(mid) => { setRemarkMid(mid); setRemarkMode('edit'); }}
               onViewRemarks={(mid) => { setRemarkMid(mid); setRemarkMode('view'); }}
