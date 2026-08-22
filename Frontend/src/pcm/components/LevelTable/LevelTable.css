@@ -19,9 +19,9 @@
 
 .pcm-root .level-status thead .level-groups th {
   text-align: center; vertical-align: middle;
-  color: var(--text-2); font-weight: 700; font-size: 11px;
+  color: #475569; font-weight: 700; font-size: 11px;
   letter-spacing: .04em; text-transform: uppercase;
-  background: var(--surface); border-bottom: 0;
+  background: #F8FAFC; border-bottom: 0;
   padding: 10px 12px 8px; white-space: nowrap;
   height: 48px;
 }
@@ -32,10 +32,11 @@
 
 .pcm-root .level-status thead .level-subs th {
   top: 48px;
-  background: var(--surface-2); color: var(--text-3);
-  font-weight: 600; letter-spacing: 0; text-transform: none;
-  text-align: right; padding: 8px 14px;
-  border-bottom: 1px solid var(--border);
+  background: #F8FAFC; color: #475569;
+  font-weight: 700; font-size: 11.5px;
+  letter-spacing: .03em; text-transform: uppercase;
+  text-align: center; padding: 8px 14px;
+  border-bottom: 2px solid #E2E8F0;
 }
 .pcm-root .level-status thead .level-subs th:nth-child(1) { text-align: left; }
 .pcm-root .level-status thead .level-subs th:nth-child(2),
@@ -47,7 +48,36 @@
 
 .pcm-root .level-status thead tr:first-child th { top: 0; }
 .pcm-root .level-status th.n,
-.pcm-root .level-status td.n { text-align: right; }
+.pcm-root .level-status td.n { text-align: center; }
+
+/* Status column tints, lifted from the party dashboard's location-wise
+   analysis tables so a figure means the same colour in both consoles:
+   conducted green, not conducted red, not updated violet, plain counts
+   uncoloured. Header carries the paler half of each pair. */
+.pcm-root .level-status thead th.th-v { background: #F0FDF4; color: #166534; }
+.pcm-root .level-status thead th.th-p { background: #FEF2F2; color: #991B1B; }
+.pcm-root .level-status thead th.th-u { background: #F5F3FF; color: #5B21B6; }
+.pcm-root .level-status thead th.th-num { background: #F8FAFC; color: #475569; }
+.pcm-root .level-status td.td-v { background: #F0FDF4; color: #15803D; font-weight: 700; }
+.pcm-root .level-status td.td-p { background: #FEF2F2; color: #B91C1C; font-weight: 700; }
+.pcm-root .level-status td.td-u { background: #F5F3FF; color: #6D28D9; font-weight: 700; }
+.pcm-root .level-status td.td-num { font-weight: 700; color: #1E293B; }
+/* App Status and PC Status carry the same three status tints, so the group
+   itself has to be told apart some other way: each band gets its own hue, and
+   `grp` draws a heavy rule down the column that opens a group — through the
+   header, the body and the total row — so the two blocks read as two blocks. */
+.pcm-root .level-status thead th.grp-app { background: #EFF6FF; color: #1D4ED8; }
+.pcm-root .level-status thead th.grp-pc { background: #FFF7ED; color: #C2410C; }
+.pcm-root .level-status thead .level-groups th.grp,
+.pcm-root .level-status thead .level-subs th.grp,
+.pcm-root .level-status tbody td.grp,
+.pcm-root .level-status tfoot td.grp { border-left: 2px solid #CBD5E1; }
+
+/* column rules, so two same-tinted columns still read apart */
+.pcm-root .level-status tbody td,
+.pcm-root .level-status tfoot td { border-right: 1px solid #F1F5F9; }
+.pcm-root .level-status tbody td:last-child,
+.pcm-root .level-status tfoot td:last-child { border-right: 0; }
 .pcm-root .cell-count {
   background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer;
   text-decoration: underline; text-decoration-style: dotted;
@@ -62,11 +92,16 @@
 .pcm-root .level-pick {
   background: none; border: 0; padding: 0; font: inherit; cursor: pointer;
 }
-.pcm-root .level-pick:hover .badge { box-shadow: var(--ring); }
-.pcm-root .level-pick[aria-pressed="true"] .badge {
-  outline: 2px solid color-mix(in srgb, var(--lvl) 45%, transparent);
-  outline-offset: 2px;
+/* The level reads as plain coloured type here, not a pill — the row already
+   has four tinted column groups and a fifth chip competed with them. The
+   shared `.badge` is untouched; this is scoped to this table. */
+.pcm-root .level-status .badge {
+  background: none; border-color: transparent; padding-left: 0; padding-right: 0;
+  text-decoration: underline; text-decoration-style: dotted;
+  text-underline-offset: 3px; text-decoration-color: var(--text-4);
 }
+.pcm-root .level-pick:hover .badge,
+.pcm-root .level-pick[aria-pressed="true"] .badge { text-decoration-color: currentColor; }
 .pcm-root .level-status tbody th[scope="row"],
 .pcm-root .level-status tfoot th[scope="row"] {
   font-weight: 500; text-align: left; padding: 12px 14px;
@@ -74,8 +109,8 @@
 .pcm-root .level-status tfoot td { padding: 12px 14px; }
 .pcm-root .level-status tfoot th,
 .pcm-root .level-status tfoot td {
-  font-weight: 700; color: var(--text-strong);
-  background: var(--surface-2); border-top: 1px solid var(--border); border-bottom: 0;
+  font-weight: 700; color: #1E293B;
+  background: #F8FAFC; border-top: 2px solid #E2E8F0; border-bottom: 0;
 }
 
 @media (max-width: 720px) {

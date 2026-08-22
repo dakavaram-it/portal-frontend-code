@@ -91,17 +91,22 @@ function tally(items) {
   }, empty());
 }
 
+// `tone` is a column class, not a colour: td-v (conducted), td-p (not
+// conducted), td-u (not updated), td-num (neutral figure). The tint lives in
+// LevelTable.css so the header cell above can carry the paler half of the
+// same pair.
 function Cell({ value, tone, onClick }) {
   return (
-    <td className="n">
-      <button
-        className="cell-count num"
-        type="button"
-        style={tone ? { color: tone } : undefined}
-        onClick={onClick}
-      >
-        {num(value)}
-      </button>
+    <td className={'n ' + (tone || 'td-num')}>
+      {/* A zero has no rows behind it — the drill-down would open an empty
+          table, so it is plain text rather than a dead-end button. */}
+      {value ? (
+        <button className="cell-count num" type="button" onClick={onClick}>
+          {num(value)}
+        </button>
+      ) : (
+        <span className="num">{num(value)}</span>
+      )}
     </td>
   );
 }
@@ -117,6 +122,16 @@ export default function LevelTable({
       return { level, items, ...tally(items) };
     });
   }, [meetings, range, from, to]);
+
+  // Column totals across the four levels. Read-only — the drill-downs stay on
+  // the level rows, so nothing in the footer is clickable.
+  const totals = useMemo(
+    () => rows.reduce((a, r) => {
+      Object.keys(a).forEach((k) => { a[k] += r[k]; });
+      return a;
+    }, empty()),
+    [rows]
+  );
 
   /* Every App/PC figure is a slice of real `meeting_schedules` or
      `meeting_conducted_status` rows — fetched on click rather than
@@ -281,22 +296,22 @@ export default function LevelTable({
             <thead>
               <tr className="level-groups">
                 <th scope="col">Level</th>
-                <th scope="col" className="n">Total</th>
-                <th scope="colgroup" colSpan={3}>App Status</th>
-                <th scope="colgroup" colSpan={3}>PC Status</th>
-                <th scope="col" className="n">App &amp; PC<br />Not Conducted</th>
-                <th scope="col">Remarks</th>
+                <th scope="col" className="n th-num">Total</th>
+                <th scope="colgroup" colSpan={3} className="grp grp-app">App Status</th>
+                <th scope="colgroup" colSpan={3} className="grp grp-pc">PC Status</th>
+                <th scope="col" className="n th-p grp">App &amp; PC<br />Not Conducted</th>
+                <th scope="col" className="n">Remarks</th>
               </tr>
               <tr className="level-subs">
                 <th scope="col" />
-                <th scope="col" className="n" />
-                <th scope="col" className="n">Conducted</th>
-                <th scope="col" className="n">Not Conducted</th>
-                <th scope="col" className="n">Not Updated</th>
-                <th scope="col" className="n">Conducted</th>
-                <th scope="col" className="n">Not conducted</th>
-                <th scope="col" className="n">Not updated</th>
-                <th scope="col" className="n" />
+                <th scope="col" className="n th-num" />
+                <th scope="col" className="n th-v grp">Conducted</th>
+                <th scope="col" className="n th-p">Not Conducted</th>
+                <th scope="col" className="n th-u">Not Updated</th>
+                <th scope="col" className="n th-v grp">Conducted</th>
+                <th scope="col" className="n th-p">Not conducted</th>
+                <th scope="col" className="n th-u">Not updated</th>
+                <th scope="col" className="n th-p grp" />
                 <th scope="col" className="n" />
               </tr>
             </thead>
@@ -318,31 +333,31 @@ export default function LevelTable({
                     onClick={() => openTotal(r.level, r.items)}
                   />
                   <Cell
-                    value={r.conducted} tone="var(--ok)"
+                    value={r.conducted} tone="td-v grp"
                     onClick={() => openSchedule(api.conductedSchedules, columnsFor(NOT_UPDATED_COLUMNS, r.level), 'App Conducted', r.level, r.items)}
                   />
                   <Cell
-                    value={r.notConducted + r.notScheduled} tone="var(--bad)"
+                    value={r.notConducted + r.notScheduled} tone="td-p"
                     onClick={() => openNotConducted(r.level, r.items)}
                   />
                   <Cell
-                    value={r.notScheduled}
+                    value={r.notScheduled} tone="td-u"
                     onClick={() => openSchedule(api.notScheduledSchedules, columnsFor(NOT_SCHEDULED_COLUMNS, r.level), 'Not Updated', r.level, r.items)}
                   />
                   <Cell
-                    value={r.pcCompleted} tone="var(--ok)"
+                    value={r.pcCompleted} tone="td-v grp"
                     onClick={() => openSchedule(api.pcCompletedSchedules, columnsFor(PC_NOT_UPDATED_COLUMNS, r.level), 'Conducted', r.level, r.items)}
                   />
                   <Cell
-                    value={r.pcNotCompleted} tone="var(--accent)"
+                    value={r.pcNotCompleted} tone="td-p"
                     onClick={() => openSchedule(api.pcNotCompletedSchedules, pcNotConductedColumnsFor(r.level), 'Not conducted', r.level, r.items)}
                   />
                   <Cell
-                    value={r.pcNotUpdated}
+                    value={r.pcNotUpdated} tone="td-u"
                     onClick={() => openSchedule(api.pcNeverUpdatedSchedules, columnsFor(NOT_SCHEDULED_COLUMNS, r.level), 'Not updated', r.level, r.items)}
                   />
                   <Cell
-                    value={r.notScheduled + r.pcNotUpdated}
+                    value={r.notScheduled + r.pcNotUpdated} tone="td-p grp"
                     onClick={() => openAppPcNotUpdated(r.level, r.items)}
                   />
                   <Cell
@@ -352,6 +367,20 @@ export default function LevelTable({
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr>
+                <th scope="row">Total</th>
+                <td className="n td-num num">{num(totals.conducted + totals.notConducted + totals.notScheduled)}</td>
+                <td className="n td-v grp num">{num(totals.conducted)}</td>
+                <td className="n td-p num">{num(totals.notConducted + totals.notScheduled)}</td>
+                <td className="n td-u num">{num(totals.notScheduled)}</td>
+                <td className="n td-v grp num">{num(totals.pcCompleted)}</td>
+                <td className="n td-p num">{num(totals.pcNotCompleted)}</td>
+                <td className="n td-u num">{num(totals.pcNotUpdated)}</td>
+                <td className="n td-p grp num">{num(totals.notScheduled + totals.pcNotUpdated)}</td>
+                <td className="n td-num num">{num(totals.remarks)}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>

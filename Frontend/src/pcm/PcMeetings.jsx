@@ -21,9 +21,9 @@ import { prefersReduced } from './lib/motion.js';
    on rather than owning a nav: Leap's `pcmMeetings`/`pcmPrograms`/`pcmCalendar`
    map onto the three the standalone console had. */
 export const PCM_VIEWS = {
-  pcmMeetings: { name: 'dashboard', title: 'Committee Meetings' },
-  pcmPrograms: { name: 'programs', title: 'Programmes' },
-  pcmCalendar: { name: 'calendar', title: 'Meeting Calendar' }
+  pcmMeetings: { name: 'dashboard', title: 'CALENDAR MEETINGS' },
+  pcmPrograms: { name: 'programs', title: 'PROGRAMS' },
+  pcmCalendar: { name: 'calendar', title: 'MEETING CALENDAR' }
 };
 
 /* The service counts a meeting's split in SQL over the whole invitee list. The

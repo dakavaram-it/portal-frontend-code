@@ -125,7 +125,7 @@ const COMMITTEES_ASSIGN_ITEM = { view: 'committeesAssign', label: 'Committees As
 // Programmes against `party_track`), so a user is routinely given one and not the other.
 // Calendar is the meetings list drawn on a date grid and holds nothing of its own, so it
 // rides along with either grant rather than having a third.
-const PCM_MEETINGS_ITEM = { view: 'pcmMeetings', label: 'Committee Meetings', icon: <IconGauge /> }
+const PCM_MEETINGS_ITEM = { view: 'pcmMeetings', label: 'Calendar Meetings', icon: <IconGauge /> }
 const PCM_PROGRAMS_ITEM = { view: 'pcmPrograms', label: 'Programmes', icon: <IconClipboard /> }
 const PCM_CALENDAR_ITEM = { view: 'pcmCalendar', label: 'Calendar', icon: <IconCalendar /> }
 const CADRE_SEARCH_ITEM = { view: 'cadreSearch', label: 'Cadre Search', icon: <IconSearch /> }
@@ -136,7 +136,8 @@ export default function Sidebar({ user, onLogout, view, onNavigate, open, onClos
   // session actually starts on, so shipping it shut would hide the whole app behind a
   // click.
   const [electionsOpen, setElectionsOpen] = useState(true)
-  // PC-Meetings ships collapsed: a session starts on the Dashboard, in the group above.
+  // Meetings & Activities ships collapsed: a session starts on the Dashboard, in the
+  // election group below.
   const [meetingsOpen, setMeetingsOpen] = useState(false)
 
   // Drawer mode (below 1025px): Escape closes it, the page behind stays put, and focus
@@ -210,6 +211,21 @@ export default function Sidebar({ user, onLogout, view, onNavigate, open, onClos
       </div>
 
       <nav className="leap-nav">
+        {meetingsNav.length > 0 && (
+          <>
+            <button
+              type="button"
+              className="leap-nav-group-label leap-nav-group-toggle"
+              aria-expanded={meetingsOpen}
+              onClick={() => setMeetingsOpen((o) => !o)}
+            >
+              <span>MEETINGS &amp; ACTIVITIES</span>
+              <IconChevron />
+            </button>
+            {meetingsOpen && meetingsNav.map(navButton)}
+          </>
+        )}
+
         <button
           type="button"
           className="leap-nav-group-label leap-nav-group-toggle"
@@ -220,21 +236,6 @@ export default function Sidebar({ user, onLogout, view, onNavigate, open, onClos
           <IconChevron />
         </button>
         {electionsOpen && electionNav.map(navButton)}
-
-        {meetingsNav.length > 0 && (
-          <>
-            <button
-              type="button"
-              className="leap-nav-group-label leap-nav-group-toggle"
-              aria-expanded={meetingsOpen}
-              onClick={() => setMeetingsOpen((o) => !o)}
-            >
-              <span>PC-MEETINGS</span>
-              <IconChevron />
-            </button>
-            {meetingsOpen && meetingsNav.map(navButton)}
-          </>
-        )}
 
         <div className="leap-nav-group-label">CADRE</div>
         {navButton(CADRE_SEARCH_ITEM)}
