@@ -166,21 +166,12 @@ export default function Sidebar({ user, onLogout, view, onNavigate, open, onClos
   // grants (the same escape hatch CadreSearchNotes' Add Note button already has) —
   // except Committees Assign, which is deliberately outside that blanket: it writes to
   // the PSA committee service, so it is only ever reached through its own entitlement.
-  // Coerce the id: `/login` has answered it as a string on some sessions, and
-  // `=== 1` then hid the whole PC-MEETINGS group.
-  const isSuperUser = Number(user?.user_id) === 1
+  const isSuperUser = user?.user_id === 1
   const hasCommitteeAccess = !isSuperUser && hasEntitlement(user, 'CADRE_COMMITTEE_MANAGEMENT')
   const electionNav = [...BASE_NAV, ...(hasCommitteeAccess ? [COMMITTEES_ASSIGN_ITEM] : [])]
 
-  // Split grants (meetings vs programmes) plus the older committee grant that
-  // used to open this whole group — accounts that only hold
-  // CADRE_COMMITTEE_MANAGEMENT still need to reach Committee Meetings.
-  const canSeeMeetings = isSuperUser
-    || hasEntitlement(user, 'MEETING_REMARKS_UPDATE')
-    || hasEntitlement(user, 'CADRE_COMMITTEE_MANAGEMENT')
-  const canSeePrograms = isSuperUser
-    || hasEntitlement(user, 'LEADER_PROGRAMS_UPDATE')
-    || hasEntitlement(user, 'CADRE_COMMITTEE_MANAGEMENT')
+  const canSeeMeetings = isSuperUser || hasEntitlement(user, 'MEETING_REMARKS_UPDATE')
+  const canSeePrograms = isSuperUser || hasEntitlement(user, 'LEADER_PROGRAMS_UPDATE')
   const meetingsNav = [
     ...(canSeeMeetings ? [PCM_MEETINGS_ITEM] : []),
     ...(canSeePrograms ? [PCM_PROGRAMS_ITEM] : []),
