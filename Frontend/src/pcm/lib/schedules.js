@@ -31,7 +31,7 @@ export const PC_NOT_UPDATED_COLUMNS = [
 // GET /api/meetings/schedules/pc-remarks returns.
 export const PC_REMARKS_COLUMNS = [
   { key: 'meetingId', label: 'Meeting ID' },
-  { key: 'role', label: 'Role' },
+  { key: 'role', label: 'Level' },
   { key: 'location', label: 'Location' },
   { key: 'category', label: 'Category' },
   { key: 'remarks', label: 'Remarks' }
