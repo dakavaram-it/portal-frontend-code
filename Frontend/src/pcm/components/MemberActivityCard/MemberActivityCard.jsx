@@ -10,7 +10,8 @@ import SortHead from '../SortHead/SortHead.jsx';
 // distinguish loading from a genuinely empty result.
 //
 // Variants:
-// - `calendar` / `log` — Update-only (entries modals); no Upload / Attended / View
+// - `calendar` / `monthly` / `log` — Update-only (their own save modals); no
+//   Upload / Attended status / View, all three of which are client-side only
 // - `default` — Upload / Attended / Update remarks / View remarks
 const blank = (v) => {
   if (v == null) return '';
@@ -27,11 +28,11 @@ const SORT_KEYS = {
   role: (r) => blank(r.role).toLowerCase(),
   mobile: (r) => blank(r.mobile),
   cadreId: (r) => blank(r.cadreId),
-  // Calendar Meetings only: `completed` is a real count of meetings this
-  // leader was marked attended at (see program_leaders' docstring), so
-  // "attended" is just whether that count is above zero — not a separate
-  // stored flag. Not shown as its own column for any other variant.
-  attended: (r) => (r.completed > 0 ? 1 : 0)
+  // Calendar Meetings only: `attended` is whether this leader has a
+  // `meeting_attendance` row for any meeting they were invited to that month
+  // (see program_leaders' docstring). The service sends the field for no
+  // other programme, so no other variant shows the column.
+  attended: (r) => (r.attended ? 1 : 0)
 };
 
 export default function MemberActivityCard({
@@ -47,11 +48,10 @@ export default function MemberActivityCard({
 }) {
   const loading = members === null;
   const rows = members || [];
-  const entriesOnly = variant === 'calendar' || variant === 'log';
-  // Calendar Meetings' participated/completed are real invited/attended
-  // counts off `meeting_invitee`/`meeting_attendance`, not something to hand-
-  // edit — so this variant shows one read-only Attended/Not attended pill
-  // instead of the two editable count inputs the other variants keep.
+  const entriesOnly = variant === 'calendar' || variant === 'monthly' || variant === 'log';
+  // Calendar Meetings' attendance is a real `meeting_attendance` fact, not
+  // something to hand-edit — so this variant alone shows a read-only
+  // Attended / Not attended pill.
   const calendarVariant = variant === 'calendar';
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
@@ -110,7 +110,7 @@ export default function MemberActivityCard({
                   <td>{blank(m.cadreId)}</td>
                   {calendarVariant && (
                     <td>
-                      {m.completed > 0
+                      {m.attended
                         ? <span className="pill pill-present"><i className="dot" />Attended</span>
                         : <span className="pill pill-absent"><i className="dot" />Not attended</span>}
                     </td>

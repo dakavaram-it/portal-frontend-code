@@ -61,8 +61,11 @@ export const api = {
      month scoping as roleSummary above. `activity` here is `program.program_name`. */
   programActivitySummary: (year, month) => request(`/api/programs/activity-summary?year=${year}&month=${month}`),
 
-  /* Every active leader in one role, with their participation in one
-     programme/month — the Programmes page's third card. */
+  /* Every active leader in one role for one programme/month — the Programmes
+     page's third card. Carries no participation counts: the service's own
+     `total`/`completed` columns were never written, so they are gone rather
+     than reported as zero. Calendar Meetings rows alone carry `attended`, a
+     real `meeting_attendance` fact. */
   programLeaders: (roleId, activityId, year, month) =>
     request(`/api/programs/leaders?role_id=${seg(roleId)}&activity_id=${seg(activityId)}&year=${year}&month=${month}`),
 
@@ -82,9 +85,35 @@ export const api = {
       body: JSON.stringify({ remarks })
     }),
 
-  /* Every other programme's Update modal: a leader's own hand-added
-     date/remarks log for one programme/month, off `party_track.leader_meetings`
-     — not `leader_meeting_attendance`, which only Calendar Meetings writes to. */
+  /* Pedala Sevalo / Swatch Andhra / Pattadar Passbook's Update modal: this
+     leader's single record for one programme and month, off
+     `party_track.leader_program_activity` — the same table the two summary
+     cards count Updated/Not updated from, which is why a save here moves
+     those figures. One record rather than a list because that table keys a
+     row by `month_id` and has no date column to file a second one under.
+     `recorded` separates "nothing entered yet" from "entered, remark blank".
+     The service refuses these three on the log-entry routes below, and
+     refuses every other programme here, so the two never cross. */
+  programLeaderMonthlyActivity: (leaderId, programId, year, month) =>
+    request(
+      `/api/programs/leaders/${seg(leaderId)}/monthly-activity` +
+        `?program_id=${seg(programId)}&year=${year}&month=${month}`
+    ),
+
+  /* An upsert on (leader, programme, month): the row is the month, so saving
+     twice corrects the record rather than adding a second one. Answers 409
+     when `party_track.month` has no row for the period — a hand-seeded table
+     that runs behind, so the message is meant to be shown. */
+  saveLeaderMonthlyActivity: (leaderId, programId, year, month, remarks) =>
+    request(`/api/programs/leaders/${seg(leaderId)}/monthly-activity`, {
+      method: 'PUT',
+      body: JSON.stringify({ programId, year, month, remarks })
+    }),
+
+  /* The dated-log programmes' Update modal: a leader's own hand-added
+     date/remarks entries for one programme/month, off
+     `party_track.leader_meetings` — not `leader_meeting_attendance` (Calendar
+     Meetings only) and not `leader_program_activity` (the three above). */
   programLeaderLogEntries: (leaderId, programId, year, month) =>
     request(`/api/programs/leaders/${seg(leaderId)}/log-entries?program_id=${seg(programId)}&year=${year}&month=${month}`),
 

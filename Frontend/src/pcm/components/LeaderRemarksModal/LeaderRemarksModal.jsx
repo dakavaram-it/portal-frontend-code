@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import Icon from '../Icon/Icon.jsx';
-import { initials, num } from '../../lib/format.js';
+import { initials } from '../../lib/format.js';
 import { prefersReduced } from '../../lib/motion.js';
 import '../RemarksModal/RemarksModal.css';
 
@@ -72,11 +72,12 @@ export default function LeaderRemarksModal({ member, mode = 'view', onClose, onS
         </div>
 
         <div className="modal-body">
+          {/* No participated/completed pair here any more: those read
+              `leader_program_activity.total`/`.completed`, two columns nothing
+              ever wrote, so every leader showed 0/0. */}
           <div className="meta-grid">
             <div><div className="m-key">MID</div><div className="m-val mono">{member.mid}</div></div>
             <div><div className="m-key">Activity</div><div className="m-val">{member.activity}</div></div>
-            <div><div className="m-key">Activities participated</div><div className="m-val num">{num(member.participated)}</div></div>
-            <div><div className="m-key">Completed</div><div className="m-val num">{num(member.completed)}</div></div>
           </div>
           <div className="field">
             <label htmlFor="lr-remarks-text">Remarks</label>

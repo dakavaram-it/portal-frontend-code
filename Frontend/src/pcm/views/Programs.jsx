@@ -6,6 +6,7 @@ import Dropdown from '../components/Dropdown/Dropdown.jsx';
 import Icon from '../components/Icon/Icon.jsx';
 import LeaderActivityEntriesModal from '../components/LeaderActivityEntriesModal/LeaderActivityEntriesModal.jsx';
 import LeaderMeetingEntriesModal from '../components/LeaderMeetingEntriesModal/LeaderMeetingEntriesModal.jsx';
+import LeaderMonthlyActivityModal from '../components/LeaderMonthlyActivityModal/LeaderMonthlyActivityModal.jsx';
 import LeaderRemarksModal from '../components/LeaderRemarksModal/LeaderRemarksModal.jsx';
 import MemberActivityCard from '../components/MemberActivityCard/MemberActivityCard.jsx';
 import Select from '../components/Select/Select.jsx';
@@ -33,10 +34,19 @@ import { prefersReduced, useAnim } from '../lib/motion.js';
    `activitySummary` itself, the same way the Assembly filter below derives
    its options from whatever leader list is on screen.
 
-   Calendar Meetings gets the meeting-entries Update overlay; AC Cadre /
-   Parliament Lunch-Dinner / Field Performance / Ground AC Grievance /
-   Central Party Office Grievance get the simpler date/files/remarks overlay
-   (`logEntriesByMid`). Remaining activities keep remarks + upload overlays. */
+   Which Update overlay a programme opens, and which table it writes, is
+   decided by its name alone — `memberCardVariant` below:
+
+   - Calendar Meeting — the meeting-entries overlay, remarks per real meeting,
+     into `leader_meeting_attendance`.
+   - Pedala Sevalo / Swatch Andhra / Pattadar Passbook — one monthly record,
+     into `leader_program_activity` (`MONTHLY_ACTIVITIES`).
+   - Grievance / Cadre / Central Party Office Grievance / PC Lunch-Dinner /
+     Press Meets / Field Performance — the date/files/remarks list, into
+     `leader_meetings` (`LOG_ACTIVITIES`).
+
+   Nothing else has a save endpoint: the remaining activities' remarks and
+   uploads are still client-side state for the visit only. */
 const MONTH_NAMES = Array.from({ length: 12 }, (_, i) => new Date(2000, i, 1).toLocaleDateString('en-IN', { month: 'long' }));
 const thisMonth = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); };
 const lastMonth = () => { const d = thisMonth(); return new Date(d.getFullYear(), d.getMonth() - 1, 1); };
@@ -103,26 +113,37 @@ const hasPlace = (v) => {
 const isCalendarMeetingsActivity = (name) =>
   /calendar\s*meetings?/i.test(String(name || '').trim());
 
-// Date / files / remarks Update modal — matched by normalised activity name.
-// Every non-Calendar-Meeting row of `party_track.program` (verified live:
-// id 1 Pedala Sevalo, 3 Grievance Meetings, 4 Cadre Meetings, 5 Central Party
-// Office Grievance, 6 Swatch Andhra, 7 Pattadar Passbook, 8 PC Lunch/Dinner
-// Meetings, 9 Press Meets, 10 Field Performance — id 2 Calendar Meeting is
-// the one excluded, see `isCalendarMeetingsActivity`) gets this modal, backed
-// by `party_track.leader_meetings` — see `_MEETING_TYPE_LABELS` in the
-// backend's `programs.py` for the short label each is stored under.
-const LOG_ACTIVITIES = new Set([
+const normActivity = (name) => String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+// One monthly record Update modal, backed by
+// `party_track.leader_program_activity` — the same table the two summary
+// cards count Updated/Not updated from. That table keys a row by `month_id`
+// and has no date column, so these three get a single record per month
+// rather than the dated list below; the backend's `_MONTHLY_ACTIVITY_PROGRAMS`
+// is the same set and refuses them on the log-entry routes.
+const MONTHLY_ACTIVITIES = new Set([
   'pedala sevalo',
+  'swatch andhra',
+  'pattadar passbook'
+]);
+const isMonthlyActivity = (name) => MONTHLY_ACTIVITIES.has(normActivity(name));
+
+// Date / files / remarks Update modal — matched by normalised activity name.
+// The remaining non-Calendar-Meeting rows of `party_track.program` (verified
+// live: id 3 Grievance Meetings, 4 Cadre Meetings, 5 Central Party Office
+// Grievance, 8 PC Lunch/Dinner Meetings, 9 Press Meets, 10 Field Performance
+// — id 2 Calendar Meeting is excluded by `isCalendarMeetingsActivity`, and
+// ids 1/6/7 by `isMonthlyActivity` above) get this modal, backed by
+// `party_track.leader_meetings` — see `_MEETING_TYPE_LABELS` in the backend's
+// `programs.py` for the short label each is stored under.
+const LOG_ACTIVITIES = new Set([
   'grievance meetings',
   'cadre meetings',
   'central party office grievance',
-  'swatch andhra',
-  'pattadar passbook',
   'pc lunch/dinner meetings',
   'press meets',
   'field performance'
 ]);
-const normActivity = (name) => String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
 const isLogEntriesActivity = (name) => {
   const n = normActivity(name);
   if (LOG_ACTIVITIES.has(n)) return true;
@@ -133,6 +154,7 @@ const isLogEntriesActivity = (name) => {
 
 const memberCardVariant = (activity) => {
   if (isCalendarMeetingsActivity(activity)) return 'calendar';
+  if (isMonthlyActivity(activity)) return 'monthly';
   if (isLogEntriesActivity(activity)) return 'log';
   return 'default';
 };
@@ -154,6 +176,9 @@ export default function Programs({ roles = [] }) {
   const [leaderLogEntries, setLeaderLogEntries] = useState(null); // other programmes' Update modal rows — real, from GET .../log-entries
   const [addingLogEntry, setAddingLogEntry] = useState(false);
   const [addLogEntryError, setAddLogEntryError] = useState(null);
+  const [monthlyRecord, setMonthlyRecord] = useState(null); // the three monthly programmes' one record — from GET .../monthly-activity
+  const [savingMonthly, setSavingMonthly] = useState(false);
+  const [monthlyError, setMonthlyError] = useState(null);
   const [remarksByMid, setRemarksByMid] = useState({}); // other activities' remarks overlay
   const [uploadsByMid, setUploadsByMid] = useState({}); // other activities' attendance uploads
   const [selectedAc, setSelectedAc] = useState(null); // narrows the member card to one Assembly within the open role/activity
@@ -204,7 +229,8 @@ export default function Programs({ roles = [] }) {
   }, [openRow]);
 
   // The open pairing's leaders, refetched whenever the pairing or the month
-  // changes — `leader_program_activity` is counted server-side, never cached.
+  // changes. The roster only — what has been recorded for one leader is
+  // fetched per-leader when their Update modal opens.
   useEffect(() => {
     if (!openRow) { setLeaders(null); return; }
     let cancelled = false;
@@ -216,9 +242,9 @@ export default function Programs({ roles = [] }) {
     return () => { cancelled = true; };
   }, [openRow, month]);
 
-  // Calendar Meetings' Update modal: the real per-meeting rows behind this
-  // leader's participated/completed count, refetched whenever the modal
-  // opens for a different leader or the month changes.
+  // Calendar Meetings' Update modal: the real meetings this leader was
+  // invited to, refetched whenever the modal opens for a different leader or
+  // the month changes.
   useEffect(() => {
     if (updateMid === null || !isCalendarMeetingsActivity(openRow?.activity)) { setLeaderMeetings(null); return; }
     let cancelled = false;
@@ -246,7 +272,7 @@ export default function Programs({ roles = [] }) {
     }
   };
 
-  // Every other programme's Update modal: the leader's own hand-added log
+  // The dated-log programmes' Update modal: the leader's own hand-added log
   // for the open programme/month, refetched whenever the modal opens for a
   // different leader, the programme changes, or the month changes — same
   // shape as the Calendar Meetings effect above, off `leader_meetings`.
@@ -283,6 +309,67 @@ export default function Programs({ roles = [] }) {
   const deleteLeaderLogEntry = async (entryId) => {
     await api.deleteLeaderLogEntry(updateMid, entryId);
     setLeaderLogEntries((cur) => (cur || []).filter((r) => r.id !== entryId));
+  };
+
+  // Pedala Sevalo / Swatch Andhra / Pattadar Passbook's Update modal: this
+  // leader's one `leader_program_activity` record for the open programme and
+  // month. Same shape as the two effects above — `null` while in flight, and
+  // a failure loads as an unrecorded month rather than leaving the modal on
+  // "Loading…" forever.
+  useEffect(() => {
+    if (updateMid === null || !isMonthlyActivity(openRow?.activity)) { setMonthlyRecord(null); return; }
+    let cancelled = false;
+    setMonthlyRecord(null);
+    setMonthlyError(null);
+    const year = month.getFullYear(), mo = month.getMonth() + 1;
+    api.programLeaderMonthlyActivity(updateMid, openRow.activityId, year, mo)
+      .then((row) => { if (!cancelled) setMonthlyRecord(row); })
+      .catch((err) => {
+        if (cancelled) return;
+        setMonthlyRecord({ recorded: false, remarks: '' });
+        setMonthlyError(err.message);
+      });
+    return () => { cancelled = true; };
+  }, [updateMid, openRow, month]);
+
+  // Re-reads the two summary cards in place — no `setRoleSummary(null)` first,
+  // unlike the month effect: their figures are only a few counts out of date,
+  // and blanking them to "Loading…" behind an open modal reads as though the
+  // save had cleared the screen. A failure here leaves the old figures up;
+  // the save it follows has already succeeded and must not report otherwise.
+  const reloadSummaries = async () => {
+    const year = month.getFullYear(), mo = month.getMonth() + 1;
+    try {
+      const [roleRows, activityRows] = await Promise.all([
+        api.programRoleSummary(year, mo),
+        api.programActivitySummary(year, mo)
+      ]);
+      setRoleSummary(roleRows);
+      setActivitySummary(activityRows);
+    } catch {
+      /* keep the figures on screen */
+    }
+  };
+
+  // Returns true only on a save that landed, which is what keeps the modal
+  // open on failure. A success reloads the summary cards: this table is where
+  // their Updated/Not updated figures come from, so the row just written
+  // moves them, and leaving them stale would read as a lost save.
+  const saveMonthlyActivity = async (remarks) => {
+    setSavingMonthly(true);
+    setMonthlyError(null);
+    const year = month.getFullYear(), mo = month.getMonth() + 1;
+    try {
+      const saved = await api.saveLeaderMonthlyActivity(updateMid, openRow.activityId, year, mo, remarks);
+      setMonthlyRecord(saved);
+      await reloadSummaries();
+      return true;
+    } catch (err) {
+      setMonthlyError(err.message);
+      return false;
+    } finally {
+      setSavingMonthly(false);
+    }
   };
 
   const pickThis = () => { setMonthMode('this'); setMonth(thisMonth()); };
@@ -355,6 +442,7 @@ export default function Programs({ roles = [] }) {
   const visibleMembers = selectedAc ? mergedLeaders.filter((m) => m.assembly === selectedAc) : mergedLeaders;
   const cardVariant = memberCardVariant(openRow?.activity);
   const calendarActivity = cardVariant === 'calendar';
+  const monthlyActivity = cardVariant === 'monthly';
   const logActivity = cardVariant === 'log';
   const defaultActivity = cardVariant === 'default';
   const updateMember = updateMid !== null ? mergedLeaders.find((m) => m.mid === updateMid) : null;
@@ -597,6 +685,19 @@ export default function Programs({ roles = [] }) {
           remarksError={remarksError}
           onClose={() => setUpdateMid(null)}
           onSaveRemarks={saveLeaderMeetingRemarks}
+        />
+      )}
+
+      {monthlyActivity && updateMember && (
+        <LeaderMonthlyActivityModal
+          member={updateMember}
+          activity={openRow?.activity}
+          monthTitle={monthTitle}
+          record={monthlyRecord}
+          saving={savingMonthly}
+          saveError={monthlyError}
+          onClose={() => setUpdateMid(null)}
+          onSave={saveMonthlyActivity}
         />
       )}
 
