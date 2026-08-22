@@ -217,6 +217,32 @@ export default function LevelTable({
     }
   };
 
+  // Combines the two "Not Updated" figures — App's never-scheduled roster
+  // gap and PC's own never-updated one — into a single column beside PC
+  // Status. Both already share NOT_SCHEDULED_COLUMNS's shape (see the
+  // pcNeverUpdatedSchedules cell below), so the two slices list together
+  // with no column reconciling needed.
+  const openAppPcNotUpdated = async (level, items) => {
+    const title = (LEVEL_LABEL[level] || level) + ' · App & PC Not Conducted';
+    const columns = columnsFor(NOT_SCHEDULED_COLUMNS, level);
+    const ids = items.map((m) => m.id);
+    if (!ids.length) return onCount({ title, rows: [], columns, level });
+    const session = startDrillSession();
+    onCount({ title, rows: [], columns, level, loading: true });
+    try {
+      const [appNotUpdated, pcNotUpdated] = await Promise.all([
+        api.notScheduledSchedules(ids),
+        api.pcNeverUpdatedSchedules(ids)
+      ]);
+      if (session.cancelled) return;
+      const rows = [...appNotUpdated.rows, ...pcNotUpdated.rows];
+      onCount({ title, rows, columns, level, loading: false, total: rows.length });
+    } catch {
+      if (session.cancelled) return;
+      onCount({ title, rows: [], columns, level, loading: false });
+    }
+  };
+
   return (
     <section className="level-table" aria-label="Level status">
       <div className="level-table-tools">
@@ -258,6 +284,7 @@ export default function LevelTable({
                 <th scope="col" className="n">Total</th>
                 <th scope="colgroup" colSpan={3}>App Status</th>
                 <th scope="colgroup" colSpan={3}>PC Status</th>
+                <th scope="col" className="n">App &amp; PC<br />Not Conducted</th>
                 <th scope="col">Remarks</th>
               </tr>
               <tr className="level-subs">
@@ -269,6 +296,7 @@ export default function LevelTable({
                 <th scope="col" className="n">Conducted</th>
                 <th scope="col" className="n">Not conducted</th>
                 <th scope="col" className="n">Not updated</th>
+                <th scope="col" className="n" />
                 <th scope="col" className="n" />
               </tr>
             </thead>
@@ -312,6 +340,10 @@ export default function LevelTable({
                   <Cell
                     value={r.pcNotUpdated}
                     onClick={() => openSchedule(api.pcNeverUpdatedSchedules, columnsFor(NOT_SCHEDULED_COLUMNS, r.level), 'Not updated', r.level, r.items)}
+                  />
+                  <Cell
+                    value={r.notScheduled + r.pcNotUpdated}
+                    onClick={() => openAppPcNotUpdated(r.level, r.items)}
                   />
                   <Cell
                     value={r.remarks}
