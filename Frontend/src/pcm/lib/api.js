@@ -84,8 +84,15 @@ export const api = {
   programRoleSummary: (year, month) => request(`/api/programs/role-summary?year=${year}&month=${month}`),
 
   /* One row per real (role, programme) pairing `program_role` defines, same
-     month scoping as roleSummary above. `activity` here is `program.program_name`. */
-  programActivitySummary: (year, month) => request(`/api/programs/activity-summary?year=${year}&month=${month}`),
+     month scoping as roleSummary above. `activity` here is `program.program_name`.
+     Called with no arguments for the Overview table's "Overall" period —
+     the query string is omitted entirely rather than sent as literal
+     "undefined", on the assumption the backend treats a missing year/month
+     as all-time. That's unverified against a live all-time aggregation
+     (the backend doesn't do one yet); if it 400s instead, Programs.jsx's
+     catch already renders that as the ordinary empty state. */
+  programActivitySummary: (year, month) =>
+    request(`/api/programs/activity-summary${year != null && month != null ? `?year=${year}&month=${month}` : ''}`),
 
   /* Every active leader in one role for one programme/month — the Programmes
      page's third card. Carries no participation counts: the service's own

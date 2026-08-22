@@ -1,36 +1,41 @@
 /* Programmes reuse the shared figure tiles and meeting-card chrome. */
-.pcm-root .role-summary-card .card-head,
-.pcm-root .activity-summary-card .card-head,
+.pcm-root .overview-card .card-head,
 .pcm-root .member-detail-card .card-head {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 13px 18px; border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
 }
-.pcm-root .role-summary-card .card-head h2,
-.pcm-root .activity-summary-card .card-head h2,
+.pcm-root .overview-card .card-head h2,
 .pcm-root .member-detail-card .card-head h2 {
   font-size: 15px; font-weight: 700; margin: 0; letter-spacing: -.01em;
 }
-.pcm-root .role-summary-card .card-head .sub,
-.pcm-root .activity-summary-card .card-head .sub,
+.pcm-root .overview-card .card-head .sub,
 .pcm-root .member-detail-card .card-head .sub {
   display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3);
 }
 
-/* These cards' empty state is the common case (no upstream data source yet), not
-   the rare one the shared 52px `.empty` padding was sized for, so they get their own. */
-.pcm-root .role-summary-card .empty,
-.pcm-root .activity-summary-card .empty,
-.pcm-root .member-detail-card .empty { padding: 26px 20px; }
-.pcm-root .role-summary-card .empty .icon,
-.pcm-root .activity-summary-card .empty .icon,
-.pcm-root .member-detail-card .empty .icon { width: 18px; height: 18px; padding: 9px; margin-bottom: 8px; }
-.pcm-root .role-summary-card .empty .empty-title,
-.pcm-root .activity-summary-card .empty .empty-title,
-.pcm-root .member-detail-card .empty .empty-title { font-size: 13px; }
-.pcm-root .role-summary-card .empty .empty-hint,
-.pcm-root .activity-summary-card .empty .empty-hint { font-size: 12px; }
+/* Search sits to the right of the month label, both grouped on the header's
+   right edge — the search is the Overview table's own, filtering
+   `sortedPrograms` by name client-side, same pattern as Detail's member
+   search. Smaller than that shared `.search` default: this one lives beside
+   other header content instead of owning a whole toolbar row. */
+.pcm-root .overview-card .card-head-tools {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+}
+.pcm-root .overview-card .overview-search {
+  min-width: 0; width: 220px; height: 34px;
+}
 
-.pcm-root .activity-summary-card,
+/* This card's empty state is the common case (no upstream data source yet), not
+   the rare one the shared 52px `.empty` padding was sized for, so it gets its own. */
+.pcm-root .overview-card .empty,
+.pcm-root .member-detail-card .empty { padding: 26px 20px; }
+.pcm-root .overview-card .empty .icon,
+.pcm-root .member-detail-card .empty .icon { width: 18px; height: 18px; padding: 9px; margin-bottom: 8px; }
+.pcm-root .overview-card .empty .empty-title,
+.pcm-root .member-detail-card .empty .empty-title { font-size: 13px; }
+.pcm-root .overview-card .empty .empty-hint { font-size: 12px; }
+
 .pcm-root .member-detail-card { margin-top: 16px; }
 
 /* The member card carries a stronger shadow and an accent top edge — the
@@ -42,26 +47,28 @@
   border-top: 3px solid var(--primary);
 }
 
-/* Override the shared 1240px min-width — these summary tables only have a
-   handful of columns and were stretching Role ↔ figures into empty space. */
-.pcm-root .role-summary-card table.role-summary,
-.pcm-root .activity-summary-card table.role-summary {
+/* Override the shared 1240px min-width — the Overview table sizes itself to
+   however many role columns are actually present rather than stretching a
+   handful of columns into empty space. */
+.pcm-root .overview-card table.overview-table {
   min-width: 0;
-  width: 100%;
-  table-layout: fixed;
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
 }
-.pcm-root .role-summary-card table.role-summary col.col-role,
-.pcm-root .activity-summary-card table.role-summary col.col-role { width: 28%; }
-.pcm-root .role-summary-card table.role-summary col.col-num,
-.pcm-root .activity-summary-card table.role-summary col.col-num { width: 18%; }
-.pcm-root .activity-summary-card table.role-summary col.col-activity { width: 28%; }
-.pcm-root .activity-summary-card table.role-summary col.col-members { width: 14%; }
-.pcm-root .activity-summary-card table.role-summary col.col-stat { width: 15%; }
 
-.pcm-root .role-summary-card .table-scroll,
-.pcm-root .activity-summary-card .table-scroll {
-  max-height: min(420px, 55vh);
+/* No internal vertical scroll — the table grows to its full height and the
+   page scrolls past it, same as everything above and below it. Horizontal
+   scroll stays: a month with many roles is genuinely wider than the
+   viewport, and that's what the sticky Programme column is for. */
+.pcm-root .overview-card .table-scroll {
+  max-height: none;
+  overflow-y: visible;
+  overflow-x: auto;
 }
+.pcm-root .overview-card { box-shadow: var(--shadow-md); border-radius: 14px; }
+
 .pcm-root .member-detail-card .table-scroll {
   max-height: min(480px, 60vh);
 }
@@ -70,35 +77,123 @@
   font-size: 13px;
 }
 
-.pcm-root .role-summary thead th { color: var(--text); }
-.pcm-root .role-summary th.n,
-.pcm-root .role-summary td.n { text-align: right; }
-.pcm-root .role-summary tbody th[scope="row"],
-.pcm-root .role-summary tfoot th[scope="row"] {
-  font-weight: 700; text-align: left; padding: 12px 14px;
+.pcm-root .overview-table thead th { color: var(--text); }
+.pcm-root .overview-table th.n,
+.pcm-root .overview-table td.n { text-align: right; }
+.pcm-root .overview-table tbody th[scope="row"],
+.pcm-root .overview-table tfoot th[scope="row"] {
+  font-weight: 800; text-align: left; padding: 13px 14px;
   color: var(--text-strong);
 }
-.pcm-root .role-summary tbody td {
-  padding: 12px 14px;
+.pcm-root .overview-table tbody td {
+  padding: 10px 14px;
   vertical-align: middle;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
 }
-/* Sticky footer so Total stays fully visible and isn't clipped by the scroll. */
-.pcm-root .role-summary tfoot th,
-.pcm-root .role-summary tfoot td {
-  position: sticky; bottom: 0; z-index: 1;
-  font-weight: 700; color: var(--text-strong);
-  background: var(--surface-2);
-  border-top: 1px solid var(--border); border-bottom: 0;
-  padding: 12px 14px;
-  box-shadow: 0 -1px 0 var(--border);
+.pcm-root .overview-table tbody tr:last-child td { border-bottom: 0; }
+
+/* Zebra striping + a hover wash — the one thing that actually keeps a row
+   legible while your eye travels across a dozen role columns. The sticky
+   Programme column gets its own copies of both, since it needs an opaque
+   background of its own regardless of what row it's in. */
+.pcm-root .overview-table tbody tr:nth-child(even) td { background: var(--surface-2); }
+.pcm-root .overview-table tbody tr:hover td { background: color-mix(in srgb, var(--primary) 6%, var(--surface)); }
+.pcm-root .overview-table tbody tr:nth-child(even):hover td { background: color-mix(in srgb, var(--primary) 8%, var(--surface-2)); }
+
+/* Programme is the one column every reader anchors on while scrolling
+   sideways through however many role groups the month has — pin it, with a
+   solid card-matched background so scrolled cells don't show through, and a
+   shadow standing in for the border a plain divider would need on both
+   sticky and non-sticky rows alike. */
+.pcm-root .overview-table .col-sticky {
+  position: sticky; left: 0; z-index: 2;
+  background: var(--surface);
+  box-shadow: 2px 0 4px -2px rgb(0 0 0 / .18);
+  min-width: 210px;
+}
+.pcm-root .overview-table thead .col-sticky,
+.pcm-root .overview-table tfoot .col-sticky { z-index: 3; }
+.pcm-root .overview-table tbody .col-sticky { padding: 8px 14px; }
+.pcm-root .overview-table tbody tr:nth-child(even) td.col-sticky { background: var(--surface-2); }
+.pcm-root .overview-table tbody tr:hover td.col-sticky { background: color-mix(in srgb, var(--primary) 6%, var(--surface)); }
+.pcm-root .overview-table tbody tr:nth-child(even):hover td.col-sticky { background: color-mix(in srgb, var(--primary) 8%, var(--surface-2)); }
+
+/* Each role gets its own tinted column band across both header rows, so the
+   Total/Updated/Not-updated triple under one role reads as one visual block
+   before a reader has parsed a single number. The group header carries a
+   richer gradient wash and a solid tint underline; the sub-head is a
+   quieter tint of the same colour, so the two rows read as one header
+   rather than two competing ones. A tint-coloured (not plain grey) right
+   border on the third column of each group is the seam between one role
+   and the next — coloured so the seam itself carries which group it closed. */
+.pcm-root .overview-table .role-group-head {
+  text-align: center; padding: 11px 12px;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--tint) 20%, var(--surface-2)),
+    color-mix(in srgb, var(--tint) 10%, var(--surface-2)));
+  border-bottom: 1px solid color-mix(in srgb, var(--tint) 35%, transparent);
+}
+.pcm-root .overview-table .sub-head {
+  font-size: 11px; font-weight: 700; color: var(--text-2);
+  padding: 8px 12px; white-space: nowrap;
+  background: color-mix(in srgb, var(--tint) 8%, var(--surface-2));
+  border-bottom: 1px solid var(--border);
+}
+.pcm-root .overview-table tbody td.last-in-group,
+.pcm-root .overview-table thead th.last-in-group,
+.pcm-root .overview-table tfoot td.last-in-group {
+  border-right: 1px solid color-mix(in srgb, var(--tint) 30%, var(--border));
 }
 
-/* Same chip shape as the global `.badge`, just keyed off a per-row `--tint`
-   instead of a fixed `--lvl` — Role and Activity are two independent colour
-   rotations over the same token set (see `roleTint`/`activityTint`), so a
-   colour says "which value" within a column, never "role vs activity". */
-.pcm-root .role-chip,
-.pcm-root .activity-chip {
+/* Filled pills, not just tinted text — Updated/Not-updated read as a colour
+   block per cell rather than a number the reader has to parse against a
+   legend. A matching-tone border gives each pill an edge instead of just
+   floating on the fill colour. Same green/red tokens the rest of this
+   module already uses for the same two states. */
+.pcm-root .stat-pill {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 30px;
+  font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+  padding: 3px 8px; border-radius: var(--r-pill);
+  border: 1px solid transparent;
+}
+.pcm-root .stat-pill-ok {
+  background: color-mix(in srgb, var(--ok) 15%, transparent);
+  border-color: color-mix(in srgb, var(--ok) 30%, transparent);
+  color: var(--ok);
+}
+.pcm-root .stat-pill-bad {
+  background: color-mix(in srgb, var(--bad) 15%, transparent);
+  border-color: color-mix(in srgb, var(--bad) 30%, transparent);
+  color: var(--bad);
+}
+
+/* The Total row sits directly under the last body row (no internal scroll
+   any more, so nothing needs to stick to a viewport edge) — a solid,
+   elevated bar with a primary-toned top edge is what keeps it reading as
+   "the summary of everything above" instead of just one more row. */
+.pcm-root .overview-table tfoot th,
+.pcm-root .overview-table tfoot td {
+  font-weight: 800; color: var(--text-strong);
+  background: var(--surface-2);
+  border-top: 1px solid color-mix(in srgb, var(--primary) 55%, transparent); border-bottom: 0;
+  padding: 13px 14px;
+  font-size: 12px;
+}
+
+/* Every count in this table — the pills above and the clickable
+   Total-members figure — reads smaller than body text, so the numbers stay
+   quiet and the row/column structure does the work instead of a wall of
+   bold digits. */
+.pcm-root .overview-table td.n.num { font-size: 11px; }
+.pcm-root .overview-table th.n.num { font-size: 12px; }
+
+/* Role-group headers keep the pill treatment (they're column labels, not
+   data). The Programme column is data — just the name, coloured by its own
+   tint, with no badge shape competing with the pills in the rest of the
+   row. */
+.pcm-root .role-chip {
   display: inline-flex; align-items: center;
   font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
   text-transform: uppercase; white-space: nowrap;
@@ -108,6 +203,12 @@
   color: var(--tint);
   max-width: 100%;
   overflow: hidden; text-overflow: ellipsis;
+}
+.pcm-root .program-name {
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* `position: relative` + a real z-index, not just flex layout: the entrance
@@ -137,6 +238,33 @@
   transition: color var(--dur) var(--ease);
 }
 .pcm-root .cell-count:hover { color: var(--primary); text-decoration-color: currentColor; }
+
+/* The Overview table's own copy: Total members is the one clickable figure
+   among a row of otherwise-static pills, so it carries its own light,
+   tint-graded background (the same per-role colour the group header and
+   divider use) plus a real underline, reading as a coloured link rather
+   than a plain number. */
+.pcm-root .overview-table .cell-count {
+  text-decoration: underline;
+  text-decoration-style: solid;
+  text-underline-offset: 2px;
+  text-decoration-color: color-mix(in srgb, var(--tint) 55%, transparent);
+  padding: 4px 10px; border-radius: var(--r-pill);
+  border: 1px solid color-mix(in srgb, var(--tint) 20%, transparent);
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--tint) 16%, transparent),
+    color-mix(in srgb, var(--tint) 6%, transparent));
+  color: var(--tint);
+  font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.pcm-root .overview-table .cell-count:hover,
+.pcm-root .overview-table .cell-count:focus-visible {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--tint) 26%, transparent),
+    color-mix(in srgb, var(--tint) 12%, transparent));
+  border-color: color-mix(in srgb, var(--tint) 40%, transparent);
+  text-decoration-color: currentColor;
+}
 
 .pcm-root .level-table-tools {
   display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 10px;
@@ -229,6 +357,4 @@
   .pcm-root .role-select { width: 100%; }
   .pcm-root .role-select .dd { flex: 1; }
   .pcm-root .role-select .dd-trigger { width: 100%; min-width: 0; }
-  .pcm-root .role-summary-card table.role-summary,
-  .pcm-root .activity-summary-card table.role-summary { table-layout: auto; }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import gsap from 'gsap';
 import './Programs.css';
 import AttendanceUploadModal from '../components/AttendanceUploadModal/AttendanceUploadModal.jsx';
@@ -10,7 +10,6 @@ import LeaderMonthlyActivityModal from '../components/LeaderMonthlyActivityModal
 import LeaderRemarksModal from '../components/LeaderRemarksModal/LeaderRemarksModal.jsx';
 import MemberActivityCard from '../components/MemberActivityCard/MemberActivityCard.jsx';
 import Select from '../components/Select/Select.jsx';
-import SortHead from '../components/SortHead/SortHead.jsx';
 import { api } from '../lib/api.js';
 import { num } from '../lib/format.js';
 import { prefersReduced, useAnim } from '../lib/motion.js';
@@ -19,20 +18,32 @@ import { prefersReduced, useAnim } from '../lib/motion.js';
    beneficiaries were served, and there is no invitee list to be absent from —
    so no attendance split here.
 
-   All three cards are real, `party_track`-backed data, refetched whenever
-   `month` changes: `GET .../role-summary` (role-wise member counts) and
-   `.../activity-summary` (role × programme rows) for the first two,
-   `.../leaders` for the third once a role/activity pairing is open. `null`
-   means "still loading" (each card renders its own "Loading…"), `[]` means
-   "loaded, genuinely nothing there".
+   The Overview table and the member card are real, `party_track`-backed
+   data, refetched whenever `month` (or `monthMode`) changes: `GET
+   .../activity-summary` (role × programme rows) for the Overview table,
+   `.../leaders` for the member card once a role/activity pairing is open.
+   `null` means "still loading" (each card renders its own "Loading…"), `[]`
+   means "loaded, genuinely nothing there".
+
+   The Overview table is `activitySummary` pivoted client-side: one row per
+   programme, one repeated 3-column group (Total members / Updated / Not
+   updated) per role — there is no separate role-only endpoint any more,
+   since every figure the old role-summary card showed is exactly the
+   per-role column totals summed across this same row set. There is no
+   Role/Activity filter any more either — the table always shows every role
+   and programme the month has.
+
+   `monthMode` also carries `'overall'`: the request drops year/month
+   entirely rather than the screen guessing a range, which only works once
+   the backend itself learns to aggregate across months — until then it
+   reads as the Overview table's own empty state. Overall has no single
+   month to scope a leader drill-down to, so the Total-members cells render
+   as plain numbers instead of the click-to-open button in that mode.
 
    `activitySummary` rows carry `roleId`/`activityId` alongside the display
-   names — `roles` (from `/api/programs/roles`, `party_track.role`) filters
-   by matching id straight through. The Activity filter has no roster prop of
-   its own: `party_track.activity` (`/api/programs/activities`) is a
-   different, unrelated scoring system, so its options are derived from
-   `activitySummary` itself, the same way the Assembly filter below derives
-   its options from whatever leader list is on screen.
+   names — the Assembly filter inside the member card derives its options
+   from whatever leader list is on screen, the same pattern the old Activity
+   filter used to derive its own roster from `activitySummary`.
 
    Which Update overlay a programme opens, and which table it writes, is
    decided by its name alone — `memberCardVariant` below:
@@ -58,49 +69,48 @@ const hashInt = (str, seed) => {
   return h;
 };
 
-// Role and Activity get separate colour rotations (different hash seeds over
-// the same token set) so the two columns never read as one colour system.
 const CHIP_COLORS = ['var(--primary)', 'var(--violet)', 'var(--ok)', 'var(--accent)', 'var(--bad)'];
 const chipColor = (str, seed) => CHIP_COLORS[hashInt(str, seed) % CHIP_COLORS.length];
 const roleTint = (name) => chipColor(name, 17);
-const activityTint = (name) => chipColor(name, 53);
 
-const sum = (rows, key) => rows.reduce((a, r) => a + (r[key] || 0), 0);
+// Client-side stand-in for a grouping the backend doesn't do yet: these
+// `party_track.role` names collapse into one "MLA/ACI/Ministers" Overview
+// column instead of three. Placeholder names — swap this list (or the whole
+// mechanism) out once the backend groups them itself and hands the Overview
+// table one role id for the three.
+const ROLE_GROUP_LABEL = 'MLA/ACI/Ministers';
+const ROLE_GROUP_MEMBERS = new Set(['mla', 'aci', 'minister', 'ministers', 'mlc']);
+const ROLE_GROUP_KEY = 'grp:mla-aci-ministers';
+const roleGroupKey = (roleId, roleName) =>
+  ROLE_GROUP_MEMBERS.has(String(roleName || '').trim().toLowerCase()) ? ROLE_GROUP_KEY : `id:${roleId}`;
 
-// Shared by both tables on this view — `null` sortKey leaves rows in
-// server order, matching SummaryTable's own sort convention.
-function sortRows(rows, sortKey, sortDir, getters) {
-  if (!sortKey) return rows;
-  const get = getters[sortKey];
+// The Overview table's sort is per-cell, not per-column: "Updated" means
+// nothing on its own once every role repeats that header, so a sort spec
+// names which role's triple to read alongside which of the three. `null`
+// getter leaves rows in server order, matching SummaryTable's own
+// convention; `{ scope: 'name' }` is the one spec that isn't role-scoped.
+function sortRows(rows, getter, sortDir) {
+  if (!getter) return rows;
   const sorted = [...rows].sort((a, b) => {
-    const av = get(a), bv = get(b);
+    const av = getter(a), bv = getter(b);
     return av < bv ? -1 : av > bv ? 1 : 0;
   });
   return sortDir === 'desc' ? sorted.reverse() : sorted;
 }
-function useSort() {
-  const [sortKey, setSortKey] = useState(null);
-  const [sortDir, setSortDir] = useState('asc');
-  const onSort = (key) => {
-    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    else { setSortKey(key); setSortDir('asc'); }
-  };
-  return { sortKey, sortDir, onSort };
-}
+const sortSpecEqual = (a, b) => a.scope === b.scope && a.roleKey === b.roleKey && a.metric === b.metric;
 
-const ROLE_SORT_KEYS = {
-  role: (r) => (r.role || '').toLowerCase(),
-  total: (r) => r.total || 0,
-  updated: (r) => r.updated || 0,
-  notUpdated: (r) => r.notUpdated || 0
-};
-const ACTIVITY_SORT_KEYS = {
-  role: (r) => (r.role || '').toLowerCase(),
-  totalMembers: (r) => r.totalMembers || 0,
-  activity: (r) => (r.activity || '').toLowerCase(),
-  updated: (r) => r.updated || 0,
-  notUpdated: (r) => r.notUpdated || 0
-};
+// A cell missing for this programme/role sorts as lower than any real
+// figure (including a genuine 0) rather than being coerced into one —
+// same "unrated sorts last, never as zero" reasoning the wizard's cadre
+// scores use.
+function sortGetterFor(spec) {
+  if (spec.scope === 'name') return (p) => (p.name || '').toLowerCase();
+  const field = spec.metric === 'total' ? 'totalMembers' : spec.metric === 'updated' ? 'updated' : 'notUpdated';
+  return (p) => {
+    const cell = p.cells.get(spec.roleKey);
+    return cell ? cell[field] : -1;
+  };
+}
 
 // Service returns "—" for missing place names — treat those as blank in the UI.
 const hasPlace = (v) => {
@@ -159,15 +169,12 @@ const memberCardVariant = (activity) => {
   return 'default';
 };
 
-export default function Programs({ roles = [] }) {
+export default function Programs() {
   const ref = useRef(null);
   const memberCardRef = useRef(null);
-  const [monthMode, setMonthMode] = useState('this');
+  const [monthMode, setMonthMode] = useState('this'); // 'this' | 'last' | 'overall' | 'custom'
   const [month, setMonth] = useState(thisMonth);
-  const [selectedRole, setSelectedRole] = useState(null);
-  const [selectedActivity, setSelectedActivity] = useState(null); // a program_id, despite the name
-  const [roleSummary, setRoleSummary] = useState(null); // null = loading, [] = loaded and empty
-  const [activitySummary, setActivitySummary] = useState(null);
+  const [activitySummary, setActivitySummary] = useState(null); // null = loading, [] = loaded and empty
   const [openRow, setOpenRow] = useState(null); // the activitySummary row the member card is showing
   const [leaders, setLeaders] = useState(null); // null = loading, [] = loaded and empty
   const [leaderMeetings, setLeaderMeetings] = useState(null); // Calendar Meetings Update modal rows — real, from GET .../meetings
@@ -193,35 +200,42 @@ export default function Programs({ roles = [] }) {
   const [remarkMode, setRemarkMode] = useState('view');
   const [uploadMid, setUploadMid] = useState(null);
   const [uploadMode, setUploadMode] = useState('upload');
-  const roleSort = useSort();
-  const activitySort = useSort();
+  const [programQuery, setProgramQuery] = useState(''); // Overview table's own search, by programme name
+  const [sortSpec, setSortSpec] = useState({ scope: 'name' }); // { scope: 'name' } | { scope: 'cell', roleKey, metric }
+  const [sortDir, setSortDir] = useState('asc');
+  const onSort = (spec) => {
+    if (sortSpecEqual(sortSpec, spec)) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortSpec(spec); setSortDir('asc'); }
+  };
 
   useAnim(ref, () => {
-    gsap.from('.role-summary-card, .role-select, .activity-summary-card, .member-detail-card', {
+    gsap.from('.overview-card, .role-select, .member-detail-card', {
       y: 14, autoAlpha: 0, duration: .4, stagger: .06
     });
-  }, [month, roleSummary, activitySummary]);
+  }, [month, activitySummary]);
 
-  // The two role/activity cards share one month scope, so one fetch covers
-  // both — refired whenever `month` picks a new calendar month.
+  // The Overview table's only data source — refired whenever `month` picks a
+  // new calendar month, or `monthMode` flips to/from Overall. Overall omits
+  // year/month from the request entirely rather than guessing a range —
+  // the backend doesn't group across months yet, so until it does this reads
+  // as "no rows" (the empty state below) rather than a wrong total.
   useEffect(() => {
     let cancelled = false;
-    setRoleSummary(null);
     setActivitySummary(null);
-    const year = month.getFullYear(), mo = month.getMonth() + 1;
-    Promise.all([api.programRoleSummary(year, mo), api.programActivitySummary(year, mo)])
-      .then(([roleRows, activityRows]) => {
-        if (cancelled) return;
-        setRoleSummary(roleRows);
-        setActivitySummary(activityRows);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setRoleSummary([]);
-        setActivitySummary([]);
-      });
+    const args = monthMode === 'overall' ? [] : [month.getFullYear(), month.getMonth() + 1];
+    api.programActivitySummary(...args)
+      .then((activityRows) => { if (!cancelled) setActivitySummary(activityRows); })
+      .catch(() => { if (!cancelled) setActivitySummary([]); });
     return () => { cancelled = true; };
-  }, [month]);
+  }, [month, monthMode]);
+
+  // Overall has no single month to scope a leader drill-down, a Calendar
+  // Meetings entry or a monthly-activity record to — close whatever was open
+  // rather than leave it showing one stale month's detail under an all-time
+  // summary.
+  useEffect(() => {
+    if (monthMode === 'overall') setOpenRow(null);
+  }, [monthMode]);
 
   // The card only ever opens from an explicit click on a members count, so
   // every time it does, scroll it to the top of the viewport and give it a
@@ -236,14 +250,17 @@ export default function Programs({ roles = [] }) {
 
   // The open pairing's leaders, refetched whenever the pairing or the month
   // changes. The roster only — what has been recorded for one leader is
-  // fetched per-leader when their Update modal opens.
+  // fetched per-leader when their Update modal opens. `openRow.roleIds` is
+  // usually one id; for the merged MLA/ACI/Ministers column it's the several
+  // underlying role ids, fetched in parallel and flattened into one roster —
+  // the backend has no single id for the group yet.
   useEffect(() => {
     if (!openRow) { setLeaders(null); return; }
     let cancelled = false;
     setLeaders(null);
     const year = month.getFullYear(), mo = month.getMonth() + 1;
-    api.programLeaders(openRow.roleId, openRow.activityId, year, mo)
-      .then((rows) => { if (!cancelled) setLeaders(rows); })
+    Promise.all(openRow.roleIds.map((roleId) => api.programLeaders(roleId, openRow.activityId, year, mo)))
+      .then((results) => { if (!cancelled) setLeaders(results.flat()); })
       .catch(() => { if (!cancelled) setLeaders([]); });
     return () => { cancelled = true; };
   }, [openRow, month]);
@@ -379,20 +396,16 @@ export default function Programs({ roles = [] }) {
     return () => { cancelled = true; };
   }, [updateMid, openRow, month]);
 
-  // Re-reads the two summary cards in place — no `setRoleSummary(null)` first,
-  // unlike the month effect: their figures are only a few counts out of date,
-  // and blanking them to "Loading…" behind an open modal reads as though the
-  // save had cleared the screen. A failure here leaves the old figures up;
-  // the save it follows has already succeeded and must not report otherwise.
+  // Re-reads the Overview table in place — no `setActivitySummary(null)`
+  // first, unlike the month effect: its figures are only a few counts out of
+  // date, and blanking it to "Loading…" behind an open modal reads as though
+  // the save had cleared the screen. A failure here leaves the old figures
+  // up; the save it follows has already succeeded and must not report
+  // otherwise.
   const reloadSummaries = async () => {
-    const year = month.getFullYear(), mo = month.getMonth() + 1;
+    const args = monthMode === 'overall' ? [] : [month.getFullYear(), month.getMonth() + 1];
     try {
-      const [roleRows, activityRows] = await Promise.all([
-        api.programRoleSummary(year, mo),
-        api.programActivitySummary(year, mo)
-      ]);
-      setRoleSummary(roleRows);
-      setActivitySummary(activityRows);
+      setActivitySummary(await api.programActivitySummary(...args));
     } catch {
       /* keep the figures on screen */
     }
@@ -450,59 +463,105 @@ export default function Programs({ roles = [] }) {
 
   const pickThis = () => { setMonthMode('this'); setMonth(thisMonth()); };
   const pickLast = () => { setMonthMode('last'); setMonth(lastMonth()); };
+  const pickOverall = () => setMonthMode('overall');
   const pickCustomMonth = (mo) => { setMonthMode('custom'); setMonth((d) => new Date(d.getFullYear(), +mo, 1)); };
   const pickCustomYear = (yr) => { setMonthMode('custom'); setMonth((d) => new Date(+yr, d.getMonth(), 1)); };
-  const monthTitle = month.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  const monthTitle = monthMode === 'overall' ? 'All time' : month.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
 
-  const roleRows = roleSummary ?? [];
   const activityRows = activitySummary ?? [];
-  const filteredActivitySummary = activityRows.filter((r) =>
-    (!selectedRole || r.roleId === selectedRole) &&
-    (!selectedActivity || r.activityId === selectedActivity)
-  );
-  const sortedRoleRows = useMemo(
-    () => sortRows(roleRows, roleSort.sortKey, roleSort.sortDir, ROLE_SORT_KEYS),
-    [roleRows, roleSort.sortKey, roleSort.sortDir]
-  );
-  const sortedActivitySummary = useMemo(
-    () => sortRows(filteredActivitySummary, activitySort.sortKey, activitySort.sortDir, ACTIVITY_SORT_KEYS),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activityRows, selectedRole, selectedActivity, activitySort.sortKey, activitySort.sortDir]
-  );
 
-  // Role filter options come from the activity card's rows when present
-  // (covers the static fixture's ids); otherwise the live roles roster.
-  const roleOptions = useMemo(() => {
-    if (activityRows.length) {
-      const seen = new Map();
-      for (const r of activityRows) seen.set(r.roleId, r.role);
-      return [...seen].map(([value, label]) => ({ value, label }));
-    }
-    return roles.map((r) => ({ value: r.id, label: r.name }));
-  }, [activityRows, roles]);
-
-  // The Activity filter's own roster — every programme actually appearing in
-  // (the unfiltered) activitySummary, not `party_track.activity`.
-  const activityOptions = useMemo(() => {
+  // The Overview table's shape: every role becomes a repeated 3-column group
+  // (MLA/ACI/Ministers merges its three roles into one, via `roleGroupKey`),
+  // every programme becomes a row, and each row's `cells` map holds the
+  // (possibly summed) figures for that programme/role pairing, keyed by
+  // group key — a role with no data for a given programme renders as a dash
+  // rather than a false zero.
+  const pivotRoles = useMemo(() => {
     const seen = new Map();
-    for (const r of activityRows) seen.set(r.activityId, r.activity);
-    return [...seen].map(([value, label]) => ({ value, label }));
+    for (const r of activityRows) {
+      const key = roleGroupKey(r.roleId, r.role);
+      const entry = seen.get(key);
+      if (entry) entry.roleIds.add(r.roleId);
+      else seen.set(key, { key, name: key === ROLE_GROUP_KEY ? ROLE_GROUP_LABEL : r.role, roleIds: new Set([r.roleId]) });
+    }
+    return [...seen.values()].map((v) => ({ ...v, roleIds: [...v.roleIds] }));
+  }, [activityRows]);
+
+  const pivotPrograms = useMemo(() => {
+    const byId = new Map();
+    for (const r of activityRows) {
+      let p = byId.get(r.activityId);
+      if (!p) {
+        p = { id: r.activityId, name: r.activity, cells: new Map(), total: 0, updated: 0, notUpdated: 0 };
+        byId.set(r.activityId, p);
+      }
+      const key = roleGroupKey(r.roleId, r.role);
+      let cell = p.cells.get(key);
+      if (!cell) {
+        cell = { roleIds: [], activityId: r.activityId, activity: r.activity, role: key === ROLE_GROUP_KEY ? ROLE_GROUP_LABEL : r.role, totalMembers: 0, updated: 0, notUpdated: 0 };
+        p.cells.set(key, cell);
+      }
+      cell.roleIds.push(r.roleId);
+      cell.totalMembers += r.totalMembers || 0;
+      cell.updated += r.updated || 0;
+      cell.notUpdated += r.notUpdated || 0;
+      p.total += r.totalMembers || 0;
+      p.updated += r.updated || 0;
+      p.notUpdated += r.notUpdated || 0;
+    }
+    return [...byId.values()];
+  }, [activityRows]);
+
+  const searchedPrograms = useMemo(() => {
+    const q = programQuery.trim().toLowerCase();
+    return q ? pivotPrograms.filter((p) => (p.name || '').toLowerCase().includes(q)) : pivotPrograms;
+  }, [pivotPrograms, programQuery]);
+
+  const sortedPrograms = useMemo(
+    () => sortRows(searchedPrograms, sortGetterFor(sortSpec), sortDir),
+    [searchedPrograms, sortSpec, sortDir]
+  );
+
+  // Per-role column totals for the footer — replaces the old role-only
+  // summary card's figures, which were exactly this same sum. Keyed by the
+  // same group key as `pivotRoles`/`pivotPrograms`, so MLA/ACI/Ministers gets
+  // one summed footer cell too.
+  const roleTotals = useMemo(() => {
+    const byRole = new Map();
+    for (const r of activityRows) {
+      const key = roleGroupKey(r.roleId, r.role);
+      const cur = byRole.get(key) || { total: 0, updated: 0, notUpdated: 0 };
+      cur.total += r.totalMembers || 0;
+      cur.updated += r.updated || 0;
+      cur.notUpdated += r.notUpdated || 0;
+      byRole.set(key, cur);
+    }
+    return byRole;
   }, [activityRows]);
 
   const openMembers = (r) => {
+    if (monthMode === 'overall') return; // no single month to scope the drill-down to
     setOpenRow(r);
     setSelectedAc(null); // a new role/activity pairing has its own Assembly roster
   };
 
-  // The card only ever opens from an explicit click on a members count — if a
-  // filter change makes the open row fall out of the filtered list, close it
-  // rather than silently swapping in a different one.
+  // The card only ever opens from an explicit click on a members count — if
+  // the month changes and the open row's programme/role pairing no longer
+  // has data, close it rather than silently swapping in a different one.
+  // `openRow.roleIds` may hold several ids (the merged MLA/ACI/Ministers
+  // cell), so any one of them still being present for this programme counts
+  // as "still here".
   useEffect(() => {
-    if (openRow && !filteredActivitySummary.some((r) => r.roleId === openRow.roleId && r.activityId === openRow.activityId)) {
+    if (openRow && !activityRows.some((r) => r.activityId === openRow.activityId && openRow.roleIds.includes(r.roleId))) {
       setOpenRow(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activityRows, selectedRole, selectedActivity]);
+  }, [activityRows]);
+
+  const sortIconClass = (spec) => {
+    const active = sortSpecEqual(sortSpec, spec);
+    return 'sort-icon' + (active ? ' is-active' : '') + (active && sortDir === 'asc' ? ' is-asc' : '');
+  };
 
   const mergedLeaders = useMemo(
     () => (leaders || []).map((m) => ({ ...m, remarks: remarksByMid[m.mid] || '' })),
@@ -537,17 +596,6 @@ export default function Programs({ roles = [] }) {
     setUploadMid(null);
   };
 
-  const totals = {
-    total: sum(roleRows, 'total'),
-    updated: sum(roleRows, 'updated'), notUpdated: sum(roleRows, 'notUpdated')
-  };
-  const activityTotals = {
-    totalMembers: sum(filteredActivitySummary, 'totalMembers'),
-    updated: sum(filteredActivitySummary, 'updated'),
-    notUpdated: sum(filteredActivitySummary, 'notUpdated')
-  };
-  const activityFiltered = Boolean(selectedRole || selectedActivity);
-
   return (
     <section className="view" aria-label="Programmes overview" ref={ref}>
       <div className="level-table-tools">
@@ -565,141 +613,118 @@ export default function Programs({ roles = [] }) {
         <div className="seg" role="group" aria-label="Select period">
           <button className="btn btn-sm" type="button" aria-pressed={monthMode === 'this'} onClick={pickThis}>This month</button>
           <button className="btn btn-sm" type="button" aria-pressed={monthMode === 'last'} onClick={pickLast}>Last month</button>
+          <button className="btn btn-sm" type="button" aria-pressed={monthMode === 'overall'} onClick={pickOverall}>Overall</button>
           <button className="btn btn-sm" type="button" aria-pressed={monthMode === 'custom'} onClick={() => setMonthMode('custom')}>Custom</button>
         </div>
       </div>
 
-      <div className="role-summary-card table-card">
+      <div className="overview-card table-card">
         <div className="card-head">
-          <h2>Programmes by role</h2>
-          <span className="sub"><Icon name="calendar" sm />{monthTitle}</span>
+          <h2>Programmes overview</h2>
+          <div className="card-head-tools">
+            <span className="sub"><Icon name="calendar" sm />{monthTitle}</span>
+            <label className="search overview-search">
+              <Icon name="search" sm />
+              <span className="sr-only" id="programs-search-label">Search programmes</span>
+              <input
+                type="search"
+                placeholder="Search programme…"
+                aria-labelledby="programs-search-label"
+                value={programQuery}
+                onChange={(e) => setProgramQuery(e.target.value)}
+              />
+            </label>
+          </div>
         </div>
-        <div className="table-scroll">
-          <table className="role-summary">
-            <caption className="sr-only">Programmes by role for {monthTitle}</caption>
-            <colgroup>
-              <col className="col-role" />
-              <col className="col-num" />
-              <col className="col-num" />
-              <col className="col-num" />
-            </colgroup>
-            <thead>
-              <tr>
-                <SortHead label="Role" sortKey="role" active={roleSort.sortKey === 'role'} dir={roleSort.sortDir} onSort={roleSort.onSort} />
-                <SortHead label="Total Members" sortKey="total" active={roleSort.sortKey === 'total'} dir={roleSort.sortDir} onSort={roleSort.onSort} className="n" />
-                <SortHead label="Updated" sortKey="updated" active={roleSort.sortKey === 'updated'} dir={roleSort.sortDir} onSort={roleSort.onSort} className="n" />
-                <SortHead label="Not updated" sortKey="notUpdated" active={roleSort.sortKey === 'notUpdated'} dir={roleSort.sortDir} onSort={roleSort.onSort} className="n" />
-              </tr>
-            </thead>
-            <tbody>
-              {sortedRoleRows.map((r) => (
-                <tr key={r.role}>
-                  <td><span className="role-chip" style={{ '--tint': roleTint(r.role) }}>{r.role}</span></td>
-                  <td className="n num">{num(r.total)}</td>
-                  <td className="n num" style={{ color: 'var(--ok)' }}>{num(r.updated)}</td>
-                  <td className="n num" style={{ color: 'var(--bad)' }}>{num(r.notUpdated)}</td>
-                </tr>
-              ))}
-            </tbody>
-            {roleRows.length > 0 && (
-              <tfoot>
-                <tr>
-                  <th scope="row">Total</th>
-                  <td className="n num">{num(totals.total)}</td>
-                  <td className="n num">{num(totals.updated)}</td>
-                  <td className="n num">{num(totals.notUpdated)}</td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-        <div className="empty" hidden={roleSummary !== null}>
-          <div className="empty-title">Loading…</div>
-        </div>
-        <div className="empty" hidden={roleSummary === null || roleRows.length > 0}>
-          <Icon name="inbox" />
-          <div className="empty-title">No programmes reported for {monthTitle}</div>
-          <div className="empty-hint">No roles in the leader roster for this month.</div>
-        </div>
-      </div>
-
-      <div className="filter-row">
-        <div className="role-select">
-          <span className="role-select-label">Role</span>
-          {roleOptions.length > 0 ? (
-            <Dropdown
-              id="programs-role" label="Filter by role"
-              value={selectedRole ?? 'all'}
-              onChange={(v) => setSelectedRole(v === 'all' ? null : v)}
-              options={[{ value: 'all', label: 'All roles' }, ...roleOptions]}
-            />
-          ) : (
-            <span className="muted">No roles to select yet</span>
-          )}
-        </div>
-
-        <div className="role-select">
-          <span className="role-select-label">Activity</span>
-          {activityOptions.length > 0 ? (
-            <Dropdown
-              id="programs-activity" label="Filter by activity"
-              value={selectedActivity ?? 'all'}
-              onChange={(v) => setSelectedActivity(v === 'all' ? null : v)}
-              options={[{ value: 'all', label: 'All activities' }, ...activityOptions]}
-            />
-          ) : (
-            <span className="muted">No activities to select yet</span>
-          )}
-        </div>
-      </div>
-
-      <div className="activity-summary-card table-card">
-        <div className="card-head">
-          <h2>Programmes by role &amp; activity</h2>
-          <span className="sub"><Icon name="calendar" sm />{monthTitle}</span>
-        </div>
-        <div className="table-scroll">
-          <table className="role-summary">
+        <div className="table-scroll overview-scroll">
+          <table className="overview-table">
             <caption className="sr-only">Programmes by role and activity for {monthTitle}</caption>
-            <colgroup>
-              <col className="col-role" />
-              <col className="col-members" />
-              <col className="col-activity" />
-              <col className="col-stat" />
-              <col className="col-stat" />
-            </colgroup>
             <thead>
               <tr>
-                <SortHead label="Role" sortKey="role" active={activitySort.sortKey === 'role'} dir={activitySort.sortDir} onSort={activitySort.onSort} />
-                <SortHead label="Total members" sortKey="totalMembers" active={activitySort.sortKey === 'totalMembers'} dir={activitySort.sortDir} onSort={activitySort.onSort} className="n" />
-                <SortHead label="Activity" sortKey="activity" active={activitySort.sortKey === 'activity'} dir={activitySort.sortDir} onSort={activitySort.onSort} />
-                <SortHead label="Updated" sortKey="updated" active={activitySort.sortKey === 'updated'} dir={activitySort.sortDir} onSort={activitySort.onSort} className="n" />
-                <SortHead label="Not updated" sortKey="notUpdated" active={activitySort.sortKey === 'notUpdated'} dir={activitySort.sortDir} onSort={activitySort.onSort} className="n" />
+                <th rowSpan={2} scope="col" className="col-sticky col-program">
+                  <button className="sort-th" type="button" onClick={() => onSort({ scope: 'name' })}>
+                    Programme
+                    <Icon name="chevron-down" sm className={sortIconClass({ scope: 'name' })} />
+                  </button>
+                </th>
+                {pivotRoles.map((role) => (
+                  <th key={role.key} colSpan={3} scope="colgroup" className="role-group-head" style={{ '--tint': roleTint(role.name) }}>
+                    <span className="role-chip" style={{ '--tint': roleTint(role.name) }}>{role.name}</span>
+                  </th>
+                ))}
+              </tr>
+              <tr>
+                {pivotRoles.map((role) => (
+                  <Fragment key={role.key}>
+                    <th scope="col" className="n sub-head" style={{ '--tint': roleTint(role.name) }}>
+                      <button className="sort-th" type="button" onClick={() => onSort({ scope: 'cell', roleKey: role.key, metric: 'total' })}>
+                        Total members
+                        <Icon name="chevron-down" sm className={sortIconClass({ scope: 'cell', roleKey: role.key, metric: 'total' })} />
+                      </button>
+                    </th>
+                    <th scope="col" className="n sub-head" style={{ '--tint': roleTint(role.name) }}>
+                      <button className="sort-th" type="button" onClick={() => onSort({ scope: 'cell', roleKey: role.key, metric: 'updated' })}>
+                        Updated
+                        <Icon name="chevron-down" sm className={sortIconClass({ scope: 'cell', roleKey: role.key, metric: 'updated' })} />
+                      </button>
+                    </th>
+                    <th scope="col" className="n sub-head last-in-group" style={{ '--tint': roleTint(role.name) }}>
+                      <button className="sort-th" type="button" onClick={() => onSort({ scope: 'cell', roleKey: role.key, metric: 'notUpdated' })}>
+                        Not updated
+                        <Icon name="chevron-down" sm className={sortIconClass({ scope: 'cell', roleKey: role.key, metric: 'notUpdated' })} />
+                      </button>
+                    </th>
+                  </Fragment>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {sortedActivitySummary.map((r) => (
-                <tr key={r.roleId + '_' + r.activityId}>
-                  <td><span className="role-chip" style={{ '--tint': roleTint(r.role) }}>{r.role}</span></td>
-                  <td className="n">
-                    <button className="cell-count num" type="button" onClick={() => openMembers(r)}>
-                      {num(r.totalMembers)}
-                    </button>
+              {sortedPrograms.map((p) => (
+                <tr key={p.id}>
+                  <td className="col-sticky col-program">
+                    <span className="program-name">{p.name}</span>
                   </td>
-                  <td><span className="activity-chip" style={{ '--tint': activityTint(r.activity) }}>{r.activity}</span></td>
-                  <td className="n num" style={{ color: 'var(--ok)' }}>{num(r.updated)}</td>
-                  <td className="n num" style={{ color: 'var(--bad)' }}>{num(r.notUpdated)}</td>
+                  {pivotRoles.map((role) => {
+                    const cell = p.cells.get(role.key);
+                    return (
+                      <Fragment key={role.key}>
+                        <td className="n num" style={{ '--tint': roleTint(role.name) }}>
+                          {!cell ? (
+                            <span className="muted">—</span>
+                          ) : monthMode === 'overall' ? (
+                            num(cell.totalMembers)
+                          ) : (
+                            <button className="cell-count num" type="button" onClick={() => openMembers(cell)}>
+                              {num(cell.totalMembers)}
+                            </button>
+                          )}
+                        </td>
+                        <td className="n num">
+                          {cell ? <span className="stat-pill stat-pill-ok">{num(cell.updated)}</span> : <span className="muted">—</span>}
+                        </td>
+                        <td className="n num last-in-group" style={{ '--tint': roleTint(role.name) }}>
+                          {cell ? <span className="stat-pill stat-pill-bad">{num(cell.notUpdated)}</span> : <span className="muted">—</span>}
+                        </td>
+                      </Fragment>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
-            {filteredActivitySummary.length > 0 && (
+            {sortedPrograms.length > 0 && (
               <tfoot>
                 <tr>
-                  <th scope="row">Total</th>
-                  <td className="n num">{num(activityTotals.totalMembers)}</td>
-                  <td aria-hidden="true" />
-                  <td className="n num">{num(activityTotals.updated)}</td>
-                  <td className="n num">{num(activityTotals.notUpdated)}</td>
+                  <th scope="row" className="col-sticky col-program">Total</th>
+                  {pivotRoles.map((role) => {
+                    const t = roleTotals.get(role.key) || { total: 0, updated: 0, notUpdated: 0 };
+                    return (
+                      <Fragment key={role.key}>
+                        <td className="n num">{num(t.total)}</td>
+                        <td className="n num" style={{ color: 'var(--ok)' }}>{num(t.updated)}</td>
+                        <td className="n num last-in-group" style={{ color: 'var(--bad)', '--tint': roleTint(role.name) }}>{num(t.notUpdated)}</td>
+                      </Fragment>
+                    );
+                  })}
                 </tr>
               </tfoot>
             )}
@@ -708,12 +733,12 @@ export default function Programs({ roles = [] }) {
         <div className="empty" hidden={activitySummary !== null}>
           <div className="empty-title">Loading…</div>
         </div>
-        <div className="empty" hidden={activitySummary === null || filteredActivitySummary.length > 0}>
+        <div className="empty" hidden={activitySummary === null || sortedPrograms.length > 0}>
           <Icon name="inbox" />
-          {activityFiltered ? (
+          {programQuery.trim() ? (
             <>
-              <div className="empty-title">No rows match this role/activity</div>
-              <div className="empty-hint">Try a different combination, or clear the filters above.</div>
+              <div className="empty-title">No programme matches "{programQuery.trim()}"</div>
+              <div className="empty-hint">Try a different search, or clear it.</div>
             </>
           ) : (
             <>
