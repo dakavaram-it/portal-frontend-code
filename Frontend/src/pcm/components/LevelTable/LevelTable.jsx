@@ -21,9 +21,7 @@ const TOTAL_COLUMNS = [
 ];
 
 const RANGES = [
-  ['today', 'Today'],
-  ['yesterday', 'Yesterday'],
-  ['overall', 'Overall'],
+  ['lastMonth', 'Last Month'],
   ['custom', 'Custom']
 ];
 
@@ -39,17 +37,21 @@ const empty = () => ({
   remarks: 0
 });
 
-function shiftDay(days) {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return isoDay(d);
+// Previous calendar month, not a rolling 30 days — matches how "Last Month"
+// reads on a business dashboard next to a Custom range picker.
+function lastMonthRange() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const end = new Date(now.getFullYear(), now.getMonth(), 0);
+  return [isoDay(start), isoDay(end)];
 }
 
 function inRange(m, range, from, to) {
-  if (range === 'overall') return true;
   if (!m.date) return false;
-  if (range === 'today') return m.date === shiftDay(0);
-  if (range === 'yesterday') return m.date === shiftDay(-1);
+  if (range === 'lastMonth') {
+    const [start, end] = lastMonthRange();
+    return m.date >= start && m.date <= end;
+  }
   if (!from && !to) return true;
   if (from && m.date < from) return false;
   if (to && m.date > to) return false;

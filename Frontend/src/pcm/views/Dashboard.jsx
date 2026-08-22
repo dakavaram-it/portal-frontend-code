@@ -12,7 +12,7 @@ import { cancelActiveDrill } from '../lib/schedules.js';
 
 export default function Dashboard({ meetings, remarksCategories, onToast, onSaveConductedRemark }) {
   const ref = useRef(null);
-  const [range, setRange] = useState('overall');
+  const [range, setRange] = useState('lastMonth');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [picked, setPicked] = useState(null);
