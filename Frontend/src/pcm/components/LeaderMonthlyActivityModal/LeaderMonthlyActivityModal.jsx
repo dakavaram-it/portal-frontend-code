@@ -1,12 +1,17 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import Icon from '../Icon/Icon.jsx';
+import Select from '../Select/Select.jsx';
 import { initials } from '../../lib/format.js';
 import { prefersReduced } from '../../lib/motion.js';
 import '../RemarksModal/RemarksModal.css';
 // `.field-error` and the head's `.drill-close` alignment live there, the same
 // borrowing `LeaderActivityEntriesModal` does.
 import '../LeaderMeetingEntriesModal/LeaderMeetingEntriesModal.css';
+
+const MONTH_NAMES = Array.from({ length: 12 }, (_, i) => new Date(2000, i, 1).toLocaleDateString('en-IN', { month: 'long' }));
+const thisYear = new Date().getFullYear();
+const YEARS = Array.from({ length: 7 }, (_, i) => thisYear - i);
 
 /* Pedala Sevalo / Swatch Andhra / Pattadar Passbook's Update modal.
 
@@ -25,6 +30,9 @@ export default function LeaderMonthlyActivityModal({
   member,
   activity,
   monthTitle,
+  year,
+  monthIndex,
+  onMonthChange,
   record,
   saving,
   saveError,
@@ -102,6 +110,14 @@ export default function LeaderMonthlyActivityModal({
     setDirty(false);
   };
 
+  // Switching months hands the effect above a genuinely different record —
+  // clear `dirty` so its seeding isn't blocked by a leftover edit from the
+  // month just left.
+  const changeMonth = (nextYear, nextMonthIndex) => {
+    setDirty(false);
+    onMonthChange(nextYear, nextMonthIndex);
+  };
+
   const pickFile = (e) => {
     const file = e.target.files?.[0];
     e.target.value = ''; // lets picking the same filename again re-fire onChange
@@ -146,7 +162,29 @@ export default function LeaderMonthlyActivityModal({
         <div className="modal-body">
           <div className="meta-grid">
             <div><div className="m-key">MID</div><div className="m-val mono">{member.mid}</div></div>
-            <div><div className="m-key">Month</div><div className="m-val">{monthTitle}</div></div>
+            <div>
+              <div className="m-key">Month</div>
+              <div className="m-val month-pick" role="group" aria-label="Select month and year">
+                <Select
+                  id="lma-month"
+                  label="Month"
+                  value={monthIndex}
+                  disabled={saving || uploadingFile}
+                  onChange={(v) => changeMonth(year, +v)}
+                >
+                  {MONTH_NAMES.map((m, i) => <option key={m} value={i}>{m}</option>)}
+                </Select>
+                <Select
+                  id="lma-year"
+                  label="Year"
+                  value={year}
+                  disabled={saving || uploadingFile}
+                  onChange={(v) => changeMonth(+v, monthIndex)}
+                >
+                  {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+                </Select>
+              </div>
+            </div>
             <div>
               <div className="m-key">Status</div>
               <div className="m-val">

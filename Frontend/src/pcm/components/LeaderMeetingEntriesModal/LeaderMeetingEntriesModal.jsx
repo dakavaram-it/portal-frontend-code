@@ -10,6 +10,29 @@ import './LeaderMeetingEntriesModal.css';
 
 const toIsoDate = (d) => d.toISOString().slice(0, 10);
 
+const PC_STATUS_UNSET = '';
+
+// PC status is a PC user's own classification, off `party_track.attendance_type`
+// (`attendanceTypes`, fetched once by the parent) — not derived the way App
+// status (`attended`, real check-in data) is. `status` is the row's own
+// `{id, name}` or `null` when nobody has set one yet.
+function PcStatusPicker({ meetingId, status, attendanceTypes, saving, onSave }) {
+  const options = [
+    { value: PC_STATUS_UNSET, label: 'Not set' },
+    ...attendanceTypes.map((t) => ({ value: t.id, label: t.name }))
+  ];
+  return (
+    <Dropdown
+      id={`pc-status-${meetingId}`}
+      label="PC status"
+      value={status?.id ?? PC_STATUS_UNSET}
+      disabled={saving}
+      onChange={(v) => { if (v !== PC_STATUS_UNSET) onSave(meetingId, v); }}
+      options={options}
+    />
+  );
+}
+
 // One meeting row's remarks, edited in place — starts in edit mode when there
 // is nothing recorded yet, otherwise opens read-only with an Edit button, the
 // same posture LeaderRemarksModal uses for a leader's own remarks.
@@ -30,10 +53,14 @@ function MeetingRemarksEditor({
   remarksError,
   uploadingFileFor,
   uploadFileError,
+  attendanceTypes,
+  savingPcStatusFor,
+  pcStatusError,
   onClose,
   onSave,
   onUploadFile,
-  onViewFile
+  onViewFile,
+  onSavePcStatus
 }) {
   const [text, setText] = useState(row.remarks || '');
   const [editable, setEditable] = useState(!row.remarks);
@@ -169,12 +196,30 @@ function MeetingRemarksEditor({
               </div>
 
               <div className="field">
-                <label>Attendance status</label>
+                <label>App status</label>
                 <div>
                   {selected == null ? <span className="muted">—</span> : selected.attended
                     ? <span className="pill pill-present"><i className="dot" />Attended</span>
                     : <span className="pill pill-absent"><i className="dot" />Not attended</span>}
                 </div>
+              </div>
+
+              <div className="field">
+                <label>PC status</label>
+                {selected == null ? (
+                  <div><span className="muted">—</span></div>
+                ) : (
+                  <PcStatusPicker
+                    meetingId={selected.meetingId}
+                    status={selected.pcStatus}
+                    attendanceTypes={attendanceTypes}
+                    saving={savingPcStatusFor === selected.meetingId}
+                    onSave={onSavePcStatus}
+                  />
+                )}
+                {selected != null && pcStatusError?.meetingId === selected.meetingId && (
+                  <div className="field-error">{pcStatusError.message}</div>
+                )}
               </div>
             </>
           )}
@@ -270,10 +315,14 @@ export default function LeaderMeetingEntriesModal({
   remarksError,
   uploadingFileFor,
   uploadFileError,
+  attendanceTypes,
+  savingPcStatusFor,
+  pcStatusError,
   onClose,
   onSaveRemarks,
   onUploadFile,
-  onViewFile
+  onViewFile,
+  onSavePcStatus
 }) {
   const [remarksMeetingId, setRemarksMeetingId] = useState(null);
   const [viewingFileId, setViewingFileId] = useState(null);
@@ -375,7 +424,8 @@ export default function LeaderMeetingEntriesModal({
                     <tr>
                       <th scope="col">Meeting type</th>
                       <th scope="col">Date</th>
-                      <th scope="col">Attendance status</th>
+                      <th scope="col">App status</th>
+                      <th scope="col">PC status</th>
                       <th scope="col">Remarks</th>
                       <th scope="col" className="action-cell">Files</th>
                     </tr>
@@ -389,6 +439,18 @@ export default function LeaderMeetingEntriesModal({
                           {row.attended
                             ? <span className="pill pill-present"><i className="dot" />Attended</span>
                             : <span className="pill pill-absent"><i className="dot" />Not attended</span>}
+                        </td>
+                        <td>
+                          <PcStatusPicker
+                            meetingId={row.meetingId}
+                            status={row.pcStatus}
+                            attendanceTypes={attendanceTypes}
+                            saving={savingPcStatusFor === row.meetingId}
+                            onSave={onSavePcStatus}
+                          />
+                          {pcStatusError?.meetingId === row.meetingId && (
+                            <div className="field-error">{pcStatusError.message}</div>
+                          )}
                         </td>
                         <td className="entries-remarks">
                           <button className="cell-count" type="button" onClick={() => setRemarksMeetingId(row.meetingId)}>
@@ -472,10 +534,14 @@ export default function LeaderMeetingEntriesModal({
           remarksError={remarksError}
           uploadingFileFor={uploadingFileFor}
           uploadFileError={uploadFileError}
+          attendanceTypes={attendanceTypes}
+          savingPcStatusFor={savingPcStatusFor}
+          pcStatusError={pcStatusError}
           onClose={() => setRemarksMeetingId(null)}
           onSave={(meetingId, text) => onSaveRemarks(meetingId, text)}
           onUploadFile={onUploadFile}
           onViewFile={onViewFile}
+          onSavePcStatus={onSavePcStatus}
         />
       )}
     </>

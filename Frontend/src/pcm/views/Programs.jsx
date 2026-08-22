@@ -182,6 +182,9 @@ export default function Programs() {
   const [remarksError, setRemarksError] = useState(null); // { meetingId, message } for whichever save last failed
   const [uploadingFileFor, setUploadingFileFor] = useState(null); // meetingId currently uploading, or null
   const [uploadFileError, setUploadFileError] = useState(null); // { meetingId, message } for whichever upload last failed
+  const [attendanceTypes, setAttendanceTypes] = useState([]); // PC status dropdown options, fetched once
+  const [savingPcStatusFor, setSavingPcStatusFor] = useState(null); // meetingId currently saving, or null
+  const [pcStatusError, setPcStatusError] = useState(null); // { meetingId, message } for whichever save last failed
   const [leaderLogEntries, setLeaderLogEntries] = useState(null); // other programmes' Update modal rows — real, from GET .../log-entries
   const [addingLogEntry, setAddingLogEntry] = useState(false);
   const [addLogEntryError, setAddLogEntryError] = useState(null);
@@ -192,6 +195,13 @@ export default function Programs() {
   const [monthlyError, setMonthlyError] = useState(null);
   const [uploadingMonthlyFile, setUploadingMonthlyFile] = useState(false);
   const [monthlyFileError, setMonthlyFileError] = useState(null);
+  // The monthly-activity modal's own month, seeded from the page's `month`
+  // when it opens but changeable from inside the modal from there on — these
+  // three programmes have no date field, only ever one record a month, so
+  // reaching a month other than the one selected on the page (to backfill a
+  // missed one, say) has to happen without touching the page-level filter
+  // and its summary cards.
+  const [monthlyModalMonth, setMonthlyModalMonth] = useState(null);
   const [remarksByMid, setRemarksByMid] = useState({}); // other activities' remarks overlay
   const [uploadsByMid, setUploadsByMid] = useState({}); // other activities' attendance uploads
   const [selectedAc, setSelectedAc] = useState(null); // narrows the member card to one Assembly within the open role/activity
@@ -213,6 +223,16 @@ export default function Programs() {
       y: 14, autoAlpha: 0, duration: .4, stagger: .06
     });
   }, [month, activitySummary]);
+
+  // The PC status dropdown's own options — a fixed roster, fetched once
+  // rather than per month the way the Overview table below is.
+  useEffect(() => {
+    let cancelled = false;
+    api.programAttendanceTypes()
+      .then((rows) => { if (!cancelled) setAttendanceTypes(rows); })
+      .catch(() => { if (!cancelled) setAttendanceTypes([]); });
+    return () => { cancelled = true; };
+  }, []);
 
   // The Overview table's only data source — refired whenever `month` picks a
   // new calendar month, or `monthMode` flips to/from Overall. Overall omits
@@ -315,6 +335,22 @@ export default function Programs() {
   const viewLeaderMeetingFile = (meetingId) =>
     api.getLeaderMeetingFileUrl(updateMid, meetingId).then((r) => r.url);
 
+  // Same in-place patch as remarks/file above — a PC user's own pick from
+  // `attendanceTypes`, not derived the way `attended` is.
+  const saveLeaderMeetingPcStatus = async (meetingId, attendanceTypeId) => {
+    setSavingPcStatusFor(meetingId);
+    setPcStatusError(null);
+    try {
+      await api.saveLeaderMeetingPcStatus(updateMid, meetingId, attendanceTypeId);
+      const picked = attendanceTypes.find((t) => t.id === attendanceTypeId) || null;
+      setLeaderMeetings((cur) => (cur || []).map((r) => (r.meetingId === meetingId ? { ...r, pcStatus: picked } : r)));
+    } catch (err) {
+      setPcStatusError({ meetingId, message: err.message });
+    } finally {
+      setSavingPcStatusFor(null);
+    }
+  };
+
   // The dated-log programmes' Update modal: the leader's own hand-added log
   // for the open programme/month, refetched whenever the modal opens for a
   // different leader, the programme changes, or the month changes — same
@@ -335,12 +371,16 @@ export default function Programs() {
   // Prepends the new row rather than refetching. Returns the saved row (with
   // its real id) on success, or `null` after recording the error — the modal
   // reads a falsy return as "stay open, the error is already showing".
+  // Reloads the two summary cards too: a leader's first entry for the month
+  // is what moves them from Not updated to Updated, same reasoning as
+  // `saveMonthlyActivity` below.
   const addLeaderLogEntry = async (date, remarks) => {
     setAddingLogEntry(true);
     setAddLogEntryError(null);
     try {
       const saved = await api.addLeaderLogEntry(updateMid, openRow.activityId, date, remarks);
       setLeaderLogEntries((cur) => [saved, ...(cur || [])]);
+      await reloadSummaries();
       return saved;
     } catch (err) {
       setAddLogEntryError(err.message);
@@ -350,9 +390,12 @@ export default function Programs() {
     }
   };
 
+  // Deleting a leader's only entry for the month can move them back to Not
+  // updated, so this reloads the summaries too.
   const deleteLeaderLogEntry = async (entryId) => {
     await api.deleteLeaderLogEntry(updateMid, entryId);
     setLeaderLogEntries((cur) => (cur || []).filter((r) => r.id !== entryId));
+    await reloadSummaries();
   };
 
   // Same in-place patch as the meeting/monthly file uploads — the entry
@@ -374,18 +417,28 @@ export default function Programs() {
   const viewLogEntryFile = (entryId) =>
     api.getLeaderLogEntryFileUrl(updateMid, entryId).then((r) => r.url);
 
+  // Seeds the modal's own month from the page's the moment it opens for a
+  // monthly activity — not on every `month` tick, since the page filter
+  // stays reachable underneath and must not yank the modal to a different
+  // month while it's open.
+  useEffect(() => {
+    if (updateMid === null || !isMonthlyActivity(openRow?.activity)) return;
+    setMonthlyModalMonth(month);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updateMid]);
+
   // Pedala Sevalo / Swatch Andhra / Pattadar Passbook's Update modal: this
   // leader's one `leader_program_activity` record for the open programme and
-  // month. Same shape as the two effects above — `null` while in flight, and
-  // a failure loads as an unrecorded month rather than leaving the modal on
-  // "Loading…" forever.
+  // whichever month is picked inside the modal. Same shape as the two
+  // effects above — `null` while in flight, and a failure loads as an
+  // unrecorded month rather than leaving the modal on "Loading…" forever.
   useEffect(() => {
-    if (updateMid === null || !isMonthlyActivity(openRow?.activity)) { setMonthlyRecord(null); return; }
+    if (updateMid === null || !isMonthlyActivity(openRow?.activity) || !monthlyModalMonth) { setMonthlyRecord(null); return; }
     let cancelled = false;
     setMonthlyRecord(null);
     setMonthlyError(null);
     setMonthlyFileError(null);
-    const year = month.getFullYear(), mo = month.getMonth() + 1;
+    const year = monthlyModalMonth.getFullYear(), mo = monthlyModalMonth.getMonth() + 1;
     api.programLeaderMonthlyActivity(updateMid, openRow.activityId, year, mo)
       .then((row) => { if (!cancelled) setMonthlyRecord(row); })
       .catch((err) => {
@@ -394,7 +447,7 @@ export default function Programs() {
         setMonthlyError(err.message);
       });
     return () => { cancelled = true; };
-  }, [updateMid, openRow, month]);
+  }, [updateMid, openRow, monthlyModalMonth]);
 
   // Re-reads the Overview table in place — no `setActivitySummary(null)`
   // first, unlike the month effect: its figures are only a few counts out of
@@ -411,6 +464,15 @@ export default function Programs() {
     }
   };
 
+  // Only the currently displayed month's summary cards are on screen, so a
+  // save against some other month picked inside the modal has nothing there
+  // to move.
+  const reloadSummariesIfCurrentMonth = async () => {
+    if (monthlyModalMonth.getFullYear() === month.getFullYear() && monthlyModalMonth.getMonth() === month.getMonth()) {
+      await reloadSummaries();
+    }
+  };
+
   // Returns true only on a save that landed, which is what keeps the modal
   // open on failure. A success reloads the summary cards: this table is where
   // their Updated/Not updated figures come from, so the row just written
@@ -421,11 +483,11 @@ export default function Programs() {
   const saveMonthlyActivity = async (remarks) => {
     setSavingMonthly(true);
     setMonthlyError(null);
-    const year = month.getFullYear(), mo = month.getMonth() + 1;
+    const year = monthlyModalMonth.getFullYear(), mo = monthlyModalMonth.getMonth() + 1;
     try {
       const saved = await api.saveLeaderMonthlyActivity(updateMid, openRow.activityId, year, mo, remarks);
       setMonthlyRecord((cur) => ({ ...cur, ...saved }));
-      await reloadSummaries();
+      await reloadSummariesIfCurrentMonth();
       return true;
     } catch (err) {
       setMonthlyError(err.message);
@@ -444,11 +506,11 @@ export default function Programs() {
   const uploadMonthlyActivityFile = async (file) => {
     setUploadingMonthlyFile(true);
     setMonthlyFileError(null);
-    const year = month.getFullYear(), mo = month.getMonth() + 1;
+    const year = monthlyModalMonth.getFullYear(), mo = monthlyModalMonth.getMonth() + 1;
     try {
       const saved = await api.uploadLeaderMonthlyActivityFile(updateMid, openRow.activityId, year, mo, file);
       setMonthlyRecord((cur) => ({ ...cur, ...saved }));
-      await reloadSummaries();
+      await reloadSummariesIfCurrentMonth();
     } catch (err) {
       setMonthlyFileError(err.message);
     } finally {
@@ -457,7 +519,7 @@ export default function Programs() {
   };
 
   const viewMonthlyActivityFile = () => {
-    const year = month.getFullYear(), mo = month.getMonth() + 1;
+    const year = monthlyModalMonth.getFullYear(), mo = monthlyModalMonth.getMonth() + 1;
     return api.getLeaderMonthlyActivityFileUrl(updateMid, openRow.activityId, year, mo).then((r) => r.url);
   };
 
@@ -467,6 +529,9 @@ export default function Programs() {
   const pickCustomMonth = (mo) => { setMonthMode('custom'); setMonth((d) => new Date(d.getFullYear(), +mo, 1)); };
   const pickCustomYear = (yr) => { setMonthMode('custom'); setMonth((d) => new Date(+yr, d.getMonth(), 1)); };
   const monthTitle = monthMode === 'overall' ? 'All time' : month.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  const monthlyModalTitle = monthlyModalMonth
+    ? monthlyModalMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+    : '';
 
   const activityRows = activitySummary ?? [];
 
@@ -786,18 +851,25 @@ export default function Programs() {
           remarksError={remarksError}
           uploadingFileFor={uploadingFileFor}
           uploadFileError={uploadFileError}
+          attendanceTypes={attendanceTypes}
+          savingPcStatusFor={savingPcStatusFor}
+          pcStatusError={pcStatusError}
           onClose={() => setUpdateMid(null)}
           onSaveRemarks={saveLeaderMeetingRemarks}
           onUploadFile={uploadLeaderMeetingFile}
           onViewFile={viewLeaderMeetingFile}
+          onSavePcStatus={saveLeaderMeetingPcStatus}
         />
       )}
 
-      {monthlyActivity && updateMember && (
+      {monthlyActivity && updateMember && monthlyModalMonth && (
         <LeaderMonthlyActivityModal
           member={updateMember}
           activity={openRow?.activity}
-          monthTitle={monthTitle}
+          monthTitle={monthlyModalTitle}
+          year={monthlyModalMonth.getFullYear()}
+          monthIndex={monthlyModalMonth.getMonth()}
+          onMonthChange={(y, mo) => setMonthlyModalMonth(new Date(y, mo, 1))}
           record={monthlyRecord}
           saving={savingMonthly}
           saveError={monthlyError}

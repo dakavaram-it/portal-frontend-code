@@ -28,6 +28,7 @@ const SORT_KEYS = {
   role: (r) => blank(r.role).toLowerCase(),
   mobile: (r) => blank(r.mobile),
   cadreId: (r) => blank(r.cadreId),
+  membershipId: (r) => blank(r.membershipId),
   // `attended` means two different things depending on the variant (see
   // program_leaders' docstring) — a real `meeting_attendance` fact for
   // Calendar Meetings, "has a leader_program_activity row this month" for
@@ -89,6 +90,7 @@ export default function MemberActivityCard({
               <SortHead label="Role" sortKey="role" active={sortKey === 'role'} dir={sortDir} onSort={onSort} />
               <SortHead label="Mobile" sortKey="mobile" active={sortKey === 'mobile'} dir={sortDir} onSort={onSort} />
               <SortHead label="Cadre ID" sortKey="cadreId" active={sortKey === 'cadreId'} dir={sortDir} onSort={onSort} />
+              <SortHead label="Membership ID" sortKey="membershipId" active={sortKey === 'membershipId'} dir={sortDir} onSort={onSort} />
               {showAttended && (
                 <SortHead label="Attended" sortKey="attended" active={sortKey === 'attended'} dir={sortDir} onSort={onSort} />
               )}
@@ -110,6 +112,7 @@ export default function MemberActivityCard({
                   <td>{blank(m.role)}</td>
                   <td>{blank(m.mobile)}</td>
                   <td>{blank(m.cadreId)}</td>
+                  <td className="mono">{blank(m.membershipId)}</td>
                   {showAttended && (
                     <td>
                       {m.attended

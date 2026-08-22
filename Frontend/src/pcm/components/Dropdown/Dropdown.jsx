@@ -7,7 +7,7 @@ import './Dropdown.css';
    viewport), so there is no reliable way to force "always opens down, capped
    height, scrolls inside" through one. This owns its own open state and
    positions the panel below the trigger unconditionally. */
-export default function Dropdown({ id, label, value, onChange, options }) {
+export default function Dropdown({ id, label, value, onChange, options, disabled }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const current = options.find((o) => o.value === value);
@@ -29,7 +29,7 @@ export default function Dropdown({ id, label, value, onChange, options }) {
   return (
     <div className="dd" ref={rootRef}>
       <button
-        id={id} className="dd-trigger" type="button"
+        id={id} className="dd-trigger" type="button" disabled={disabled}
         aria-haspopup="listbox" aria-expanded={open} aria-label={label}
         onClick={() => setOpen((o) => !o)}
       >

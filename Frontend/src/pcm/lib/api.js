@@ -118,6 +118,21 @@ export const api = {
       body: JSON.stringify({ remarks })
     }),
 
+  // The PC status dropdown's own options — `party_track.attendance_type`,
+  // Conducted already excluded server-side. Same fixed-roster shape as
+  // programRoles/programActivities.
+  programAttendanceTypes: () => request('/api/programs/attendance-types'),
+
+  /* Saves one meeting's PC status for one leader, onto the same
+     `leader_meeting_attendance` row the remarks/file calls write to — a
+     PC user's own pick from programAttendanceTypes, not derived from
+     attendance the way `attended` is. */
+  saveLeaderMeetingPcStatus: (leaderId, meetingId, attendanceTypeId) =>
+    request(`/api/programs/leaders/${seg(leaderId)}/meetings/${seg(meetingId)}/pc-status`, {
+      method: 'PUT',
+      body: JSON.stringify({ attendanceTypeId })
+    }),
+
   /* Saves one meeting's file for one leader onto the same
      `leader_meeting_attendance` row the remarks above write to. */
   uploadLeaderMeetingFile: (leaderId, meetingId, file) =>
