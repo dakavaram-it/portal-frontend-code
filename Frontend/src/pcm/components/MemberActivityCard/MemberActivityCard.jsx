@@ -28,10 +28,11 @@ const SORT_KEYS = {
   role: (r) => blank(r.role).toLowerCase(),
   mobile: (r) => blank(r.mobile),
   cadreId: (r) => blank(r.cadreId),
-  // Calendar Meetings only: `attended` is whether this leader has a
-  // `meeting_attendance` row for any meeting they were invited to that month
-  // (see program_leaders' docstring). The service sends the field for no
-  // other programme, so no other variant shows the column.
+  // `attended` means two different things depending on the variant (see
+  // program_leaders' docstring) — a real `meeting_attendance` fact for
+  // Calendar Meetings, "has a leader_program_activity row this month" for
+  // the three monthly activities — but the service only ever sends the
+  // field for those two variants, so no other variant shows the column.
   attended: (r) => (r.attended ? 1 : 0)
 };
 
@@ -49,10 +50,11 @@ export default function MemberActivityCard({
   const loading = members === null;
   const rows = members || [];
   const entriesOnly = variant === 'calendar' || variant === 'monthly' || variant === 'log';
-  // Calendar Meetings' attendance is a real `meeting_attendance` fact, not
-  // something to hand-edit — so this variant alone shows a read-only
-  // Attended / Not attended pill.
-  const calendarVariant = variant === 'calendar';
+  // Calendar Meetings and the three monthly activities are the only variants
+  // `program_leaders` sends an `attended` fact for (a real one for the
+  // former, "recorded this month" for the latter — see its docstring) — a
+  // read-only pill, never something to hand-edit here.
+  const showAttended = variant === 'calendar' || variant === 'monthly';
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
   const onSort = (key) => {
@@ -87,7 +89,7 @@ export default function MemberActivityCard({
               <SortHead label="Role" sortKey="role" active={sortKey === 'role'} dir={sortDir} onSort={onSort} />
               <SortHead label="Mobile" sortKey="mobile" active={sortKey === 'mobile'} dir={sortDir} onSort={onSort} />
               <SortHead label="Cadre ID" sortKey="cadreId" active={sortKey === 'cadreId'} dir={sortDir} onSort={onSort} />
-              {calendarVariant && (
+              {showAttended && (
                 <SortHead label="Attended" sortKey="attended" active={sortKey === 'attended'} dir={sortDir} onSort={onSort} />
               )}
               {!entriesOnly && <th scope="col" className="action-cell">Upload</th>}
@@ -108,7 +110,7 @@ export default function MemberActivityCard({
                   <td>{blank(m.role)}</td>
                   <td>{blank(m.mobile)}</td>
                   <td>{blank(m.cadreId)}</td>
-                  {calendarVariant && (
+                  {showAttended && (
                     <td>
                       {m.attended
                         ? <span className="pill pill-present"><i className="dot" />Attended</span>

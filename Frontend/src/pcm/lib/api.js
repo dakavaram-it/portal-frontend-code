@@ -41,6 +41,32 @@ async function request(path, options) {
 
 const seg = encodeURIComponent;
 
+/* Shared by every real, persisted file upload in this module (the monthly
+   activities' and Calendar Meetings' Update modals — everywhere else a
+   picked file is still session-only). Its own `fetch`, not `request()`: a
+   multipart body must not carry `Content-Type: application/json`, and the
+   browser has to set the multipart boundary itself, so this builds
+   `FormData` and leaves the header for fetch to fill in. Unlike the
+   portal's own `uploadNominationFile`, these routes do sit behind the auth
+   guard, so the bearer token still goes on — dropping it here would just be
+   reintroducing that gap on more endpoints. */
+async function uploadFile(path, fields) {
+  const token = getToken();
+  const form = new FormData();
+  for (const [key, value] of Object.entries(fields)) form.append(key, value);
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form
+  });
+  if (!res.ok) {
+    if (res.status === 401) sessionExpired();
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail || `Request failed (${res.status})`);
+  }
+  return res.json();
+}
+
 export const api = {
   meetings: (from, to) => request(`/api/meetings?from=${from}&to=${to}`),
   programs: (from, to) => request(`/api/programs?from=${from}&to=${to}`),
@@ -85,6 +111,17 @@ export const api = {
       body: JSON.stringify({ remarks })
     }),
 
+  /* Saves one meeting's file for one leader onto the same
+     `leader_meeting_attendance` row the remarks above write to. */
+  uploadLeaderMeetingFile: (leaderId, meetingId, file) =>
+    uploadFile(`/api/programs/leaders/${seg(leaderId)}/meetings/${seg(meetingId)}/file`, { file }),
+
+  /* A fresh 5-minute link, generated on every call rather than cached — the
+     bucket blocks direct/public access, so `filePath` alone is never
+     fetchable. */
+  getLeaderMeetingFileUrl: (leaderId, meetingId) =>
+    request(`/api/programs/leaders/${seg(leaderId)}/meetings/${seg(meetingId)}/file-url`),
+
   /* Pedala Sevalo / Swatch Andhra / Pattadar Passbook's Update modal: this
      leader's single record for one programme and month, off
      `party_track.leader_program_activity` — the same table the two summary
@@ -110,6 +147,18 @@ export const api = {
       body: JSON.stringify({ programId, year, month, remarks })
     }),
 
+  uploadLeaderMonthlyActivityFile: (leaderId, programId, year, month, file) =>
+    uploadFile(`/api/programs/leaders/${seg(leaderId)}/monthly-activity/file`, { program_id: programId, year, month, file }),
+
+  /* A fresh 5-minute link, generated on every call rather than cached — the
+     bucket blocks direct/public access, so `filePath` alone is never
+     fetchable, the same posture the portal's own nomination-file link has. */
+  getLeaderMonthlyActivityFileUrl: (leaderId, programId, year, month) =>
+    request(
+      `/api/programs/leaders/${seg(leaderId)}/monthly-activity/file-url` +
+        `?program_id=${seg(programId)}&year=${year}&month=${month}`
+    ),
+
   /* The dated-log programmes' Update modal: a leader's own hand-added
      date/remarks entries for one programme/month, off
      `party_track.leader_meetings` — not `leader_meeting_attendance` (Calendar
@@ -122,6 +171,17 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ programId, date, remarks })
     }),
+
+  /* Uploads onto an existing entry by its own id — `addLeaderLogEntry`
+     already created the row. */
+  uploadLeaderLogEntryFile: (leaderId, entryId, file) =>
+    uploadFile(`/api/programs/leaders/${seg(leaderId)}/log-entries/${seg(entryId)}/file`, { file }),
+
+  /* A fresh 5-minute link, generated on every call rather than cached — the
+     bucket blocks direct/public access, so `filePath` alone is never
+     fetchable. */
+  getLeaderLogEntryFileUrl: (leaderId, entryId) =>
+    request(`/api/programs/leaders/${seg(leaderId)}/log-entries/${seg(entryId)}/file-url`),
 
   deleteLeaderLogEntry: (leaderId, entryId) =>
     request(`/api/programs/leaders/${seg(leaderId)}/log-entries/${seg(entryId)}`, { method: 'DELETE' }),

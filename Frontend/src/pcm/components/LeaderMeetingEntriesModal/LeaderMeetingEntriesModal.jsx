@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
-import AttendanceUploadModal from '../AttendanceUploadModal/AttendanceUploadModal.jsx';
 import Dropdown from '../Dropdown/Dropdown.jsx';
 import Icon from '../Icon/Icon.jsx';
 import { api } from '../../lib/api.js';
@@ -29,10 +28,12 @@ function MeetingRemarksEditor({
   monthMeetings,
   savingMeetingId,
   remarksError,
-  filesByMeetingId,
+  uploadingFileFor,
+  uploadFileError,
   onClose,
   onSave,
-  onPickFile
+  onUploadFile,
+  onViewFile
 }) {
   const [text, setText] = useState(row.remarks || '');
   const [editable, setEditable] = useState(!row.remarks);
@@ -41,6 +42,8 @@ function MeetingRemarksEditor({
   const [options, setOptions] = useState(monthMeetings);
   const [loadedMonth, setLoadedMonth] = useState(row.date ? row.date.slice(0, 7) : dateValue.slice(0, 7));
   const [optionsLoading, setOptionsLoading] = useState(false);
+  const [viewingFile, setViewingFile] = useState(false);
+  const [viewFileError, setViewFileError] = useState('');
   const backdropRef = useRef(null);
   const panelRef = useRef(null);
   const textRef = useRef(null);
@@ -52,7 +55,8 @@ function MeetingRemarksEditor({
   const selected = canPickMeeting ? options.find((m) => m.meetingId === selectedId) || null : row;
   const saving = selected != null && savingMeetingId === selected.meetingId;
   const error = selected != null && remarksError?.meetingId === selected.meetingId ? remarksError.message : '';
-  const file = selected != null ? filesByMeetingId[selected.meetingId] : null;
+  const uploadingFile = selected != null && uploadingFileFor === selected.meetingId;
+  const fileError = selected != null && uploadFileError?.meetingId === selected.meetingId ? uploadFileError.message : '';
 
   useLayoutEffect(() => {
     if (prefersReduced()) return;
@@ -103,6 +107,20 @@ function MeetingRemarksEditor({
     value: m.meetingId,
     label: m.meetingType + (m.date ? ' · ' + fmtDate(m.date) : '')
   }));
+
+  const viewFile = async () => {
+    if (!selected) return;
+    setViewingFile(true);
+    setViewFileError('');
+    try {
+      const url = await onViewFile(selected.meetingId);
+      window.open(url, '_blank', 'noopener');
+    } catch (err) {
+      setViewFileError(err.message);
+    } finally {
+      setViewingFile(false);
+    }
+  };
 
   return (
     <div className="modal-backdrop" ref={backdropRef} onClick={(e) => { if (e.target === backdropRef.current) onClose(); }}>
@@ -186,21 +204,30 @@ function MeetingRemarksEditor({
 
           {canPickMeeting && editable && (
             <div className="field">
-              <label>Upload</label>
+              <label>File</label>
+              {selected?.filePath && (
+                <button className="btn btn-sm" type="button" disabled={viewingFile} onClick={viewFile}>
+                  <Icon name="eye" sm /> {viewingFile ? 'Opening…' : 'View file'}
+                </button>
+              )}
               <label className="upload-drop">
                 <Icon name="upload" />
-                <span className="upload-drop-label">{file ? 'Replace file' : 'Choose a file to upload'}</span>
-                {file && <span className="upload-file-name">{file.name}</span>}
+                <span className="upload-drop-label">
+                  {uploadingFile ? 'Uploading…' : selected?.filePath ? 'Replace file' : 'Choose a file to upload'}
+                </span>
                 <input
                   type="file"
                   accept="image/*,.pdf,application/pdf"
+                  disabled={uploadingFile}
                   onChange={(e) => {
                     const next = e.target.files?.[0] || null;
-                    if (!next || !selected) return;
-                    onPickFile(selected.meetingId, { name: next.name, type: next.type, url: URL.createObjectURL(next) });
+                    e.target.value = '';
+                    if (next && selected) onUploadFile(selected.meetingId, next);
                   }}
                 />
               </label>
+              {fileError && <div className="field-error">{fileError}</div>}
+              {viewFileError && <div className="field-error">{viewFileError}</div>}
             </div>
           )}
 
@@ -234,38 +261,32 @@ function MeetingRemarksEditor({
 // the leader pick a different real meeting from that month (or an earlier
 // one) to record the remark/file against — see `MeetingRemarksEditor` above
 // — everything else here is fill-in-place, there is nothing to Add or
-// Delete outright.
+// Delete outright. Remarks and files both persist into
+// `leader_meeting_attendance` — see `onSaveRemarks`/`onUploadFile` below.
 export default function LeaderMeetingEntriesModal({
   member,
   meetings,
   savingRemarksFor,
   remarksError,
+  uploadingFileFor,
+  uploadFileError,
   onClose,
-  onSaveRemarks
+  onSaveRemarks,
+  onUploadFile,
+  onViewFile
 }) {
   const [remarksMeetingId, setRemarksMeetingId] = useState(null);
-  const [uploadMeetingId, setUploadMeetingId] = useState(null);
-  const [uploadMode, setUploadMode] = useState('upload');
-  // Session-only: there is no upload endpoint yet, so a picked file lives
-  // here for this visit and is never sent anywhere — same posture the
-  // default variant's own AttendanceUploadModal already has.
-  const [filesByMeetingId, setFilesByMeetingId] = useState({});
+  const [viewingFileId, setViewingFileId] = useState(null);
+  const [viewFileError, setViewFileError] = useState(null); // { meetingId, message }
   const openerRef = useRef(document.activeElement);
   const backdropRef = useRef(null);
   const panelRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const uploadTargetId = useRef(null);
 
   const loading = meetings === null;
   const rows = meetings || [];
   const remarksRow = remarksMeetingId !== null ? rows.find((r) => r.meetingId === remarksMeetingId) : null;
-  const uploadRow = uploadMeetingId !== null ? rows.find((r) => r.meetingId === uploadMeetingId) : null;
-
-  const stageFile = (meetingId, file) => {
-    setFilesByMeetingId((cur) => {
-      const prev = cur[meetingId];
-      if (prev?.url) URL.revokeObjectURL(prev.url);
-      return { ...cur, [meetingId]: file };
-    });
-  };
 
   useLayoutEffect(() => {
     if (prefersReduced()) return;
@@ -285,7 +306,7 @@ export default function LeaderMeetingEntriesModal({
   }, []);
 
   useEffect(() => {
-    if (remarksRow || uploadRow) return;
+    if (remarksRow) return;
     const onKey = (e) => {
       if (e.key === 'Escape') { onClose(); return; }
       if (e.key !== 'Tab') return;
@@ -299,14 +320,32 @@ export default function LeaderMeetingEntriesModal({
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose, remarksRow, uploadRow]);
+  }, [onClose, remarksRow]);
+
+  const triggerUpload = (meetingId) => {
+    uploadTargetId.current = meetingId;
+    fileInputRef.current?.click();
+  };
+
+  const viewFile = async (meetingId) => {
+    setViewingFileId(meetingId);
+    setViewFileError(null);
+    try {
+      const url = await onViewFile(meetingId);
+      window.open(url, '_blank', 'noopener');
+    } catch (err) {
+      setViewFileError({ meetingId, message: err.message });
+    } finally {
+      setViewingFileId(null);
+    }
+  };
 
   return (
     <>
       <div
         className="modal-backdrop"
         ref={backdropRef}
-        onClick={(e) => { if (!remarksRow && !uploadRow && e.target === backdropRef.current) onClose(); }}
+        onClick={(e) => { if (!remarksRow && e.target === backdropRef.current) onClose(); }}
       >
         <div
           className="modal entries-modal"
@@ -342,43 +381,52 @@ export default function LeaderMeetingEntriesModal({
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((row) => {
-                      const file = filesByMeetingId[row.meetingId];
-                      const hasFile = Boolean(file || row.filePath);
-                      return (
-                        <tr key={row.meetingId}>
-                          <td>{row.meetingType}</td>
-                          <td>{row.date ? fmtDate(row.date) : ''}</td>
-                          <td>
-                            {row.attended
-                              ? <span className="pill pill-present"><i className="dot" />Attended</span>
-                              : <span className="pill pill-absent"><i className="dot" />Not attended</span>}
-                          </td>
-                          <td className="entries-remarks">
-                            <button className="cell-count" type="button" onClick={() => setRemarksMeetingId(row.meetingId)}>
-                              {row.remarks || 'No remarks has been provided'}
+                    {rows.map((row) => (
+                      <tr key={row.meetingId}>
+                        <td>{row.meetingType}</td>
+                        <td>{row.date ? fmtDate(row.date) : ''}</td>
+                        <td>
+                          {row.attended
+                            ? <span className="pill pill-present"><i className="dot" />Attended</span>
+                            : <span className="pill pill-absent"><i className="dot" />Not attended</span>}
+                        </td>
+                        <td className="entries-remarks">
+                          <button className="cell-count" type="button" onClick={() => setRemarksMeetingId(row.meetingId)}>
+                            {row.remarks || 'No remarks has been provided'}
+                          </button>
+                        </td>
+                        <td className="action-cell">
+                          {row.filePath && (
+                            <button
+                              className="icon-btn"
+                              type="button"
+                              title="View file"
+                              aria-label="View file"
+                              disabled={viewingFileId === row.meetingId}
+                              onClick={() => viewFile(row.meetingId)}
+                            >
+                              <Icon name="eye" sm />
                             </button>
-                          </td>
-                          <td className="action-cell">
-                            {hasFile ? (
-                              <button
-                                className="icon-btn"
-                                type="button"
-                                title="View file"
-                                aria-label="View file"
-                                onClick={() => { setUploadMode('view'); setUploadMeetingId(row.meetingId); }}
-                              >
-                                <Icon name="eye" sm />
-                              </button>
-                            ) : (
-                              <button className="cell-count" type="button" onClick={() => { setUploadMode('upload'); setUploadMeetingId(row.meetingId); }}>
-                                Files has not been updated
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                          )}
+                          <button
+                            className="icon-btn"
+                            type="button"
+                            title={row.filePath ? 'Replace file' : 'Upload file'}
+                            aria-label={row.filePath ? 'Replace file' : 'Upload file'}
+                            disabled={uploadingFileFor === row.meetingId}
+                            onClick={() => triggerUpload(row.meetingId)}
+                          >
+                            <Icon name="upload" sm />
+                          </button>
+                          {uploadFileError?.meetingId === row.meetingId && (
+                            <div className="field-error">{uploadFileError.message}</div>
+                          )}
+                          {viewFileError?.meetingId === row.meetingId && (
+                            <div className="field-error">{viewFileError.message}</div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -398,31 +446,36 @@ export default function LeaderMeetingEntriesModal({
         </div>
       </div>
 
+      {/* One shared, hidden input for every row's Upload/Replace button —
+          `uploadTargetId` (a ref, not state: picking a file must not
+          re-render the whole table) says which meeting the next picked
+          file belongs to. */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,.pdf,application/pdf"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (file && uploadTargetId.current != null) onUploadFile(uploadTargetId.current, file);
+        }}
+      />
+
       {remarksRow && (
         <MeetingRemarksEditor
           leaderId={member.mid}
           row={remarksRow}
           canPickMeeting={!remarksRow.attended}
           monthMeetings={rows}
-          filesByMeetingId={filesByMeetingId}
           savingMeetingId={savingRemarksFor}
           remarksError={remarksError}
+          uploadingFileFor={uploadingFileFor}
+          uploadFileError={uploadFileError}
           onClose={() => setRemarksMeetingId(null)}
           onSave={(meetingId, text) => onSaveRemarks(meetingId, text)}
-          onPickFile={stageFile}
-        />
-      )}
-
-      {uploadRow && (
-        <AttendanceUploadModal
-          member={{ name: uploadRow.meetingType }}
-          mode={uploadMode}
-          file={filesByMeetingId[uploadRow.meetingId]}
-          onClose={() => setUploadMeetingId(null)}
-          onSave={(file) => {
-            stageFile(uploadRow.meetingId, file);
-            setUploadMeetingId(null);
-          }}
+          onUploadFile={onUploadFile}
+          onViewFile={onViewFile}
         />
       )}
     </>

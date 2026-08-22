@@ -28,11 +28,17 @@ export default function LeaderMonthlyActivityModal({
   record,
   saving,
   saveError,
+  uploadingFile,
+  uploadError,
   onClose,
-  onSave
+  onSave,
+  onUploadFile,
+  onViewFile
 }) {
   const [text, setText] = useState('');
   const [dirty, setDirty] = useState(false);
+  const [viewingFile, setViewingFile] = useState(false);
+  const [viewFileError, setViewFileError] = useState('');
   const openerRef = useRef(document.activeElement);
   const backdropRef = useRef(null);
   const panelRef = useRef(null);
@@ -96,6 +102,29 @@ export default function LeaderMonthlyActivityModal({
     setDirty(false);
   };
 
+  const pickFile = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // lets picking the same filename again re-fire onChange
+    if (file) onUploadFile(file);
+  };
+
+  // A fresh presigned link is fetched on every click rather than kept around
+  // — the same reason the backend generates one per call instead of caching
+  // it: a link left sitting in state would still work past whatever moment
+  // it should have expired.
+  const viewFile = async () => {
+    setViewingFile(true);
+    setViewFileError('');
+    try {
+      const url = await onViewFile();
+      window.open(url, '_blank', 'noopener');
+    } catch (err) {
+      setViewFileError(err.message);
+    } finally {
+      setViewingFile(false);
+    }
+  };
+
   return (
     <div
       className="modal-backdrop"
@@ -144,6 +173,29 @@ export default function LeaderMonthlyActivityModal({
             />
             <div className="field-hint">{text.trim().length} characters · Ctrl + Enter saves</div>
             {saveError && <div className="field-error">{saveError}</div>}
+          </div>
+
+          <div className="field">
+            <label>File for {monthTitle}</label>
+            {!loading && record.filePath && (
+              <button className="btn btn-sm" type="button" disabled={viewingFile} onClick={viewFile}>
+                <Icon name="eye" sm /> {viewingFile ? 'Opening…' : 'View file'}
+              </button>
+            )}
+            <label className="upload-drop">
+              <Icon name="upload" />
+              <span className="upload-drop-label">
+                {uploadingFile ? 'Uploading…' : record?.filePath ? 'Replace file' : 'Choose a file to upload'}
+              </span>
+              <input
+                type="file"
+                accept="image/*,.pdf,application/pdf"
+                disabled={loading || uploadingFile}
+                onChange={pickFile}
+              />
+            </label>
+            {uploadError && <div className="field-error">{uploadError}</div>}
+            {viewFileError && <div className="field-error">{viewFileError}</div>}
           </div>
         </div>
 

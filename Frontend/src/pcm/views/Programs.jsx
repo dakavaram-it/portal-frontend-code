@@ -173,12 +173,18 @@ export default function Programs({ roles = [] }) {
   const [leaderMeetings, setLeaderMeetings] = useState(null); // Calendar Meetings Update modal rows — real, from GET .../meetings
   const [savingRemarksFor, setSavingRemarksFor] = useState(null); // meetingId currently saving, or null
   const [remarksError, setRemarksError] = useState(null); // { meetingId, message } for whichever save last failed
+  const [uploadingFileFor, setUploadingFileFor] = useState(null); // meetingId currently uploading, or null
+  const [uploadFileError, setUploadFileError] = useState(null); // { meetingId, message } for whichever upload last failed
   const [leaderLogEntries, setLeaderLogEntries] = useState(null); // other programmes' Update modal rows — real, from GET .../log-entries
   const [addingLogEntry, setAddingLogEntry] = useState(false);
   const [addLogEntryError, setAddLogEntryError] = useState(null);
+  const [uploadingLogEntryFileFor, setUploadingLogEntryFileFor] = useState(null); // entry id currently uploading, or null
+  const [logEntryFileError, setLogEntryFileError] = useState(null); // { id, message } for whichever upload last failed
   const [monthlyRecord, setMonthlyRecord] = useState(null); // the three monthly programmes' one record — from GET .../monthly-activity
   const [savingMonthly, setSavingMonthly] = useState(false);
   const [monthlyError, setMonthlyError] = useState(null);
+  const [uploadingMonthlyFile, setUploadingMonthlyFile] = useState(false);
+  const [monthlyFileError, setMonthlyFileError] = useState(null);
   const [remarksByMid, setRemarksByMid] = useState({}); // other activities' remarks overlay
   const [uploadsByMid, setUploadsByMid] = useState({}); // other activities' attendance uploads
   const [selectedAc, setSelectedAc] = useState(null); // narrows the member card to one Assembly within the open role/activity
@@ -250,6 +256,7 @@ export default function Programs({ roles = [] }) {
     let cancelled = false;
     setLeaderMeetings(null);
     setRemarksError(null);
+    setUploadFileError(null);
     const year = month.getFullYear(), mo = month.getMonth() + 1;
     api.programLeaderMeetings(updateMid, year, mo)
       .then((rows) => { if (!cancelled) setLeaderMeetings(rows); })
@@ -272,6 +279,25 @@ export default function Programs({ roles = [] }) {
     }
   };
 
+  // Same in-place patch as remarks above, keyed by whichever meeting the
+  // file was uploaded against — not necessarily `updateMid`'s own row, once
+  // a Not-Attended row's Update form has picked a different real meeting.
+  const uploadLeaderMeetingFile = async (meetingId, file) => {
+    setUploadingFileFor(meetingId);
+    setUploadFileError(null);
+    try {
+      const saved = await api.uploadLeaderMeetingFile(updateMid, meetingId, file);
+      setLeaderMeetings((cur) => (cur || []).map((r) => (r.meetingId === meetingId ? { ...r, filePath: saved.filePath } : r)));
+    } catch (err) {
+      setUploadFileError({ meetingId, message: err.message });
+    } finally {
+      setUploadingFileFor(null);
+    }
+  };
+
+  const viewLeaderMeetingFile = (meetingId) =>
+    api.getLeaderMeetingFileUrl(updateMid, meetingId).then((r) => r.url);
+
   // The dated-log programmes' Update modal: the leader's own hand-added log
   // for the open programme/month, refetched whenever the modal opens for a
   // different leader, the programme changes, or the month changes — same
@@ -281,6 +307,7 @@ export default function Programs({ roles = [] }) {
     let cancelled = false;
     setLeaderLogEntries(null);
     setAddLogEntryError(null);
+    setLogEntryFileError(null);
     const year = month.getFullYear(), mo = month.getMonth() + 1;
     api.programLeaderLogEntries(updateMid, openRow.activityId, year, mo)
       .then((rows) => { if (!cancelled) setLeaderLogEntries(rows); })
@@ -311,6 +338,25 @@ export default function Programs({ roles = [] }) {
     setLeaderLogEntries((cur) => (cur || []).filter((r) => r.id !== entryId));
   };
 
+  // Same in-place patch as the meeting/monthly file uploads — the entry
+  // already exists (Add or an earlier row both create it first), this only
+  // ever updates its `filePath`.
+  const uploadLogEntryFile = async (entryId, file) => {
+    setUploadingLogEntryFileFor(entryId);
+    setLogEntryFileError(null);
+    try {
+      const saved = await api.uploadLeaderLogEntryFile(updateMid, entryId, file);
+      setLeaderLogEntries((cur) => (cur || []).map((r) => (r.id === entryId ? { ...r, filePath: saved.filePath } : r)));
+    } catch (err) {
+      setLogEntryFileError({ id: entryId, message: err.message });
+    } finally {
+      setUploadingLogEntryFileFor(null);
+    }
+  };
+
+  const viewLogEntryFile = (entryId) =>
+    api.getLeaderLogEntryFileUrl(updateMid, entryId).then((r) => r.url);
+
   // Pedala Sevalo / Swatch Andhra / Pattadar Passbook's Update modal: this
   // leader's one `leader_program_activity` record for the open programme and
   // month. Same shape as the two effects above — `null` while in flight, and
@@ -321,6 +367,7 @@ export default function Programs({ roles = [] }) {
     let cancelled = false;
     setMonthlyRecord(null);
     setMonthlyError(null);
+    setMonthlyFileError(null);
     const year = month.getFullYear(), mo = month.getMonth() + 1;
     api.programLeaderMonthlyActivity(updateMid, openRow.activityId, year, mo)
       .then((row) => { if (!cancelled) setMonthlyRecord(row); })
@@ -354,14 +401,17 @@ export default function Programs({ roles = [] }) {
   // Returns true only on a save that landed, which is what keeps the modal
   // open on failure. A success reloads the summary cards: this table is where
   // their Updated/Not updated figures come from, so the row just written
-  // moves them, and leaving them stale would read as a lost save.
+  // moves them, and leaving them stale would read as a lost save. Merged
+  // into the existing record rather than replacing it — the save response
+  // carries no `filePath`, and a plain overwrite would blank out a file
+  // uploaded earlier in the same visit until the modal was reopened.
   const saveMonthlyActivity = async (remarks) => {
     setSavingMonthly(true);
     setMonthlyError(null);
     const year = month.getFullYear(), mo = month.getMonth() + 1;
     try {
       const saved = await api.saveLeaderMonthlyActivity(updateMid, openRow.activityId, year, mo, remarks);
-      setMonthlyRecord(saved);
+      setMonthlyRecord((cur) => ({ ...cur, ...saved }));
       await reloadSummaries();
       return true;
     } catch (err) {
@@ -370,6 +420,32 @@ export default function Programs({ roles = [] }) {
     } finally {
       setSavingMonthly(false);
     }
+  };
+
+  // Same merge reasoning as above, in reverse: the upload response carries
+  // no `remarks`, so a plain overwrite would blank those out instead. A
+  // success also reloads the summaries — an upload can be what first
+  // creates this leader's row for the month (see
+  // `_upsert_monthly_activity_row`), which is itself enough to move
+  // Updated/Not updated even before any remark is saved.
+  const uploadMonthlyActivityFile = async (file) => {
+    setUploadingMonthlyFile(true);
+    setMonthlyFileError(null);
+    const year = month.getFullYear(), mo = month.getMonth() + 1;
+    try {
+      const saved = await api.uploadLeaderMonthlyActivityFile(updateMid, openRow.activityId, year, mo, file);
+      setMonthlyRecord((cur) => ({ ...cur, ...saved }));
+      await reloadSummaries();
+    } catch (err) {
+      setMonthlyFileError(err.message);
+    } finally {
+      setUploadingMonthlyFile(false);
+    }
+  };
+
+  const viewMonthlyActivityFile = () => {
+    const year = month.getFullYear(), mo = month.getMonth() + 1;
+    return api.getLeaderMonthlyActivityFileUrl(updateMid, openRow.activityId, year, mo).then((r) => r.url);
   };
 
   const pickThis = () => { setMonthMode('this'); setMonth(thisMonth()); };
@@ -683,8 +759,12 @@ export default function Programs({ roles = [] }) {
           meetings={leaderMeetings}
           savingRemarksFor={savingRemarksFor}
           remarksError={remarksError}
+          uploadingFileFor={uploadingFileFor}
+          uploadFileError={uploadFileError}
           onClose={() => setUpdateMid(null)}
           onSaveRemarks={saveLeaderMeetingRemarks}
+          onUploadFile={uploadLeaderMeetingFile}
+          onViewFile={viewLeaderMeetingFile}
         />
       )}
 
@@ -696,8 +776,12 @@ export default function Programs({ roles = [] }) {
           record={monthlyRecord}
           saving={savingMonthly}
           saveError={monthlyError}
+          uploadingFile={uploadingMonthlyFile}
+          uploadError={monthlyFileError}
           onClose={() => setUpdateMid(null)}
           onSave={saveMonthlyActivity}
+          onUploadFile={uploadMonthlyActivityFile}
+          onViewFile={viewMonthlyActivityFile}
         />
       )}
 
@@ -707,9 +791,13 @@ export default function Programs({ roles = [] }) {
           entries={leaderLogEntries}
           adding={addingLogEntry}
           addError={addLogEntryError}
+          uploadingFileFor={uploadingLogEntryFileFor}
+          uploadFileError={logEntryFileError}
           onClose={() => setUpdateMid(null)}
           onAdd={addLeaderLogEntry}
           onDelete={deleteLeaderLogEntry}
+          onUploadFile={uploadLogEntryFile}
+          onViewFile={viewLogEntryFile}
         />
       )}
 
