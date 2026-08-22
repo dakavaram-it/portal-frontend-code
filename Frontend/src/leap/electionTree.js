@@ -24,7 +24,7 @@
 //
 // NOT BY ELECTION TYPE EITHER: a position's election type is its *constituency's*, not the
 // post's, and the two disagree across the data — Sarpanch and Upa-Sarpanch positions sit
-// under an MPTC constituency, and role 5 Corporator appears under three types. Pinning a
+// under an MPTC constituency, and role 5 Corporator appears under two types. Pinning a
 // card to a type makes it read "not configured" while its own rows sit in the Other group
 // below it.
 //
@@ -74,13 +74,14 @@ export const ELECTION_TREE = [
         cards: [
           { label: 'Chairperson', roleIds: [8] },
           { label: 'Vice-Chairperson', roleIds: [9] },
-          // No proposal_role of its own: municipal-ward seats are filed under role 5
-          // Corporator, which the Corporator card below claims. That is why this card is
-          // empty by definition and why Corporator counts both wards together.
-          // With no rows of its own there is nothing to derive a type label from, so it
-          // names one: proposal_election_type 3, Municipality. The ID, not the name — the
-          // name is looked up from the loaded rows so a rename cannot leave it stale.
-          { label: 'Ward Councillor', roleIds: [], electionTypeId: 3 },
+          // Role 14 Ward Councillor, added to proposal_role after this tree was written.
+          // Municipal-ward seats used to be filed under role 5 Corporator, which is why
+          // this card claimed nothing; they now carry a role of their own, under
+          // proposal_election_type 8 Municipal Ward. Until this card was told about it
+          // every one of those positions fell into the Other group.
+          // electionTypeId is the label to fall back on for an assembly with no ward rows
+          // of its own — the ID, not the name, so a rename cannot leave it stale.
+          { label: 'Ward Councillor', roleIds: [14], electionTypeId: 8 },
         ],
       },
       {
@@ -116,9 +117,9 @@ export const ELECTION_TREE = [
 // mainElectionTypeId — for labelling only, never for claiming
 // ---------------------------------------------------------------------------
 // A card still claims its rows by role id alone (see below). But a role can legitimately
-// span election types — role 5 Corporator holds Municipal Ward, Corporation Ward and a
-// stray MPTC constituency — and a card that names all three reads as nonsense under the
-// one body it sits in. So the BODY says which main_election_type it is, and a card names
+// span election types — role 5 Corporator holds Corporation Ward and a stray MPTC
+// constituency — and a card that names both reads as nonsense under the one body it sits
+// in. So the BODY says which main_election_type it is, and a card names
 // the election type(s) of its own rows within that body: Corporator under Municipal
 // Corporation reads "Corporation Ward", Mayor reads "Corporation".
 //
