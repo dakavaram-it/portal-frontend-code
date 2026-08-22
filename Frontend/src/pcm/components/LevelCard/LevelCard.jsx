@@ -1,7 +1,10 @@
 import Icon from '../Icon/Icon.jsx';
 import { LEVEL_LABEL, badgeClass, fmtDate, num } from '../../lib/format.js';
 import { api } from '../../lib/api.js';
-import { NOT_SCHEDULED_COLUMNS, PC_NOT_UPDATED_COLUMNS, columnsFor } from '../../lib/schedules.js';
+import {
+  NOT_SCHEDULED_COLUMNS, NOT_UPDATED_COLUMNS, PC_NOT_UPDATED_COLUMNS,
+  columnsFor, openDrillProgressive
+} from '../../lib/schedules.js';
 import './LevelCard.css';
 
 // `units` is the App schedule funnel, its own three-bucket partition
@@ -13,23 +16,28 @@ import './LevelCard.css';
 function summarise(meeting) {
   const u = meeting.units || {};
   const pc = meeting.pc;
+  // MCS row count — same figure App & PC Summary lists, not schedule rows.
+  const totalMeetings = meeting.totalMeetings != null
+    ? meeting.totalMeetings
+    : (pc ? pc.total : 0);
   return {
     conducted: u.completed || 0,
     notConducted: u.notConducted || 0,
     // Roster locations this meeting never scheduled at all — outside the
     // App funnel above on the meeting object itself, same as at table level.
     notUpdated: meeting.notScheduled || 0,
+    totalMeetings,
     // A strict two-state read of the PC in-charge's own status: 'Y' is
     // Conducted, anything else (IS NULL, or 'N' on the rare row that
     // carries one) is Not conducted — the two foot to `pc.total` exactly.
     pcConducted: pc ? pc.conducted : null,
     pcNotConducted: pc ? pc.notConducted : null,
-    // Roster locations with no `meeting_conducted_status` row at all — the
-    // PC-side twin of `notUpdated` above, outside `pc.total` on purpose the
-    // same way that one sits outside `units.total`. The backend only ever
-    // sends it inside `pc`, so it reads as "not tracked yet" right along
-    // with `pcConducted`/`pcNotConducted` when `pc` is null, same as those.
-    pcNotUpdated: pc ? pc.notUpdated : null
+    // Roster gap is the primary Not Updated figure; the arithmetic
+    // Total − (Conducted + Not Conducted) is only a backup when the
+    // roster value is missing.
+    pcNotUpdated: pc
+      ? (pc.notUpdated != null ? pc.notUpdated : pc.notUpdatedBackup)
+      : null
   };
 }
 
@@ -47,20 +55,15 @@ function Stat({ label, value, tone, onClick }) {
 export default function LevelCard({ level, meeting, onCount, onSummary, expanded }) {
   const t = summarise(meeting);
   const name = LEVEL_LABEL[level] || level;
-  const open = (label) => onCount(name + ' · Meeting #' + meeting.id + ' · ' + label);
 
-  // The PC stats fetch this one meeting's own rows — `fetcher([meeting.id])`
-  // is the same call LevelTable makes for a whole level, just scoped to a
-  // single-meeting id list, so the count on the button and the rows behind
-  // it are always the same meeting's.
-  const openPc = async (fetcher, columns, label) => {
+  // Same drill helpers LevelTable uses, scoped to this one meeting so the
+  // App/PC modal filters (Assembly / Parliament) see real rows. First page
+  // opens the modal; remaining rows append in the background.
+  const openSlice = (fetcher, columns, label) => {
     const title = name + ' · Meeting #' + meeting.id + ' · ' + label;
-    try {
-      const data = await fetcher([meeting.id]);
-      onCount({ title, rows: data.rows, columns });
-    } catch {
-      onCount({ title, rows: [], columns });
-    }
+    return openDrillProgressive({
+      onCount, title, columns, level, fetcher, meetingIds: [meeting.id]
+    });
   };
 
   return (
@@ -75,22 +78,31 @@ export default function LevelCard({ level, meeting, onCount, onSummary, expanded
 
       <div className="lc-split">
         <div className="lc-box">
-          <Stat label="App Conducted" value={t.conducted} tone="var(--ok)" onClick={() => open('App Conducted')} />
-          <Stat label="App Not Conducted" value={t.notConducted} tone="var(--bad)" onClick={() => open('App Not Conducted')} />
-          <Stat label="App Not Updated" value={t.notUpdated} onClick={() => open('App Not Updated')} />
+          <Stat
+            label="App Conducted" value={t.conducted} tone="var(--ok)"
+            onClick={() => openSlice(api.conductedSchedules, columnsFor(NOT_UPDATED_COLUMNS, level), 'App Conducted')}
+          />
+          <Stat
+            label="App Not Conducted" value={t.notConducted} tone="var(--bad)"
+            onClick={() => openSlice(api.notUpdatedSchedules, columnsFor(NOT_UPDATED_COLUMNS, level), 'App Not Conducted')}
+          />
+          <Stat
+            label="App Not Updated" value={t.notUpdated}
+            onClick={() => openSlice(api.notScheduledSchedules, columnsFor(NOT_SCHEDULED_COLUMNS, level), 'App Not Updated')}
+          />
         </div>
         <div className="lc-box">
           <Stat
             label="PC Conducted" value={t.pcConducted} tone="var(--ok)"
-            onClick={() => openPc(api.pcCompletedSchedules, columnsFor(PC_NOT_UPDATED_COLUMNS, level), 'PC Conducted')}
+            onClick={() => openSlice(api.pcCompletedSchedules, columnsFor(PC_NOT_UPDATED_COLUMNS, level), 'PC Conducted')}
           />
           <Stat
             label="PC Not conducted" value={t.pcNotConducted} tone="var(--accent)"
-            onClick={() => openPc(api.pcNotCompletedSchedules, columnsFor(PC_NOT_UPDATED_COLUMNS, level), 'PC Not conducted')}
+            onClick={() => openSlice(api.pcNotCompletedSchedules, columnsFor(PC_NOT_UPDATED_COLUMNS, level), 'PC Not conducted')}
           />
           <Stat
             label="PC Not Updated" value={t.pcNotUpdated}
-            onClick={() => openPc(api.pcNeverUpdatedSchedules, columnsFor(NOT_SCHEDULED_COLUMNS, level), 'PC Not Updated')}
+            onClick={() => openSlice(api.pcNeverUpdatedSchedules, columnsFor(NOT_SCHEDULED_COLUMNS, level), 'PC Not Updated')}
           />
         </div>
       </div>
@@ -101,7 +113,8 @@ export default function LevelCard({ level, meeting, onCount, onSummary, expanded
         aria-expanded={expanded}
         onClick={() => onSummary(meeting.id)}
       >
-        <span>App &amp; PC summary</span>
+        <span className="lc-summary-label">Total Meetings</span>
+        <span className="lc-summary-total num">{num(t.totalMeetings)}</span>
         <Icon name="arrow-right" sm />
       </button>
     </article>

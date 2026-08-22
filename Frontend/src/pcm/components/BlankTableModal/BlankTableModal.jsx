@@ -1,15 +1,40 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import gsap from 'gsap';
+import Dropdown from '../Dropdown/Dropdown.jsx';
 import Icon from '../Icon/Icon.jsx';
 import { prefersReduced } from '../../lib/motion.js';
 import '../RemarksModal/RemarksModal.css';
 import './BlankTableModal.css';
 
-export default function BlankTableModal({ title, rows, columns, onClose }) {
+const PAINT_CHUNK = 200;
+
+function hasPlace(v) {
+  const s = (v || '').trim();
+  return s && s !== '-' && s !== '—';
+}
+
+// Same place-filter rules as App & PC Summary: PC → Parliament (location is
+// the PC), Unit/Mandal → Assembly, AC → Assembly via location.
+function placeOf(row, level, kind) {
+  if (kind === 'parliament') {
+    return (level === 'PC' ? row.location : row.parliament) || '';
+  }
+  return (level === 'AC' ? row.location : row.assembly) || '';
+}
+
+export default function BlankTableModal({ title, rows, columns, level, placeFilter = true, loading = false, total = null, onClose }) {
   const wired = Array.isArray(rows);
   const openerRef = useRef(document.activeElement);
   const backdropRef = useRef(null);
   const panelRef = useRef(null);
+
+  const showParliamentFilter = placeFilter && level === 'PC';
+  const showAssemblyFilter = placeFilter && (level === 'Unit' || level === 'Mandal' || level === 'AC');
+  const [selectedParliament, setSelectedParliament] = useState(null);
+  const [selectedAssembly, setSelectedAssembly] = useState(null);
+  // Paint in chunks so Unit-scale lists (~thousands of rows) do not freeze
+  // the tab while building the full tbody.
+  const [painted, setPainted] = useState(PAINT_CHUNK);
 
   useLayoutEffect(() => {
     if (prefersReduced()) return;
@@ -44,6 +69,57 @@ export default function BlankTableModal({ title, rows, columns, onClose }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const parliamentOptions = useMemo(() => {
+    if (!showParliamentFilter || !wired) return [];
+    return [...new Set(rows.map((r) => placeOf(r, level, 'parliament')).filter(hasPlace))]
+      .sort((a, b) => a.localeCompare(b));
+  }, [rows, wired, level, showParliamentFilter]);
+
+  const assemblyOptions = useMemo(() => {
+    if (!showAssemblyFilter || !wired) return [];
+    return [...new Set(rows.map((r) => placeOf(r, level, 'assembly')).filter(hasPlace))]
+      .sort((a, b) => a.localeCompare(b));
+  }, [rows, wired, level, showAssemblyFilter]);
+
+  useEffect(() => {
+    if (selectedParliament && !parliamentOptions.includes(selectedParliament)) {
+      setSelectedParliament(null);
+    }
+  }, [selectedParliament, parliamentOptions]);
+
+  useEffect(() => {
+    if (selectedAssembly && !assemblyOptions.includes(selectedAssembly)) {
+      setSelectedAssembly(null);
+    }
+  }, [selectedAssembly, assemblyOptions]);
+
+  const visible = useMemo(() => {
+    if (!wired) return [];
+    let list = rows;
+    if (selectedParliament) {
+      list = list.filter((r) => placeOf(r, level, 'parliament') === selectedParliament);
+    }
+    if (selectedAssembly) {
+      list = list.filter((r) => placeOf(r, level, 'assembly') === selectedAssembly);
+    }
+    return list;
+  }, [rows, wired, level, selectedParliament, selectedAssembly]);
+
+  useEffect(() => {
+    setPainted(PAINT_CHUNK);
+  }, [title, selectedParliament, selectedAssembly]);
+
+  useEffect(() => {
+    if (painted >= visible.length) return;
+    const id = requestAnimationFrame(() => {
+      setPainted((n) => Math.min(n + PAINT_CHUNK, visible.length));
+    });
+    return () => cancelAnimationFrame(id);
+  }, [painted, visible.length]);
+
+  const shown = visible.slice(0, painted);
+  const showFilters = wired && (showParliamentFilter || showAssemblyFilter);
+
   return (
     <div
       className="modal-backdrop"
@@ -62,7 +138,11 @@ export default function BlankTableModal({ title, rows, columns, onClose }) {
           <div>
             <h3 id="drill-title">{title}</h3>
             <div className="who-sub">
-              {wired ? `${rows.length} ${rows.length === 1 ? 'row' : 'rows'}` : 'Detail list — empty until this slice is wired'}
+              {wired
+                ? `${visible.length}${total != null && visible.length !== total ? ` of ${total}` : visible.length !== rows.length ? ` of ${rows.length}` : ''} ${visible.length === 1 ? 'row' : 'rows'}${
+                    loading ? ' · loading…' : painted < visible.length ? ` · showing ${painted}` : ''
+                  }`
+                : 'Detail list — empty until this slice is wired'}
             </div>
           </div>
           <button className="icon-btn drill-close" type="button" aria-label="Close" onClick={onClose}>
@@ -70,6 +150,40 @@ export default function BlankTableModal({ title, rows, columns, onClose }) {
           </button>
         </div>
         <div className="modal-body">
+          {showFilters && (
+            <div className="drill-filters">
+              {showParliamentFilter && (
+                <div className="drill-filter">
+                  <span className="drill-filter-label">Parliament</span>
+                  <Dropdown
+                    id="drill-parliament"
+                    label="Filter by parliament"
+                    value={selectedParliament ?? 'all'}
+                    onChange={(v) => setSelectedParliament(v === 'all' ? null : v)}
+                    options={[
+                      { value: 'all', label: 'All parliaments' },
+                      ...parliamentOptions.map((p) => ({ value: p, label: p }))
+                    ]}
+                  />
+                </div>
+              )}
+              {showAssemblyFilter && (
+                <div className="drill-filter">
+                  <span className="drill-filter-label">Assembly</span>
+                  <Dropdown
+                    id="drill-assembly"
+                    label="Filter by assembly"
+                    value={selectedAssembly ?? 'all'}
+                    onChange={(v) => setSelectedAssembly(v === 'all' ? null : v)}
+                    options={[
+                      { value: 'all', label: 'All assemblies' },
+                      ...assemblyOptions.map((a) => ({ value: a, label: a }))
+                    ]}
+                  />
+                </div>
+              )}
+            </div>
+          )}
           <div className="table-card">
             <div className="table-scroll drill-scroll">
               <table>
@@ -80,8 +194,8 @@ export default function BlankTableModal({ title, rows, columns, onClose }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {wired && rows.map((r, i) => (
-                    <tr key={i}>
+                  {wired && shown.map((r, i) => (
+                    <tr key={r.id ?? i}>
                       {columns.map((c) => <td key={c.key}>{r[c.key]}</td>)}
                     </tr>
                   ))}

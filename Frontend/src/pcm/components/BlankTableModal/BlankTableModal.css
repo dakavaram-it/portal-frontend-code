@@ -3,3 +3,26 @@
 .pcm-root .drill-close { margin-left: auto; }
 .pcm-root .drill-scroll { min-height: 280px; max-height: 60vh; }
 .pcm-root .drill-modal .table-card table { min-width: 0; }
+
+.pcm-root .drill-filters {
+  position: relative; z-index: 20;
+  display: flex; flex-wrap: wrap; gap: 12px;
+  margin-bottom: 12px;
+}
+.pcm-root .drill-filter {
+  position: relative; z-index: 1;
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md);
+}
+.pcm-root .drill-filter-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-3); flex: none;
+}
+
+@media (max-width: 720px) {
+  .pcm-root .drill-filters { flex-direction: column; }
+  .pcm-root .drill-filter { width: 100%; }
+  .pcm-root .drill-filter .dd { flex: 1; }
+  .pcm-root .drill-filter .dd-trigger { width: 100%; min-width: 0; }
+}

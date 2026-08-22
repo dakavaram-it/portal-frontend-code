@@ -8,6 +8,7 @@ import SummaryTable from '../components/SummaryTable/SummaryTable.jsx';
 import ViewRemarksModal from '../components/ViewRemarksModal/ViewRemarksModal.jsx';
 import { api } from '../lib/api.js';
 import { useAnim } from '../lib/motion.js';
+import { cancelActiveDrill } from '../lib/schedules.js';
 
 export default function Dashboard({ meetings, remarksCategories, onToast, onSaveConductedRemark }) {
   const ref = useRef(null);
@@ -59,18 +60,45 @@ export default function Dashboard({ meetings, remarksCategories, onToast, onSave
     }
   }
 
-  // The Assembly/Location/App/PC detail behind the summary panel is real,
-  // per-schedule data — too much to pre-load, so it's fetched per meeting
-  // the moment its "App & PC summary" is expanded.
+  // The Assembly/Location/App/PC detail behind Total Meetings is real
+  // per-location data — too much to pre-load. Unit meetings page the first
+  // chunk so the table paints in ~1s, then fill the rest in the background.
   useEffect(() => {
     if (!summaryMeetingId) { setSummaryRows(null); return; }
     let cancelled = false;
     setSummaryRows(null);
-    api.scheduleSummary(summaryMeetingId)
-      .then((data) => { if (!cancelled) setSummaryRows(data.rows); })
-      .catch(() => { if (!cancelled) setSummaryRows([]); });
+
+    const pageSize = picked === 'Unit' ? 150 : null;
+
+    (async () => {
+      try {
+        if (pageSize == null) {
+          const data = await api.scheduleSummary(summaryMeetingId);
+          if (!cancelled) setSummaryRows(data.rows);
+          return;
+        }
+        const first = await api.scheduleSummary(summaryMeetingId, { limit: pageSize, offset: 0 });
+        if (cancelled) return;
+        setSummaryRows(first.rows);
+        let offset = first.rows.length;
+        const total = first.total || 0;
+        while (!cancelled && offset < total) {
+          const more = await api.scheduleSummary(summaryMeetingId, {
+            limit: 500,
+            offset
+          });
+          if (cancelled) return;
+          setSummaryRows((prev) => [...(prev || []), ...more.rows]);
+          offset += more.rows.length;
+          if (!more.rows.length) break;
+        }
+      } catch {
+        if (!cancelled) setSummaryRows([]);
+      }
+    })();
+
     return () => { cancelled = true; };
-  }, [summaryMeetingId]);
+  }, [summaryMeetingId, picked]);
 
   return (
     <section className="view" aria-label="Meetings overview" ref={ref}>
@@ -113,7 +141,16 @@ export default function Dashboard({ meetings, remarksCategories, onToast, onSave
       )}
 
       {sheet && (
-        <BlankTableModal title={sheet.title} rows={sheet.rows} columns={sheet.columns} onClose={() => setSheet(null)} />
+        <BlankTableModal
+          title={sheet.title}
+          rows={sheet.rows}
+          columns={sheet.columns}
+          level={sheet.level}
+          placeFilter={sheet.placeFilter !== false}
+          loading={!!sheet.loading}
+          total={sheet.total}
+          onClose={() => { cancelActiveDrill(); setSheet(null); }}
+        />
       )}
       {remarkRow && summaryMeeting && (
         <ViewRemarksModal

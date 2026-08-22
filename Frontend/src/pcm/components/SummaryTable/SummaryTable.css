@@ -8,6 +8,27 @@
    isn't reliably the same nth-child at every level. */
 .pcm-root .summary-grid td.location-cell { white-space: normal; max-width: 320px; }
 
+/* Sit above the summary table so the assembly/parliament dropdown panel
+   isn't painted under `.table-card` / `.table-scroll`. */
+.pcm-root .summary-filters {
+  position: relative; z-index: 20;
+  display: flex; flex-wrap: wrap; gap: 12px;
+  margin-bottom: 12px;
+}
+.pcm-root .summary-filter {
+  position: relative; z-index: 1;
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+}
+.pcm-root .summary-filter-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-3); flex: none;
+}
+.pcm-root .summary-table .table-card {
+  position: relative; z-index: 0;
+}
+
 /* The eye toggle — compact, table-row scale rather than the 40px .icon-btn
    used in page chrome — reveals the remark in place and nothing else: no
    modal, no navigation. */
@@ -38,3 +59,10 @@
 .pcm-root .sort-th:hover .sort-icon { opacity: .8; }
 .pcm-root .sort-icon.is-active { opacity: 1; color: var(--primary); }
 .pcm-root .sort-icon.is-asc { transform: rotate(180deg); }
+
+@media (max-width: 720px) {
+  .pcm-root .summary-filters { flex-direction: column; }
+  .pcm-root .summary-filter { width: 100%; }
+  .pcm-root .summary-filter .dd { flex: 1; }
+  .pcm-root .summary-filter .dd-trigger { width: 100%; min-width: 0; }
+}

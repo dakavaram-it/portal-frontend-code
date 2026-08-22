@@ -43,7 +43,13 @@
   transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .pcm-root .lc-summary:hover { border-color: var(--primary); background: var(--surface); }
-.pcm-root .lc-summary .icon { margin-left: auto; color: var(--text-4); transition: transform var(--dur) var(--ease); }
+.pcm-root .lc-summary-label { flex: none; }
+.pcm-root .lc-summary-total {
+  margin-left: auto;
+  font-size: 15px; font-weight: 800; letter-spacing: -.03em;
+  color: var(--text-strong);
+}
+.pcm-root .lc-summary .icon { color: var(--text-4); transition: transform var(--dur) var(--ease); }
 .pcm-root .lc-summary[aria-expanded="true"] .icon { transform: rotate(90deg); }
 
 .pcm-root .level-card-grid {

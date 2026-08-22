@@ -67,9 +67,18 @@ export const api = {
      the whole invitee list — the table only ever holds a page of it. */
   rollup: (meetingId) => request(`/api/meetings/${seg(meetingId)}/rollup`),
 
-  /* Row-level Assembly/Location/App status/PC status behind the App & PC
-     summary panel — one row per `meeting_schedules` entry for this meeting. */
-  scheduleSummary: (meetingId) => request(`/api/meetings/${seg(meetingId)}/schedule-summary`),
+  /* Row-level Assembly/Location/App/PC status behind Total Meetings —
+     one row per `meeting_conducted_status`. Unit meetings page with
+     `limit`/`offset` so the first rows paint before the full ~8k load. */
+  scheduleSummary: (meetingId, { limit, offset } = {}) => {
+    const q = new URLSearchParams();
+    if (limit != null) q.set('limit', String(limit));
+    if (offset != null) q.set('offset', String(offset));
+    const qs = q.toString();
+    return request(
+      `/api/meetings/${seg(meetingId)}/schedule-summary` + (qs ? `?${qs}` : '')
+    );
+  },
 
   saveRemarks: (meetingId, mid, remarks, capturedBy) =>
     request(`/api/meetings/${seg(meetingId)}/members/${seg(mid)}/remarks`, {
@@ -80,18 +89,20 @@ export const api = {
   /* Row-level detail behind the App section's figures — fetched on click
      rather than folded into the meetings list, since it can run to thousands
      of rows across a level's meetings. Every one of these is a slice of a
-     figure already summed in the meetings list; the slug names the slice. */
-  conductedSchedules: (meetingIds) => schedules('conducted', meetingIds),
-  notUpdatedSchedules: (meetingIds) => schedules('not-updated', meetingIds),
-  notScheduledSchedules: (meetingIds) => schedules('not-scheduled', meetingIds),
+     figure already summed in the meetings list; the slug names the slice.
+     Optional `{ limit, offset }` pages Unit-scale drills so the modal can
+     paint the first chunk before the rest arrives. */
+  conductedSchedules: (meetingIds, opts) => schedules('conducted', meetingIds, opts),
+  notUpdatedSchedules: (meetingIds, opts) => schedules('not-updated', meetingIds, opts),
+  notScheduledSchedules: (meetingIds, opts) => schedules('not-scheduled', meetingIds, opts),
 
   // Same shape, for the PC section: real `meeting_conducted_status` rows.
-  pcCompletedSchedules: (meetingIds) => schedules('pc-completed', meetingIds),
-  pcNotCompletedSchedules: (meetingIds) => schedules('pc-not-completed', meetingIds),
-  pcNotUpdatedSchedules: (meetingIds) => schedules('pc-not-updated', meetingIds),
+  pcCompletedSchedules: (meetingIds, opts) => schedules('pc-completed', meetingIds, opts),
+  pcNotCompletedSchedules: (meetingIds, opts) => schedules('pc-not-completed', meetingIds, opts),
+  pcNotUpdatedSchedules: (meetingIds, opts) => schedules('pc-not-updated', meetingIds, opts),
   // Roster locations with no `meeting_conducted_status` row at all — the
   // PC-side twin of `notScheduledSchedules`, behind PC Status' Not Updated.
-  pcNeverUpdatedSchedules: (meetingIds) => schedules('pc-never-updated', meetingIds),
+  pcNeverUpdatedSchedules: (meetingIds, opts) => schedules('pc-never-updated', meetingIds, opts),
 
   // Every non-empty PC remark, across a level's meetings.
   pcRemarksSchedules: (meetingIds) => schedules('pc-remarks', meetingIds),
@@ -107,6 +118,9 @@ export const api = {
     })
 };
 
-function schedules(slug, meetingIds) {
-  return request(`/api/meetings/schedules/${slug}?meeting_ids=${meetingIds.map(seg).join(',')}`);
+function schedules(slug, meetingIds, opts = {}) {
+  const q = new URLSearchParams({ meeting_ids: meetingIds.map(seg).join(',') });
+  if (opts.limit != null) q.set('limit', String(opts.limit));
+  if (opts.offset != null) q.set('offset', String(opts.offset));
+  return request(`/api/meetings/schedules/${slug}?${q}`);
 }

@@ -3,7 +3,8 @@ import { api } from '../../lib/api.js';
 import { LEVEL_LABEL, badgeClass, num } from '../../lib/format.js';
 import { isoDay } from '../../lib/calendar.js';
 import {
-  NOT_SCHEDULED_COLUMNS, NOT_UPDATED_COLUMNS, PC_NOT_UPDATED_COLUMNS, PC_REMARKS_COLUMNS, columnsFor
+  NOT_SCHEDULED_COLUMNS, NOT_UPDATED_COLUMNS, PC_NOT_UPDATED_COLUMNS, PC_REMARKS_COLUMNS,
+  columnsFor, openDrillProgressive, startDrillSession
 } from '../../lib/schedules.js';
 import './LevelTable.css';
 
@@ -117,17 +118,30 @@ export default function LevelTable({
   /* Every App/PC figure is a slice of real `meeting_schedules` or
      `meeting_conducted_status` rows — fetched on click rather than
      pre-loaded, since a slice can run to thousands of rows across a level's
-     meetings. `fetcher` picks the slice; `columns` picks the row shape. */
-  const openSchedule = async (fetcher, columns, label, level, items) => {
+     meetings. `fetcher` picks the slice; `columns` picks the row shape.
+     First page opens the modal; remaining rows append in the background. */
+  const openSchedule = (fetcher, columns, label, level, items, { placeFilter = true } = {}) => {
     const title = (LEVEL_LABEL[level] || level) + ' · ' + label;
     const ids = items.map((m) => m.id);
-    if (!ids.length) return onCount({ title, rows: [], columns });
-    try {
-      const data = await fetcher(ids);
-      onCount({ title, rows: data.rows, columns });
-    } catch {
-      onCount({ title, rows: [], columns });
+    if (!ids.length) return onCount({ title, rows: [], columns, level, placeFilter });
+    // Remarks lists are small and have no pagination on the backend.
+    if (fetcher === api.pcRemarksSchedules) {
+      return (async () => {
+        const session = startDrillSession();
+        onCount({ title, rows: [], columns, level, placeFilter, loading: true });
+        try {
+          const data = await fetcher(ids);
+          if (session.cancelled) return;
+          onCount({ title, rows: data.rows, columns, level, placeFilter, loading: false });
+        } catch {
+          if (session.cancelled) return;
+          onCount({ title, rows: [], columns, level, placeFilter, loading: false });
+        }
+      })();
     }
+    return openDrillProgressive({
+      onCount, title, columns, level, placeFilter, fetcher, meetingIds: ids
+    });
   };
 
   /* App Status mirrors PC Status's combined/subset shape: Not Conducted is
@@ -141,7 +155,9 @@ export default function LevelTable({
     const title = (LEVEL_LABEL[level] || level) + ' · App Not Conducted';
     const columns = columnsFor(NOT_SCHEDULED_COLUMNS, level);
     const ids = items.map((m) => m.id);
-    if (!ids.length) return onCount({ title, rows: [], columns });
+    if (!ids.length) return onCount({ title, rows: [], columns, level });
+    const session = startDrillSession();
+    onCount({ title, rows: [], columns, level, loading: true });
     try {
       // Not-updated rows carry a real `time`; never-scheduled rows have none
       // to carry — dropped here rather than shown blank, since this list has
@@ -151,11 +167,13 @@ export default function LevelTable({
         api.notUpdatedSchedules(ids),
         api.notScheduledSchedules(ids)
       ]);
+      if (session.cancelled) return;
       const strip = ({ time, ...rest }) => rest;
       const rows = [...notHeld.rows.map(strip), ...neverScheduled.rows];
-      onCount({ title, rows, columns });
+      onCount({ title, rows, columns, level, loading: false, total: rows.length });
     } catch {
-      onCount({ title, rows: [], columns });
+      if (session.cancelled) return;
+      onCount({ title, rows: [], columns, level, loading: false });
     }
   };
 
@@ -172,23 +190,27 @@ export default function LevelTable({
     const title = (LEVEL_LABEL[level] || level) + ' · Total';
     const columns = columnsFor(TOTAL_COLUMNS, level);
     const ids = items.map((m) => m.id);
-    if (!ids.length) return onCount({ title, rows: [], columns });
+    if (!ids.length) return onCount({ title, rows: [], columns, level });
     const dateById = new Map(items.map((m) => [m.id, m.date]));
     const withDate = (rows) => rows.map((r) => ({ ...r, date: dateById.get(r.meetingId) }));
+    const session = startDrillSession();
+    onCount({ title, rows: [], columns, level, loading: true });
     try {
       const [conducted, notHeld, neverScheduled] = await Promise.all([
         api.conductedSchedules(ids),
         api.notUpdatedSchedules(ids),
         api.notScheduledSchedules(ids)
       ]);
+      if (session.cancelled) return;
       const rows = [
         ...withDate(conducted.rows),
         ...withDate(notHeld.rows),
         ...withDate(neverScheduled.rows)
       ];
-      onCount({ title, rows, columns });
+      onCount({ title, rows, columns, level, loading: false, total: rows.length });
     } catch {
-      onCount({ title, rows: [], columns });
+      if (session.cancelled) return;
+      onCount({ title, rows: [], columns, level, loading: false });
     }
   };
 
@@ -290,7 +312,7 @@ export default function LevelTable({
                   />
                   <Cell
                     value={r.remarks}
-                    onClick={() => openSchedule(api.pcRemarksSchedules, PC_REMARKS_COLUMNS, 'Remarks', r.level, r.items)}
+                    onClick={() => openSchedule(api.pcRemarksSchedules, PC_REMARKS_COLUMNS, 'Remarks', r.level, r.items, { placeFilter: false })}
                   />
                 </tr>
               ))}
