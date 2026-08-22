@@ -5,7 +5,7 @@ import { prefersReduced } from '../../lib/motion.js';
 import '../RemarksModal/RemarksModal.css';
 import '../LeaderMeetingEntriesModal/LeaderMeetingEntriesModal.css';
 
-export default function AddActivityEntryModal({ onClose, onSave }) {
+export default function AddActivityEntryModal({ onClose, onSave, saving, error }) {
   const [date, setDate] = useState('');
   const [remarks, setRemarks] = useState('');
   const [picked, setPicked] = useState(null);
@@ -126,6 +126,7 @@ export default function AddActivityEntryModal({ onClose, onSave }) {
               />
             </label>
           </div>
+          {error && <div className="field-error">{error}</div>}
         </div>
 
         <div className="modal-foot">
@@ -133,11 +134,10 @@ export default function AddActivityEntryModal({ onClose, onSave }) {
           <button
             className="btn btn-primary"
             type="button"
-            disabled={!canSave}
+            disabled={!canSave || saving}
             onClick={() => {
               if (!date) return;
               onSave({
-                id: 'a-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
                 date,
                 remarks: remarks.trim(),
                 file: picked
@@ -146,7 +146,7 @@ export default function AddActivityEntryModal({ onClose, onSave }) {
               });
             }}
           >
-            Submit
+            {saving ? 'Saving…' : 'Submit'}
           </button>
         </div>
       </div>

@@ -2,14 +2,17 @@
 // `/dash2api` proxy in vite.config.js — the same gateway as /leapapi, a different project
 // mounted under it.
 //
-// Deliberately NOT api.js: that client attaches the session bearer token and routes a 401
-// back to the login screen. This backend has no authentication at all, so sending the token
-// would be noise and its 401 handling would be dead code.
+// The GETs are unauthenticated — that backend serves its reads to anyone who can reach it.
+// The three POSTs are not: they carry the portal's own session token, which that backend
+// verifies with the same secret /login signs with, and take the acting user id from it.
+// getToken() comes from api.js so there is one place the token is stored and read.
 //
 // Scope: every endpoint takes (userLocationLevelId, userLocationLevelValuesStr). Dashboard 2
 // runs at STATE access for now — no level, no values — so the two parameters are simply
 // omitted and the backend answers state-wide. The one exception is the location list, which
 // scopes to the assembly the user drilled into; that is what the pair is for.
+
+import { getToken } from './api.js'
 
 const BASE = '/dash2api/api/dashboard2'
 
@@ -69,4 +72,50 @@ export function getLocations(position, assemblyId, { limit = 200, offset = 0 } =
     limit,
     offset,
   })
+}
+
+// --- writes ----------------------------------------------------------------
+// Every write needs a signed-in user: the backend rejects an anonymous call with 401 and
+// stamps updated_user_id from the token, so the audit trail cannot be forged from here.
+async function post(path, body) {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken() || ''}` },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    let detail = ''
+    try {
+      detail = (await res.json()).detail || ''
+    } catch {
+      detail = ''
+    }
+    throw new Error(detail || `${path} failed (${res.status})`)
+  }
+  return res.json()
+}
+
+// Proposed -> Confirmed, and back. proposalStatusId 1 un-confirms, which is how a mis-click
+// is undone; the backend refuses a second Confirmed on the same location with a 409.
+export function confirmCandidate(proposalCandidateId, proposalStatusId = 2) {
+  return post('/confirmCandidate', {
+    proposal_candidate_id: proposalCandidateId,
+    proposal_status_id: proposalStatusId,
+  })
+}
+
+// Confirmed -> Nomination filed, and back. This is proposal_candidate.is_nominated, which is
+// what Dashboard 2's stage 3 reads — NOT the nomination PDF, which is Dashboard 1's separate
+// mechanism and moves nothing here.
+export function markNominated(proposalCandidateId, isNominated = 'Y') {
+  return post('/markNominated', {
+    proposal_candidate_id: proposalCandidateId,
+    is_nominated: isNominated,
+  })
+}
+
+// Drops a name off its location. A soft delete: is_active flips to 'N', so the slot reopens
+// and who was proposed survives.
+export function removeCandidate(proposalCandidateId) {
+  return post('/removeCandidate', { proposal_candidate_id: proposalCandidateId })
 }

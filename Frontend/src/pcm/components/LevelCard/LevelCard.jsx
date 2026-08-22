@@ -3,7 +3,7 @@ import { LEVEL_LABEL, badgeClass, fmtDate, num } from '../../lib/format.js';
 import { api } from '../../lib/api.js';
 import {
   NOT_SCHEDULED_COLUMNS, NOT_UPDATED_COLUMNS, PC_NOT_UPDATED_COLUMNS,
-  columnsFor, openDrillProgressive
+  columnsFor, pcNotConductedColumnsFor, openDrillProgressive
 } from '../../lib/schedules.js';
 import './LevelCard.css';
 
@@ -27,9 +27,10 @@ function summarise(meeting) {
     // App funnel above on the meeting object itself, same as at table level.
     notUpdated: meeting.notScheduled || 0,
     totalMeetings,
-    // A strict two-state read of the PC in-charge's own status: 'Y' is
-    // Conducted, anything else (IS NULL, or 'N' on the rare row that
-    // carries one) is Not conducted — the two foot to `pc.total` exactly.
+    // The PC in-charge's own status: 'Y' is Conducted, IS NULL is Not
+    // conducted — an explicit 'N' is its own rare state and counts as
+    // neither, so the two can sit just under `pc.total` on a meeting that
+    // carries one.
     pcConducted: pc ? pc.conducted : null,
     pcNotConducted: pc ? pc.notConducted : null,
     // Roster gap is the primary Not Updated figure; the arithmetic
@@ -98,7 +99,7 @@ export default function LevelCard({ level, meeting, onCount, onSummary, expanded
           />
           <Stat
             label="PC Not conducted" value={t.pcNotConducted} tone="var(--accent)"
-            onClick={() => openSlice(api.pcNotCompletedSchedules, columnsFor(PC_NOT_UPDATED_COLUMNS, level), 'PC Not conducted')}
+            onClick={() => openSlice(api.pcNotCompletedSchedules, pcNotConductedColumnsFor(level), 'PC Not conducted')}
           />
           <Stat
             label="PC Not Updated" value={t.pcNotUpdated}

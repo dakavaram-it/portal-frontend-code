@@ -223,7 +223,11 @@ export default function SummaryTable({ level, rows, onUpdateRemarks }) {
           </table>
         </div>
         <div className="empty" hidden={loading || list.length > 0}>
-          <div className="empty-title">No rows for this level</div>
+          <div className="empty-title">
+            {selectedAssembly || selectedParliament
+              ? 'No rows for this filter'
+              : 'No rows for this level'}
+          </div>
         </div>
         <div className="empty" hidden={!loading}>
           <div className="empty-title">Loading…</div>

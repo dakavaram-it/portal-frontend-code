@@ -4,7 +4,7 @@ import { LEVEL_LABEL, badgeClass, num } from '../../lib/format.js';
 import { isoDay } from '../../lib/calendar.js';
 import {
   NOT_SCHEDULED_COLUMNS, NOT_UPDATED_COLUMNS, PC_NOT_UPDATED_COLUMNS, PC_REMARKS_COLUMNS,
-  columnsFor, openDrillProgressive, startDrillSession
+  columnsFor, pcNotConductedColumnsFor, openDrillProgressive, startDrillSession
 } from '../../lib/schedules.js';
 import './LevelTable.css';
 
@@ -69,16 +69,17 @@ function tally(items) {
     // meeting — distinct from `notConducted`, which is scheduled-but-not-done.
     a.notScheduled += m.notScheduled || 0;
     a.remarks += m.pcRemarks || 0;
-    /* PC Status' Conducted/Not conducted is a strict two-state read of
-       `meeting_conducted_status`: `is_conducted = 'Y'` is Conducted,
-       anything else — `IS NULL`, and 'N' on the rare row that carries one —
-       is Not conducted, so the two always foot to `pc.total`. Not Updated
-       sits outside that total the same way `notScheduled` sits outside
-       `units.total`: it's roster locations with no conducted-status row at
-       all, not a subset of the rows counted in `pc.total`. A meeting with
-       no rows there at all (`m.pc` is null) contributes nothing to either
-       Conducted or Not conducted — there is nothing to count yet — but can
-       still carry a Not Updated figure, so that one is read unconditionally. */
+    /* PC Status' Conducted/Not conducted reads `meeting_conducted_status`:
+       `is_conducted = 'Y'` is Conducted, `IS NULL` is Not conducted. An
+       explicit 'N' is its own rare state and counts as neither, so the two
+       can sit just under `pc.total` on a meeting that carries one. Not
+       Updated sits outside that total the same way `notScheduled` sits
+       outside `units.total`: it's roster locations with no conducted-status
+       row at all, not a subset of the rows counted in `pc.total`. A meeting
+       with no rows there at all (`m.pc` is null) contributes nothing to
+       either Conducted or Not conducted — there is nothing to count yet —
+       but can still carry a Not Updated figure, so that one is read
+       unconditionally. */
     if (m.pc) {
       a.pcCompleted += m.pc.conducted;
       a.pcNotCompleted += m.pc.notConducted;
@@ -304,7 +305,7 @@ export default function LevelTable({
                   />
                   <Cell
                     value={r.pcNotCompleted} tone="var(--accent)"
-                    onClick={() => openSchedule(api.pcNotCompletedSchedules, columnsFor(PC_NOT_UPDATED_COLUMNS, r.level), 'Not conducted', r.level, r.items)}
+                    onClick={() => openSchedule(api.pcNotCompletedSchedules, pcNotConductedColumnsFor(r.level), 'Not conducted', r.level, r.items)}
                   />
                   <Cell
                     value={r.pcNotUpdated}

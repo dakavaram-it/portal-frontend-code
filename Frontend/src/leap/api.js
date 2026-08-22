@@ -20,6 +20,12 @@ const checkUnauthorized = (path, status) => {
   if (status === 401 && !AUTH_PATHS.some((p) => path.startsWith(p))) onUnauthorized()
 }
 
+// The PC-Meetings backend is a second service behind the same token (see pcm/lib/api.js),
+// so its 401 has to end the session here too — the handler App.jsx registered lives in
+// this module and nowhere else. None of that service's paths is exempt the way /login is,
+// so it says so directly rather than going through checkUnauthorized's allowlist.
+export const sessionExpired = () => onUnauthorized()
+
 // `/login` returns a signed JWT in its body and sets no cookie, so this is the session — the
 // backend reads `Authorization: Bearer <token>` and nothing else. sessionStorage rather
 // than localStorage: it dies with the tab, which caps how long a stolen one is worth

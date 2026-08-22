@@ -5,15 +5,32 @@
    `/api` to an unrelated service. Vite proxies this prefix to the PSA gateway
    and swaps it for `/pc-meetings`, the mount the meetings backend sits behind
    there — so the paths below stay exactly the ones the service publishes. */
+import { getToken, sessionExpired } from '../../leap/api.js';
+
 const API_BASE = '/pcmapi';
 
+/* Same bearer token the portal's own backend takes: this service verifies it
+   with the same secret, reads the user id out of it and answers with only the
+   assemblies that user is granted. Without it every route here is a 401 — the
+   figures are the whole state's otherwise, which is exactly what the scoping
+   exists to stop. */
 async function request(path, options) {
+  const token = getToken();
   const res = await fetch(API_BASE + path, {
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-    ...options
+    ...options,
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options?.headers
+    }
   });
 
   if (!res.ok) {
+    // A 401 here is the one shared session lapsing, not this screen failing:
+    // hand it to the portal's own handler so the app returns to the login
+    // screen rather than showing this module's "could not reach the service".
+    if (res.status === 401) sessionExpired();
     // FastAPI puts the reason in `detail`; fall back to the status so the
     // banner never reads "undefined".
     const body = await res.json().catch(() => null);
@@ -48,6 +65,37 @@ export const api = {
      programme/month — the Programmes page's third card. */
   programLeaders: (roleId, activityId, year, month) =>
     request(`/api/programs/leaders?role_id=${seg(roleId)}&activity_id=${seg(activityId)}&year=${year}&month=${month}`),
+
+  /* Calendar Meetings' Update modal: one row per real meeting this leader
+     was invited to in the month, off `mytdp` — not `leader_program_activity`,
+     which Calendar Meetings never writes to. `leaderId` is the same `mid`
+     `programLeaders` returns for a calendar-variant row. */
+  programLeaderMeetings: (leaderId, year, month) =>
+    request(`/api/programs/leaders/${seg(leaderId)}/meetings?year=${year}&month=${month}`),
+
+  /* Saves one meeting's remarks for one leader, into `leader_meeting_attendance`
+     — accepted whether or not the leader attended, unlike the Meetings screen's
+     own remarks (`saveRemarks` below), which are absent-only. */
+  saveLeaderMeetingRemarks: (leaderId, meetingId, remarks) =>
+    request(`/api/programs/leaders/${seg(leaderId)}/meetings/${seg(meetingId)}/remarks`, {
+      method: 'PUT',
+      body: JSON.stringify({ remarks })
+    }),
+
+  /* Every other programme's Update modal: a leader's own hand-added
+     date/remarks log for one programme/month, off `party_track.leader_meetings`
+     — not `leader_meeting_attendance`, which only Calendar Meetings writes to. */
+  programLeaderLogEntries: (leaderId, programId, year, month) =>
+    request(`/api/programs/leaders/${seg(leaderId)}/log-entries?program_id=${seg(programId)}&year=${year}&month=${month}`),
+
+  addLeaderLogEntry: (leaderId, programId, date, remarks) =>
+    request(`/api/programs/leaders/${seg(leaderId)}/log-entries`, {
+      method: 'POST',
+      body: JSON.stringify({ programId, date, remarks })
+    }),
+
+  deleteLeaderLogEntry: (leaderId, entryId) =>
+    request(`/api/programs/leaders/${seg(leaderId)}/log-entries/${seg(entryId)}`, { method: 'DELETE' }),
 
   /* The first call for a meeting pulls its whole invitee list upstream — six
      figures of rows for a Unit-level meeting — so it can take minutes. Later

@@ -104,20 +104,30 @@ const isCalendarMeetingsActivity = (name) =>
   /calendar\s*meetings?/i.test(String(name || '').trim());
 
 // Date / files / remarks Update modal — matched by normalised activity name.
+// Every non-Calendar-Meeting row of `party_track.program` (verified live:
+// id 1 Pedala Sevalo, 3 Grievance Meetings, 4 Cadre Meetings, 5 Central Party
+// Office Grievance, 6 Swatch Andhra, 7 Pattadar Passbook, 8 PC Lunch/Dinner
+// Meetings, 9 Press Meets, 10 Field Performance — id 2 Calendar Meeting is
+// the one excluded, see `isCalendarMeetingsActivity`) gets this modal, backed
+// by `party_track.leader_meetings` — see `_MEETING_TYPE_LABELS` in the
+// backend's `programs.py` for the short label each is stored under.
 const LOG_ACTIVITIES = new Set([
-  'ac cadre meetings',
-  'parliament lunch/dinner meetings',
-  'parliament lunch dinner meetings',
-  'field performance',
-  'ground ac grievance',
-  'central party office grievance'
+  'pedala sevalo',
+  'grievance meetings',
+  'cadre meetings',
+  'central party office grievance',
+  'swatch andhra',
+  'pattadar passbook',
+  'pc lunch/dinner meetings',
+  'press meets',
+  'field performance'
 ]);
 const normActivity = (name) => String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
 const isLogEntriesActivity = (name) => {
   const n = normActivity(name);
   if (LOG_ACTIVITIES.has(n)) return true;
-  // tolerate "Parliament Lunch / Dinner Meetings" spacing variants
-  if (/^parliament\s+lunch\s*\/?\s*dinner\s+meetings?$/.test(n)) return true;
+  // tolerate "PC Lunch / Dinner Meetings" spacing variants around the slash
+  if (/^pc\s+lunch\s*\/?\s*dinner\s+meetings?$/.test(n)) return true;
   return false;
 };
 
@@ -127,10 +137,9 @@ const memberCardVariant = (activity) => {
   return 'default';
 };
 
-export default function Programs({ roles = [], meetings = [] }) {
+export default function Programs({ roles = [] }) {
   const ref = useRef(null);
   const memberCardRef = useRef(null);
-  const skipNextFocusRef = useRef(true); // the default row on mount needs no scroll/entrance of its own
   const [monthMode, setMonthMode] = useState('this');
   const [month, setMonth] = useState(thisMonth);
   const [selectedRole, setSelectedRole] = useState(null);
@@ -139,11 +148,14 @@ export default function Programs({ roles = [], meetings = [] }) {
   const [activitySummary, setActivitySummary] = useState(null);
   const [openRow, setOpenRow] = useState(null); // the activitySummary row the member card is showing
   const [leaders, setLeaders] = useState(null); // null = loading, [] = loaded and empty
-  const [entriesByMid, setEntriesByMid] = useState({}); // Calendar Meetings Update rows (client-only)
-  const [logEntriesByMid, setLogEntriesByMid] = useState({}); // date/files/remarks Update rows
+  const [leaderMeetings, setLeaderMeetings] = useState(null); // Calendar Meetings Update modal rows — real, from GET .../meetings
+  const [savingRemarksFor, setSavingRemarksFor] = useState(null); // meetingId currently saving, or null
+  const [remarksError, setRemarksError] = useState(null); // { meetingId, message } for whichever save last failed
+  const [leaderLogEntries, setLeaderLogEntries] = useState(null); // other programmes' Update modal rows — real, from GET .../log-entries
+  const [addingLogEntry, setAddingLogEntry] = useState(false);
+  const [addLogEntryError, setAddLogEntryError] = useState(null);
   const [remarksByMid, setRemarksByMid] = useState({}); // other activities' remarks overlay
   const [uploadsByMid, setUploadsByMid] = useState({}); // other activities' attendance uploads
-  const [countsByMid, setCountsByMid] = useState({}); // manual participated/completed overrides (client-only, no save endpoint yet)
   const [selectedAc, setSelectedAc] = useState(null); // narrows the member card to one Assembly within the open role/activity
   const [updateMid, setUpdateMid] = useState(null); // entries Update modal (calendar or log)
   const [remarkMid, setRemarkMid] = useState(null);
@@ -180,12 +192,10 @@ export default function Programs({ roles = [], meetings = [] }) {
     return () => { cancelled = true; };
   }, [month]);
 
-  // Switching rows — by click or by the filters narrowing to a new default —
-  // scrolls the card into view and gives it a small entrance so the change is
-  // noticeable, but not on the very first render: that row is already on
-  // screen next to the other two cards and needs no scroll-jack on load.
+  // The card only ever opens from an explicit click on a members count, so
+  // every time it does, scroll it to the top of the viewport and give it a
+  // small entrance so the change is noticeable.
   useEffect(() => {
-    if (skipNextFocusRef.current) { skipNextFocusRef.current = false; return; }
     if (!openRow) return;
     memberCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     if (!prefersReduced()) {
@@ -205,6 +215,75 @@ export default function Programs({ roles = [], meetings = [] }) {
       .catch(() => { if (!cancelled) setLeaders([]); });
     return () => { cancelled = true; };
   }, [openRow, month]);
+
+  // Calendar Meetings' Update modal: the real per-meeting rows behind this
+  // leader's participated/completed count, refetched whenever the modal
+  // opens for a different leader or the month changes.
+  useEffect(() => {
+    if (updateMid === null || !isCalendarMeetingsActivity(openRow?.activity)) { setLeaderMeetings(null); return; }
+    let cancelled = false;
+    setLeaderMeetings(null);
+    setRemarksError(null);
+    const year = month.getFullYear(), mo = month.getMonth() + 1;
+    api.programLeaderMeetings(updateMid, year, mo)
+      .then((rows) => { if (!cancelled) setLeaderMeetings(rows); })
+      .catch(() => { if (!cancelled) setLeaderMeetings([]); });
+    return () => { cancelled = true; };
+  }, [updateMid, openRow, month]);
+
+  // Patches the saved remark into `leaderMeetings` in place rather than
+  // refetching, so the row order and scroll position do not jump.
+  const saveLeaderMeetingRemarks = async (meetingId, remarks) => {
+    setSavingRemarksFor(meetingId);
+    setRemarksError(null);
+    try {
+      await api.saveLeaderMeetingRemarks(updateMid, meetingId, remarks);
+      setLeaderMeetings((cur) => (cur || []).map((r) => (r.meetingId === meetingId ? { ...r, remarks } : r)));
+    } catch (err) {
+      setRemarksError({ meetingId, message: err.message });
+    } finally {
+      setSavingRemarksFor(null);
+    }
+  };
+
+  // Every other programme's Update modal: the leader's own hand-added log
+  // for the open programme/month, refetched whenever the modal opens for a
+  // different leader, the programme changes, or the month changes — same
+  // shape as the Calendar Meetings effect above, off `leader_meetings`.
+  useEffect(() => {
+    if (updateMid === null || !isLogEntriesActivity(openRow?.activity)) { setLeaderLogEntries(null); return; }
+    let cancelled = false;
+    setLeaderLogEntries(null);
+    setAddLogEntryError(null);
+    const year = month.getFullYear(), mo = month.getMonth() + 1;
+    api.programLeaderLogEntries(updateMid, openRow.activityId, year, mo)
+      .then((rows) => { if (!cancelled) setLeaderLogEntries(rows); })
+      .catch(() => { if (!cancelled) setLeaderLogEntries([]); });
+    return () => { cancelled = true; };
+  }, [updateMid, openRow, month]);
+
+  // Prepends the new row rather than refetching. Returns the saved row (with
+  // its real id) on success, or `null` after recording the error — the modal
+  // reads a falsy return as "stay open, the error is already showing".
+  const addLeaderLogEntry = async (date, remarks) => {
+    setAddingLogEntry(true);
+    setAddLogEntryError(null);
+    try {
+      const saved = await api.addLeaderLogEntry(updateMid, openRow.activityId, date, remarks);
+      setLeaderLogEntries((cur) => [saved, ...(cur || [])]);
+      return saved;
+    } catch (err) {
+      setAddLogEntryError(err.message);
+      return null;
+    } finally {
+      setAddingLogEntry(false);
+    }
+  };
+
+  const deleteLeaderLogEntry = async (entryId) => {
+    await api.deleteLeaderLogEntry(updateMid, entryId);
+    setLeaderLogEntries((cur) => (cur || []).filter((r) => r.id !== entryId));
+  };
 
   const pickThis = () => { setMonthMode('this'); setMonth(thisMonth()); };
   const pickLast = () => { setMonthMode('last'); setMonth(lastMonth()); };
@@ -252,35 +331,20 @@ export default function Programs({ roles = [], meetings = [] }) {
     setSelectedAc(null); // a new role/activity pairing has its own Assembly roster
   };
 
-  // The shown row belongs to the filtered list; once that list changes, fall
-  // back to its first row rather than going blank — the card should always
-  // have something to show, the same way the first two cards do.
+  // The card only ever opens from an explicit click on a members count — if a
+  // filter change makes the open row fall out of the filtered list, close it
+  // rather than silently swapping in a different one.
   useEffect(() => {
-    if (!openRow || !filteredActivitySummary.some((r) => r.roleId === openRow.roleId && r.activityId === openRow.activityId)) {
-      const next = filteredActivitySummary[0];
-      if (next) openMembers(next); else setOpenRow(null);
+    if (openRow && !filteredActivitySummary.some((r) => r.roleId === openRow.roleId && r.activityId === openRow.activityId)) {
+      setOpenRow(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activityRows, selectedRole, selectedActivity]);
 
   const mergedLeaders = useMemo(
-    () => (leaders || []).map((m) => {
-      const override = countsByMid[m.mid];
-      return {
-        ...m,
-        remarks: remarksByMid[m.mid] || '',
-        participated: override?.participated ?? m.participated,
-        completed: override?.completed ?? m.completed
-      };
-    }),
-    [leaders, remarksByMid, countsByMid]
+    () => (leaders || []).map((m) => ({ ...m, remarks: remarksByMid[m.mid] || '' })),
+    [leaders, remarksByMid]
   );
-  // No save endpoint exists yet for these counts — same client-only, resets-
-  // on-reload contract as remarks/uploads above.
-  const setCount = (mid, field, value) => {
-    const n = Math.max(0, Math.trunc(Number(value)) || 0);
-    setCountsByMid((cur) => ({ ...cur, [mid]: { ...cur[mid], [field]: n } }));
-  };
   const acOptions = useMemo(
     () => [...new Set(mergedLeaders.map((m) => m.assembly).filter(hasPlace))],
     [mergedLeaders]
@@ -515,8 +579,6 @@ export default function Programs({ roles = [], meetings = [] }) {
               members={leaders === null ? null : visibleMembers}
               variant={cardVariant}
               uploadsByMid={uploadsByMid}
-              onChangeParticipated={(mid, v) => setCount(mid, 'participated', v)}
-              onChangeCompleted={(mid, v) => setCount(mid, 'completed', v)}
               onUpdate={setUpdateMid}
               onUpdateRemarks={(mid) => { setRemarkMid(mid); setRemarkMode('edit'); }}
               onViewRemarks={(mid) => { setRemarkMid(mid); setRemarkMode('view'); }}
@@ -530,19 +592,23 @@ export default function Programs({ roles = [], meetings = [] }) {
       {calendarActivity && updateMember && (
         <LeaderMeetingEntriesModal
           member={updateMember}
-          entries={entriesByMid[updateMid] || []}
-          meetings={meetings}
+          meetings={leaderMeetings}
+          savingRemarksFor={savingRemarksFor}
+          remarksError={remarksError}
           onClose={() => setUpdateMid(null)}
-          onChange={(rows) => setEntriesByMid((cur) => ({ ...cur, [updateMid]: rows }))}
+          onSaveRemarks={saveLeaderMeetingRemarks}
         />
       )}
 
       {logActivity && updateMember && (
         <LeaderActivityEntriesModal
           member={updateMember}
-          entries={logEntriesByMid[updateMid] || []}
+          entries={leaderLogEntries}
+          adding={addingLogEntry}
+          addError={addLogEntryError}
           onClose={() => setUpdateMid(null)}
-          onChange={(rows) => setLogEntriesByMid((cur) => ({ ...cur, [updateMid]: rows }))}
+          onAdd={addLeaderLogEntry}
+          onDelete={deleteLeaderLogEntry}
         />
       )}
 
